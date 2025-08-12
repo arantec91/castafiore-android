@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Estilos para botones -->
+    <style name="Button.Primary" parent="Widget.MaterialComponents.Button">
+        <item name="android:textColor">@color/text_on_primary</item>
+        <item name="backgroundTint">@color/primary</item>
+        <item name="cornerRadius">8dp</item>
+    </style>
+
+    <style name="Button.Secondary" parent="Widget.MaterialComponents.Button.OutlinedButton">
+        <item name="android:textColor">@color/primary</item>
+        <item name="strokeColor">@color/primary</item>
+        <item name="cornerRadius">8dp</item>
+    </style>
+
+    <!-- Estilo para FloatingActionButton -->
+    <style name="FloatingActionButton.Primary" parent="Widget.MaterialComponents.FloatingActionButton">
+        <item name="backgroundTint">@color/primary</item>
+        <item name="tint">@color/text_on_primary</item>
+    </style>
+
+    <!-- Estilos para TextInputLayout -->
+    <style name="TextInputLayout.Primary" parent="Widget.MaterialComponents.TextInputLayout.OutlinedBox">
+        <item name="boxStrokeColor">@color/primary</item>
+        <item name="hintTextColor">@color/primary</item>
+        <item name="android:textColorHint">@color/text_secondary</item>
+    </style>
+
+    <!-- Estilo para AppBarLayout -->
+    <style name="AppBarLayout.Primary" parent="Widget.MaterialComponents.AppBarLayout.Primary">
+        <item name="android:background">@color/background_primary</item>
+        <item name="android:elevation">4dp</item>
+    </style>
+
+    <!-- Estilo para Toolbar -->
+    <style name="Toolbar.Primary" parent="Widget.MaterialComponents.Toolbar.Primary">
+        <item name="android:background">@color/background_primary</item>
+        <item name="titleTextColor">@color/text_primary</item>
+        <item name="subtitleTextColor">@color/text_secondary</item>
+    </style>
+
+    <!-- Estilo para BottomNavigationView - Modo oscuro -->
+    <style name="BottomNavigationView.Primary" parent="Widget.MaterialComponents.BottomNavigationView">
+        <item name="android:background">@color/dark_surface</item>
+        <item name="itemIconTint">@color/bottom_nav_selector</item>
+        <item name="itemTextColor">@color/bottom_nav_selector</item>
+        <item name="itemRippleColor">@color/primary_alpha_24</item>
+        <item name="elevation">8dp</item>
+    </style>
+
+    <!-- Estilo para CardView -->
+    <style name="CardView.Primary" parent="Widget.MaterialComponents.CardView">
+        <item name="cardBackgroundColor">@color/surface</item>
+        <item name="cardElevation">4dp</item>
+        <item name="cardCornerRadius">8dp</item>
+    </style>
+
+    <!-- Estilo para Switch -->
+    <style name="Switch.Primary" parent="Widget.MaterialComponents.CompoundButton.Switch">
+        <item name="thumbTint">@color/primary</item>
+        <item name="trackTint">@color/primary_light</item>
+    </style>
+
+    <!-- Estilo para ProgressBar -->
+    <style name="ProgressBar.Primary" parent="Widget.AppCompat.ProgressBar.Horizontal">
+        <item name="android:progressTint">@color/primary</item>
+        <item name="android:progressBackgroundTint">@color/surface_variant</item>
+    </style>
+
+    <!-- Estilo para TabLayout -->
+    <style name="TabLayout.Primary" parent="Widget.MaterialComponents.TabLayout">
+        <item name="android:background">@color/background_primary</item>
+        <item name="tabTextColor">@color/text_secondary</item>
+        <item name="tabSelectedTextColor">@color/primary</item>
+        <item name="tabIndicatorColor">@color/primary</item>
+        <item name="tabRippleColor">@color/primary_light</item>
+    </style>
+
+    <!-- Estilo para Chip -->
+    <style name="Chip.Primary" parent="Widget.MaterialComponents.Chip.Choice">
+        <item name="chipBackgroundColor">@color/surface</item>
+        <item name="chipStrokeColor">@color/primary</item>
+        <item name="android:textColor">@color/text_primary</item>
+        <item name="checkedIconTint">@color/primary</item>
+    </style>
+</resources>

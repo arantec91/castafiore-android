@@ -1,0 +1,49 @@
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <!-- Tema principal unificado - Modo oscuro con color principal #FF2D55 -->
+    <style name="Theme.Castafiore" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <!-- Colores primarios -->
+        <item name="colorPrimary">@color/primary</item>
+        <item name="colorPrimaryVariant">@color/primary_dark</item>
+        <item name="colorOnPrimary">@color/white</item>
+
+        <!-- Colores secundarios -->
+        <item name="colorSecondary">@color/secondary</item>
+        <item name="colorSecondaryVariant">@color/secondary_dark</item>
+        <item name="colorOnSecondary">@color/white</item>
+
+        <!-- Colores de superficie y fondo - MODO OSCURO -->
+        <item name="android:colorBackground">@color/dark_background</item>
+        <item name="colorSurface">@color/dark_surface</item>
+        <item name="colorOnSurface">@color/dark_on_surface</item>
+        <item name="colorSurfaceVariant">@color/dark_surface_variant</item>
+        <item name="colorOnSurfaceVariant">@color/dark_on_surface_variant</item>
+
+        <!-- Colores de error -->
+        <item name="colorError">@color/error</item>
+        <item name="colorOnError">@color/white</item>
+
+        <!-- Fondo de ventana - MODO OSCURO -->
+        <item name="android:windowBackground">@color/dark_background</item>
+
+        <!-- Colores de texto - MODO OSCURO -->
+        <item name="android:textColorPrimary">@color/dark_on_surface</item>
+        <item name="android:textColorSecondary">@color/dark_on_surface_variant</item>
+
+        <!-- Barra de estado y navegación - MODO OSCURO -->
+        <item name="android:statusBarColor">@color/dark_background</item>
+        <item name="android:navigationBarColor">@color/dark_background</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar">false</item>
+
+        <!-- Outline para modo oscuro -->
+        <item name="colorOutline">@color/dark_outline</item>
+
+        <!-- Control highlights para modo oscuro -->
+        <item name="colorControlHighlight">@color/primary_alpha_12</item>
+        <item name="colorControlActivated">@color/primary</item>
+        <item name="colorControlNormal">@color/dark_on_surface_variant</item>
+
+        <!-- Bottom navigation color -->
+        <item name="bottomNavigationStyle">@style/BottomNavigationView.Primary</item>
+    </style>
+</resources>

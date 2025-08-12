@@ -1,0 +1,22 @@
+<resources>
+    <string name="app_name">Castafiore</string>
+    <string name="artist_avatar">Avatar del artista</string>
+    <string name="album_icon">Icono de álbum</string>
+    <string name="add_to_favorites">Añadir a favoritos</string>
+    <string name="download">Descargar</string>
+    <string name="more_options">Más opciones</string>
+    <string name="shuffle_play">Reproducción aleatoria</string>
+    <string name="play_album">Reproducir álbum</string>
+    <string name="album_info">Álbum • %1$s • %2$d canciones, %3$s</string>
+    <string name="unknown_year">Desconocido</string>
+
+    <!-- Strings para el bottom sheet de opciones de canción -->
+    <string name="song_cover">Portada de la canción</string>
+    <string name="add_to_queue">Agregar a la cola</string>
+    <string name="play_next">Reproducir siguiente</string>
+    <string name="add_to_playlist">Agregar a playlist</string>
+    <string name="view_album">Ver álbum</string>
+    <string name="view_artist">Ver artista</string>
+    <string name="share">Compartir</string>
+    <string name="song_info">Información de la canción</string>
+</resources>
