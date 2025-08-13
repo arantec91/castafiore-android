@@ -16,6 +16,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.view.isGone
 import androidx.core.view.isVisible
 import androidx.fragment.app.Fragment
+import androidx.fragment.app.viewModels
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.fragment.findNavController
 import androidx.recyclerview.widget.LinearLayoutManager
@@ -26,6 +27,7 @@ import com.arantec.castafiore.data.models.Song
 import com.arantec.castafiore.data.repository.MusicRepository
 import com.arantec.castafiore.databinding.FragmentSearchBinding
 import com.arantec.castafiore.ui.adapters.SearchResultsAdapter
+import com.arantec.castafiore.ui.viewmodels.SearchViewModel
 import com.google.android.material.snackbar.Snackbar
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -54,6 +56,7 @@ class SearchFragment : Fragment() {
 
     private lateinit var musicRepository: MusicRepository
     private lateinit var searchAdapter: SearchResultsAdapter
+    private val viewModel: SearchViewModel by viewModels()
 
     // Estado de búsqueda
     private var searchJob: Job? = null
@@ -101,6 +104,34 @@ class SearchFragment : Fragment() {
         setupUI()
         setupRecycler()
         setupSearchFunctionality()
+
+        // Restaurar resultados si existen en ViewModel para evitar parpadeo
+        ensureAuth()
+        val cachedItems = viewModel.items.value.orEmpty()
+        val cachedQuery = viewModel.query.value ?: ""
+        if (cachedItems.isNotEmpty()) {
+            searchAdapter.updateAuth(
+                serverUrl = serverUrl ?: "",
+                username = authUsername ?: "",
+                token = authToken ?: "",
+                salt = authSalt ?: ""
+            )
+            searchAdapter.submitData(cachedItems)
+            showResults()
+            // Rellenar el texto sin disparar el watcher
+            suppressTextWatcher = true
+            binding.etSearch.setText(cachedQuery)
+            binding.etSearch.setSelection(cachedQuery.length)
+            suppressTextWatcher = false
+        } else {
+            if (cachedQuery.isNotBlank()) {
+                // Si hay query pero no items, disparar búsqueda sin mostrar estado vacío
+                showLoading(true)
+                performSearch(cachedQuery)
+            } else {
+                showEmptyState()
+            }
+        }
     }
 
     override fun onStart() {
@@ -146,8 +177,7 @@ class SearchFragment : Fragment() {
             .setInterpolator(AccelerateDecelerateInterpolator())
             .start()
 
-        // Estados iniciales
-        showEmptyState()
+        // No llamar showEmptyState() aquí; se decide en onViewCreated según ViewModel
 
         // Botón limpiar
         binding.btnClearSearch.setOnClickListener {
@@ -174,11 +204,13 @@ class SearchFragment : Fragment() {
         }
     }
 
+    private var suppressTextWatcher = false
+
     private fun setupSearchFunctionality() {
-        // EditText del layout real
         binding.etSearch.addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+                if (suppressTextWatcher) return
                 val query = s?.toString()?.trim() ?: ""
                 binding.btnClearSearch.isVisible = query.isNotEmpty()
                 handleSearchTextChange(query)
@@ -209,6 +241,7 @@ class SearchFragment : Fragment() {
 
     private fun handleSearchTextChange(query: String) {
         currentSearchQuery = query
+        viewModel.query.value = query
         searchJob?.cancel()
 
         if (query.isBlank()) {
@@ -254,6 +287,9 @@ class SearchFragment : Fragment() {
                         message = "Intenta con otros términos"
                     )
                 } else {
+                    // Guardar en ViewModel y mostrar
+                    viewModel.items.value = items
+                    viewModel.query.value = query
                     showResults()
                     searchAdapter.updateAuth(
                         serverUrl = serverUrl ?: "",
