@@ -389,8 +389,8 @@ class LibraryFragment : Fragment() {
                 }
             }
             LibraryItemType.LIKED_SONGS -> {
-                // Navegar a canciones favoritas
-                findNavController().navigate(R.id.songsFragment)
+                // Navegar a canciones favoritas con animaciones definidas
+                findNavController().navigate(R.id.action_library_to_favorites)
             }
         }
     }
