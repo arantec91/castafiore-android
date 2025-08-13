@@ -66,6 +66,12 @@ class MusicRepository private constructor(private val context: Context) {
             }
         }
 
+    var continueWithSimilarEnabled: Boolean
+        get() = prefs.getBoolean("continue_with_similar", true)
+        set(value) {
+            prefs.edit().putBoolean("continue_with_similar", value).apply()
+        }
+
     fun isConfigured(): Boolean {
         return !serverUrl.isNullOrEmpty() && !username.isNullOrEmpty() && !password.isNullOrEmpty()
     }

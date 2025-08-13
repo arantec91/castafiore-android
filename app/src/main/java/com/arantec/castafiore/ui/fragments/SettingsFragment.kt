@@ -79,6 +79,13 @@ class SettingsFragment : Fragment() {
         binding.btnClearCache.setOnClickListener {
             clearImageCache()
         }
+
+        // Switch: continuar con canciones similares
+        binding.switchContinueWithSimilar.isChecked = musicRepository.continueWithSimilarEnabled
+        binding.switchContinueWithSimilar.setOnCheckedChangeListener { _, isChecked ->
+            musicRepository.continueWithSimilarEnabled = isChecked
+            showMessage(if (isChecked) "Reproducir similares activado" else "Reproducir similares desactivado")
+        }
     }
 
     private fun showDisconnectConfirmation() {

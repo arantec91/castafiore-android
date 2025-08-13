@@ -93,16 +93,9 @@ class MusicService : Service() {
             override fun onPlaybackStateChanged(state: Int) {
                 if (state == com.google.android.exoplayer2.Player.STATE_ENDED) {
                     when (repeatMode) {
-                        RepeatMode.ONE -> {
-                            // Repetir la canción actual
-                            startNewSong()
-                        }
+                        RepeatMode.ONE -> { startNewSong() }
                         RepeatMode.ALL -> {
-                            // Si hay más canciones, avanzar; si no, volver al inicio
-                            if (currentIndex < playlist.size - 1) {
-                                next()
-                            } else if (playlist.isNotEmpty()) {
-                                // Volver al inicio de la lista
+                            if (currentIndex < playlist.size - 1) { next() } else if (playlist.isNotEmpty()) {
                                 currentIndex = 0
                                 currentSong = playlist[currentIndex]
                                 notifySongChanged(currentSong)
@@ -113,21 +106,22 @@ class MusicService : Service() {
                             if (currentIndex < playlist.size - 1) {
                                 next()
                             } else {
-                                // Usar prefetched primero para evitar espera
-                                if (!prefetchedSimilar.isNullOrEmpty()) {
-                                    val toAppend = prefetchedSimilar!!.filter { s -> playlist.none { it.id == s.id } }
-                                    if (toAppend.isNotEmpty()) {
-                                        playlist.addAll(toAppend)
-                                        notifyQueueChanged(playlist.toList())
-                                        prefetchedSimilar = null
-                                        next()
-                                        // Prefetch para la nueva canción en curso
-                                        prefetchSimilarForCurrentSong()
-                                        return
+                                if (musicRepository.continueWithSimilarEnabled) {
+                                    if (!prefetchedSimilar.isNullOrEmpty()) {
+                                        val toAppend = prefetchedSimilar!!.filter { s -> playlist.none { it.id == s.id } }
+                                        if (toAppend.isNotEmpty()) {
+                                            playlist.addAll(toAppend)
+                                            notifyQueueChanged(playlist.toList())
+                                            prefetchedSimilar = null
+                                            next()
+                                            prefetchSimilarForCurrentSong()
+                                            return
+                                        }
                                     }
+                                    continueWithSimilarSongs()
+                                } else {
+                                    stopAtEnd()
                                 }
-                                // Fin de la cola: intentar continuar con canciones similares (con red)
-                                continueWithSimilarSongs()
                             }
                         }
                     }
@@ -142,7 +136,7 @@ class MusicService : Service() {
                 notifySongChanged(currentSong)
                 showOrUpdateNotification()
                 // Lanzar prefetch de similares de la canción actual (solo si repeat OFF)
-                if (repeatMode == RepeatMode.OFF) {
+                if (repeatMode == RepeatMode.OFF && musicRepository.continueWithSimilarEnabled) {
                     prefetchSimilarForCurrentSong()
                 }
             }
