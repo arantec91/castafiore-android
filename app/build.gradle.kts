@@ -95,6 +95,9 @@ dependencies {
     // Palette
     implementation("androidx.palette:palette-ktx:1.0.0")
 
+    // Media notifications (MediaStyle)
+    implementation("androidx.media:media:1.7.0")
+
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)

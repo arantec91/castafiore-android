@@ -19,4 +19,8 @@
     <string name="view_artist">Ver artista</string>
     <string name="share">Compartir</string>
     <string name="song_info">Información de la canción</string>
+    <string name="play">Reproducir</string>
+    <string name="pause">Pausar</string>
+    <string name="next">Siguiente</string>
+    <string name="previous">Anterior</string>
 </resources>

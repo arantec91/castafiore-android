@@ -1,16 +1,38 @@
 package com.arantec.castafiore.service
 
-import android.app.Service
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
+import android.content.Context
 import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.os.Build
+import androidx.core.app.NotificationCompat
+import androidx.media.session.MediaButtonReceiver
+import androidx.core.content.ContextCompat
+import androidx.media.app.NotificationCompat.MediaStyle
+import android.support.v4.media.MediaMetadataCompat
+import android.app.Service
 import android.os.Binder
 import android.os.IBinder
 import android.support.v4.media.session.MediaSessionCompat
 import android.support.v4.media.session.PlaybackStateCompat
-import androidx.media.session.MediaButtonReceiver
+import com.arantec.castafiore.R
 import com.arantec.castafiore.data.models.Song
 import com.arantec.castafiore.data.repository.MusicRepository
+import com.arantec.castafiore.utils.ImageLoader
 import com.google.android.exoplayer2.ExoPlayer
 import com.google.android.exoplayer2.MediaItem
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import android.content.pm.ServiceInfo
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import com.arantec.castafiore.ui.activities.PlayerActivity
 
 class MusicService : Service() {
 
@@ -25,6 +47,8 @@ class MusicService : Service() {
     private var playlist = mutableListOf<Song>()
     private var currentIndex = 0
     private var repeatMode = RepeatMode.OFF
+    private var originalQueue: MutableList<Song>? = null
+    private var progressJob: Job? = null
 
     // Enum para los modos de repetición
     enum class RepeatMode {
@@ -38,6 +62,8 @@ class MusicService : Service() {
     companion object {
         private const val TAG = "MusicService"
         private const val MEDIA_SESSION_TAG = "CastafioreMediaSession"
+        private const val NOTIFICATION_CHANNEL_ID = "playback_channel"
+        private const val NOTIFICATION_ID = 2001
     }
 
     inner class MusicBinder : Binder() {
@@ -48,6 +74,8 @@ class MusicService : Service() {
         super.onCreate()
 
         musicRepository = MusicRepository.getInstance(this)
+
+        createNotificationChannel()
 
         // Inicializar MediaSession
         mediaSession = MediaSessionCompat(this, MEDIA_SESSION_TAG).apply {
@@ -89,19 +117,25 @@ class MusicService : Service() {
                                 isPlaying = false
                                 updatePlaybackState()
                                 notifyPlaybackStateChanged(false)
+                                showOrUpdateNotification()
                             }
                         }
                     }
                 }
+                // Actualizar notificación cuando ExoPlayer cambia a READY o BUFFERING
+                showOrUpdateNotification()
             }
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
                 // Actualizar el mini player al cambiar de canción
                 currentSong = playlist.getOrNull(currentIndex)
+                updateMediaMetadata()
                 notifySongChanged(currentSong)
+                showOrUpdateNotification()
             }
         })
 
         updatePlaybackState()
+        updateMediaMetadata()
     }
 
     override fun onBind(intent: Intent): IBinder {
@@ -114,6 +148,7 @@ class MusicService : Service() {
         mediaSession.release()
         playbackStateListeners.clear()
         songChangeListeners.clear()
+        stopProgressUpdates()
         super.onDestroy()
     }
 
@@ -162,6 +197,8 @@ class MusicService : Service() {
         isPlaying = true
         updatePlaybackState()
         notifyPlaybackStateChanged(true)
+        showOrUpdateNotification()
+        startProgressUpdates()
     }
 
     private fun startNewSong() {
@@ -173,6 +210,9 @@ class MusicService : Service() {
         exoPlayer?.setMediaItem(mediaItem)
         exoPlayer?.prepare()
         exoPlayer?.play()
+        updateMediaMetadata()
+        showOrUpdateNotification()
+        startProgressUpdates()
     }
 
     fun resume() {
@@ -182,6 +222,8 @@ class MusicService : Service() {
             isPlaying = true
             updatePlaybackState()
             notifyPlaybackStateChanged(true)
+            showOrUpdateNotification()
+            startProgressUpdates()
         } else {
             // Si no está listo, llamar a play normal
             play()
@@ -193,6 +235,8 @@ class MusicService : Service() {
         updatePlaybackState()
         notifyPlaybackStateChanged(false)
         exoPlayer?.pause()
+        showOrUpdateNotification()
+        stopProgressUpdates()
     }
 
     fun stop() {
@@ -201,6 +245,10 @@ class MusicService : Service() {
         updatePlaybackState()
         notifyPlaybackStateChanged(false)
         exoPlayer?.stop()
+        stopForeground(true)
+        (getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).cancel(NOTIFICATION_ID)
+        stopSelf()
+        stopProgressUpdates()
     }
 
     fun togglePlayPause() {
@@ -222,6 +270,7 @@ class MusicService : Service() {
             if (isPlaying) {
                 updatePlaybackState()
                 notifyPlaybackStateChanged(true)
+                showOrUpdateNotification()
             }
         }
     }
@@ -237,6 +286,7 @@ class MusicService : Service() {
             if (isPlaying) {
                 updatePlaybackState()
                 notifyPlaybackStateChanged(true)
+                showOrUpdateNotification()
             }
         }
     }
@@ -260,6 +310,7 @@ class MusicService : Service() {
         isPlaying = true
         updatePlaybackState()
         notifyPlaybackStateChanged(true)
+        showOrUpdateNotification()
     }
 
     fun playSong(song: Song) {
@@ -275,116 +326,160 @@ class MusicService : Service() {
         isPlaying = true
         updatePlaybackState()
         notifyPlaybackStateChanged(true)
+        showOrUpdateNotification()
     }
 
-    fun addToQueue(song: Song) {
-        playlist.add(song)
-        notifyQueueChanged(playlist.toList())
+    // --- Notificación y metadata ---
+    private fun createNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                NOTIFICATION_CHANNEL_ID,
+                getString(R.string.app_name),
+                NotificationManager.IMPORTANCE_LOW
+            ).apply {
+                description = "Reproducción de música"
+                setSound(null, null)
+                enableVibration(false)
+            }
+            val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            nm.createNotificationChannel(channel)
+        }
     }
 
-    fun playNext(song: Song) {
-        val insertPosition = currentIndex + 1
-        if (insertPosition <= playlist.size) {
-            playlist.add(insertPosition, song)
-            notifyQueueChanged(playlist.toList())
+    private fun getContentPendingIntent(): PendingIntent? {
+        // Abrir directamente PlayerActivity al tocar la notificación
+        val intent = Intent(this, PlayerActivity::class.java).apply {
+            addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
+        }
+        return PendingIntent.getActivity(
+            this,
+            0,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+    }
+
+    private fun buildBaseNotification(largeIcon: Bitmap? = null): NotificationCompat.Builder {
+        val song = currentSong
+        val title = song?.title ?: getString(R.string.app_name)
+        val artist = song?.artist ?: ""
+
+        val playPauseAction = NotificationCompat.Action(
+            if (isPlaying) R.drawable.ic_pause else R.drawable.ic_play,
+            if (isPlaying) getString(R.string.pause) else getString(R.string.play),
+            MediaButtonReceiver.buildMediaButtonPendingIntent(
+                this,
+                PlaybackStateCompat.ACTION_PLAY_PAUSE
+            )
+        )
+        val prevAction = NotificationCompat.Action(
+            R.drawable.ic_arrow_back,
+            getString(R.string.previous),
+            MediaButtonReceiver.buildMediaButtonPendingIntent(
+                this,
+                PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS
+            )
+        )
+        val nextAction = NotificationCompat.Action(
+            R.drawable.ic_skip_next,
+            getString(R.string.next),
+            MediaButtonReceiver.buildMediaButtonPendingIntent(
+                this,
+                PlaybackStateCompat.ACTION_SKIP_TO_NEXT
+            )
+        )
+
+        val style = MediaStyle()
+            .setMediaSession(mediaSession.sessionToken)
+            .setShowActionsInCompactView(0, 1, 2)
+
+        val builder = NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_music_note)
+            .setContentTitle(title)
+            .setContentText(artist)
+            .setContentIntent(getContentPendingIntent())
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setCategory(Notification.CATEGORY_TRANSPORT)
+            .setOnlyAlertOnce(true)
+            .setColor(ContextCompat.getColor(this, R.color.primary))
+            .setStyle(style)
+            .addAction(prevAction)
+            .addAction(playPauseAction)
+            .addAction(nextAction)
+
+        if (largeIcon != null) builder.setLargeIcon(largeIcon)
+
+        return builder
+    }
+
+    private fun showOrUpdateNotification() {
+        val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val isForeground = isPlaying
+
+        // Cargar carátula en background y actualizar notificación
+        val song = currentSong
+        if (song != null && musicRepository.serverUrl != null) {
+            val (u, t, s) = musicRepository.getAuthParams()
+            val coverUrl = song.getCoverArtUrl(musicRepository.serverUrl!!, u, t, s)
+            CoroutineScope(Dispatchers.IO).launch {
+                val bitmap = try {
+                    if (coverUrl != null) {
+                        val future = com.bumptech.glide.Glide.with(this@MusicService)
+                            .asBitmap()
+                            .load(coverUrl)
+                            .submit(256, 256)
+                        future.get()
+                    } else null
+                } catch (_: Exception) { null }
+
+                withContext(Dispatchers.Main) {
+                    val notification = buildBaseNotification(bitmap).build()
+                    if (isForeground) {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                            startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK)
+                        } else {
+                            startForeground(NOTIFICATION_ID, notification)
+                        }
+                    } else {
+                        nm.notify(NOTIFICATION_ID, notification)
+                        // Mantener notificación visible pero quitar foreground si está pausado
+                        stopForeground(false)
+                    }
+                }
+            }
         } else {
-            // Si no hay posición siguiente válida, agregar al final
-            addToQueue(song)
-        }
-    }
-
-    fun removeFromQueue(index: Int) {
-        if (index in 0 until playlist.size) {
-            playlist.removeAt(index)
-            if (index < currentIndex) {
-                currentIndex--
-            } else if (index == currentIndex && currentIndex >= playlist.size) {
-                currentIndex = playlist.size - 1
-                currentSong = if (playlist.isNotEmpty()) playlist[currentIndex] else null
-                notifySongChanged(currentSong)
+            val notification = buildBaseNotification(null).build()
+            if (isForeground) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK)
+                } else {
+                    startForeground(NOTIFICATION_ID, notification)
+                }
+            } else {
+                nm.notify(NOTIFICATION_ID, notification)
+                stopForeground(false)
             }
-            notifyQueueChanged(playlist.toList())
         }
     }
 
-    // Nuevos métodos para la cola de reproducción
-    fun getQueue(): List<Song> = playlist.toList()
-
-    fun getCurrentIndex(): Int = currentIndex
-
-    fun playFromQueue(index: Int) {
-        if (index in 0 until playlist.size) {
-            currentIndex = index
-            currentSong = playlist[currentIndex]
-            notifySongChanged(currentSong)
-            startNewSong()
-            isPlaying = true
-            updatePlaybackState()
-            notifyPlaybackStateChanged(true)
-        }
+    private fun updateMediaMetadata() {
+        val song = currentSong ?: return
+        val metadata = MediaMetadataCompat.Builder()
+            .putString(MediaMetadataCompat.METADATA_KEY_TITLE, song.title)
+            .putString(MediaMetadataCompat.METADATA_KEY_ARTIST, song.artist)
+            .putString(MediaMetadataCompat.METADATA_KEY_ALBUM, song.album)
+            .putLong(MediaMetadataCompat.METADATA_KEY_DURATION, (song.duration * 1000).toLong())
+            .build()
+        mediaSession.setMetadata(metadata)
     }
-
-    fun clearQueue() {
-        val hadSongs = playlist.isNotEmpty()
-        playlist.clear()
-        currentIndex = 0
-        currentSong = null
-
-        if (hadSongs) {
-            stop()
-            notifySongChanged(null)
-            notifyQueueChanged(emptyList())
-        }
-    }
-
-    fun moveInQueue(fromIndex: Int, toIndex: Int) {
-        if (fromIndex in 0 until playlist.size && toIndex in 0 until playlist.size) {
-            val song = playlist.removeAt(fromIndex)
-            playlist.add(toIndex, song)
-
-            // Actualizar currentIndex si es necesario
-            when {
-                fromIndex == currentIndex -> currentIndex = toIndex
-                fromIndex < currentIndex && toIndex >= currentIndex -> currentIndex--
-                fromIndex > currentIndex && toIndex <= currentIndex -> currentIndex++
-            }
-
-            notifyQueueChanged(playlist.toList())
-        }
-    }
-
-    fun shuffleQueue() {
-        if (playlist.isEmpty()) return
-
-        // Obtener las canciones restantes (después de la actual)
-        val remainingSongs = playlist.drop(currentIndex + 1).shuffled()
-
-        // Reconstruir la playlist: canciones ya reproducidas + actual + restantes shuffled
-        val playedSongs = playlist.take(currentIndex + 1)
-        playlist.clear()
-        playlist.addAll(playedSongs)
-        playlist.addAll(remainingSongs)
-
-        notifyQueueChanged(playlist.toList())
-    }
-
-    fun unshuffleQueue() {
-        // Esta función requeriría mantener el orden original
-        // Por simplicidad, no implementamos deshacer shuffle
-        // En una app real guardarías el orden original
-    }
-
-    fun setRepeatMode(mode: RepeatMode) {
-        repeatMode = mode
-    }
-
-    fun getRepeatMode(): RepeatMode = repeatMode
 
     // Getters para el estado actual
     fun getCurrentSong(): Song? = currentSong
     fun isPlaying(): Boolean = isPlaying
     fun getCurrentPosition(): Long = exoPlayer?.currentPosition ?: 0L
     fun getDuration(): Long = exoPlayer?.duration ?: 0L
+    fun getQueue(): List<Song> = playlist.toList()
+    fun getCurrentIndex(): Int = currentIndex
 
     // Métodos públicos para registrar listeners (compatibilidad con ArtistDetailFragment)
     fun setOnSongChangeListener(listener: ((Song?) -> Unit)?) {
@@ -437,14 +532,15 @@ class MusicService : Service() {
     }
 
     private fun updatePlaybackState() {
-        val state = if (isPlaying) {
-            PlaybackStateCompat.STATE_PLAYING
-        } else {
-            PlaybackStateCompat.STATE_PAUSED
-        }
+        val position = exoPlayer?.currentPosition ?: currentPosition
+        currentPosition = position
+        val buffered = exoPlayer?.bufferedPosition ?: 0L
+        val state = if (isPlaying) PlaybackStateCompat.STATE_PLAYING else PlaybackStateCompat.STATE_PAUSED
+        val speed = if (isPlaying) 1.0f else 0.0f
 
         val playbackState = PlaybackStateCompat.Builder()
-            .setState(state, currentPosition, 1.0f)
+            .setState(state, position, speed)
+            .setBufferedPosition(buffered)
             .setActions(
                 PlaybackStateCompat.ACTION_PLAY_PAUSE or
                 PlaybackStateCompat.ACTION_SKIP_TO_NEXT or
@@ -454,5 +550,126 @@ class MusicService : Service() {
             .build()
 
         mediaSession.setPlaybackState(playbackState)
+    }
+
+    fun addToQueue(song: Song) {
+        playlist.add(song)
+        notifyQueueChanged(playlist.toList())
+    }
+
+    fun playNext(song: Song) {
+        val insertPosition = currentIndex + 1
+        if (insertPosition <= playlist.size) {
+            playlist.add(insertPosition, song)
+            notifyQueueChanged(playlist.toList())
+        } else {
+            addToQueue(song)
+        }
+    }
+
+    fun shuffleQueue() {
+        if (playlist.isEmpty()) return
+        // Guardar orden original una sola vez
+        if (originalQueue == null) {
+            originalQueue = playlist.toMutableList()
+        }
+        val played = playlist.take(currentIndex + 1)
+        val remaining = playlist.drop(currentIndex + 1).shuffled()
+        playlist.clear()
+        playlist.addAll(played + remaining)
+        notifyQueueChanged(playlist.toList())
+    }
+
+    fun unshuffleQueue() {
+        val original = originalQueue ?: return
+        // Mantener la canción actual si existe
+        val current = currentSong
+        playlist.clear()
+        playlist.addAll(original)
+        originalQueue = null
+        currentIndex = current?.let { song -> playlist.indexOfFirst { it.id == song.id } }.takeIf { it != null && it >= 0 } ?: 0
+        currentSong = playlist.getOrNull(currentIndex)
+        notifyQueueChanged(playlist.toList())
+    }
+
+    fun setRepeatMode(mode: RepeatMode) {
+        repeatMode = mode
+        // Mapear con ExoPlayer
+        val exoMode = when (mode) {
+            RepeatMode.OFF -> com.google.android.exoplayer2.Player.REPEAT_MODE_OFF
+            RepeatMode.ALL -> com.google.android.exoplayer2.Player.REPEAT_MODE_ALL
+            RepeatMode.ONE -> com.google.android.exoplayer2.Player.REPEAT_MODE_ONE
+        }
+        exoPlayer?.repeatMode = exoMode
+    }
+
+    fun getRepeatMode(): RepeatMode = repeatMode
+
+    fun playFromQueue(index: Int) {
+        if (index in 0 until playlist.size) {
+            currentIndex = index
+            currentSong = playlist[currentIndex]
+            notifySongChanged(currentSong)
+            startNewSong()
+            isPlaying = true
+            updatePlaybackState()
+            notifyPlaybackStateChanged(true)
+            showOrUpdateNotification()
+        }
+    }
+
+    fun removeFromQueue(index: Int) {
+        if (index in 0 until playlist.size) {
+            playlist.removeAt(index)
+            when {
+                index < currentIndex -> currentIndex--
+                index == currentIndex -> {
+                    if (playlist.isNotEmpty()) {
+                        if (currentIndex >= playlist.size) currentIndex = playlist.size - 1
+                        currentSong = playlist[currentIndex]
+                        notifySongChanged(currentSong)
+                        startNewSong()
+                    } else {
+                        currentSong = null
+                        notifySongChanged(null)
+                        stop()
+                    }
+                }
+            }
+            notifyQueueChanged(playlist.toList())
+        }
+    }
+
+    fun moveInQueue(fromIndex: Int, toIndex: Int) {
+        if (fromIndex in 0 until playlist.size && toIndex in 0 until playlist.size) {
+            val song = playlist.removeAt(fromIndex)
+            playlist.add(toIndex, song)
+
+            // Actualizar currentIndex si es necesario
+            currentIndex = when {
+                fromIndex == currentIndex -> toIndex
+                fromIndex < currentIndex && toIndex >= currentIndex -> currentIndex - 1
+                fromIndex > currentIndex && toIndex <= currentIndex -> currentIndex + 1
+                else -> currentIndex
+            }
+
+            notifyQueueChanged(playlist.toList())
+        }
+    }
+
+    // Inicia y detiene actualizaciones periódicas del progreso para la notificación/lockscreen
+    private fun startProgressUpdates() {
+        progressJob?.cancel()
+        progressJob = CoroutineScope(Dispatchers.Main).launch {
+            while (isPlaying) {
+                updatePlaybackState()
+                delay(1000L)
+            }
+        }
+    }
+
+    private fun stopProgressUpdates() {
+        progressJob?.cancel()
+        progressJob = null
     }
 }
