@@ -28,14 +28,19 @@ class MusicRepository private constructor(private val context: Context) {
     private val gson = Gson()
     private val cacheManager = CacheManager.getInstance(context)
 
+    // Cache interno de auth para mantener token/salt consistentes
+    @Volatile
+    private var cachedAuth: Triple<String, String, String>? = null
+
     var serverUrl: String?
         get() = prefs.getString("server_url", null)
         set(value) {
             val oldValue = prefs.getString("server_url", null)
             prefs.edit().putString("server_url", value).apply()
-            // Si cambió el servidor, limpiar todo el cache
+            // Si cambió el servidor, limpiar todo el cache y auth
             if (oldValue != value) {
                 CacheInvalidation.invalidateAllCache(cacheManager)
+                cachedAuth = null
             }
         }
 
@@ -44,24 +49,35 @@ class MusicRepository private constructor(private val context: Context) {
         set(value) {
             val oldValue = prefs.getString("username", null)
             prefs.edit().putString("username", value).apply()
-            // Si cambió el usuario, limpiar todo el cache
+            // Si cambió el usuario, limpiar todo el cache y auth
             if (oldValue != value) {
                 CacheInvalidation.invalidateAllCache(cacheManager)
+                cachedAuth = null
             }
         }
 
     var password: String?
         get() = prefs.getString("password", null)
-        set(value) = prefs.edit().putString("password", value).apply()
+        set(value) {
+            val old = prefs.getString("password", null)
+            prefs.edit().putString("password", value).apply()
+            if (old != value) {
+                cachedAuth = null
+            }
+        }
 
     fun isConfigured(): Boolean {
         return !serverUrl.isNullOrEmpty() && !username.isNullOrEmpty() && !password.isNullOrEmpty()
     }
 
     fun getAuthParams(): Triple<String, String, String> {
+        // Devuelve auth cacheado para mantener el mismo token/salt
+        cachedAuth?.let { return it }
         val user = username ?: throw IllegalStateException("Username not configured")
         val pass = password ?: throw IllegalStateException("Password not configured")
-        return NavidromeClient.generateAuthParams(user, pass)
+        val triple = NavidromeClient.generateAuthParams(user, pass)
+        cachedAuth = triple
+        return triple
     }
 
     suspend fun searchMusic(query: String): Result<Triple<List<Song>, List<Album>, List<Artist>>> {

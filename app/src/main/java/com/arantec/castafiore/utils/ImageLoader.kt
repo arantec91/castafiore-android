@@ -157,22 +157,11 @@ object ImageLoader {
         imageView: ImageView,
         url: String?
     ) {
-        Glide.with(context)
+        Glide.with(imageView)
             .load(url)
             .apply(thumbnailOptions)
-            .into(object : CustomTarget<Drawable>() {
-                override fun onResourceReady(resource: Drawable, transition: Transition<in Drawable>?) {
-                    imageView.setImageDrawable(resource)
-                }
-
-                override fun onLoadCleared(placeholder: Drawable?) {
-                    imageView.setImageResource(R.drawable.ic_album_placeholder)
-                }
-
-                override fun onLoadFailed(errorDrawable: Drawable?) {
-                    imageView.setImageResource(R.drawable.ic_album_placeholder)
-                }
-            })
+            .transition(DrawableTransitionOptions.withCrossFade(200))
+            .into(imageView)
     }
 
     /**
