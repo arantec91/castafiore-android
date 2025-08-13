@@ -49,6 +49,7 @@ class MusicService : Service() {
     private var repeatMode = RepeatMode.OFF
     private var originalQueue: MutableList<Song>? = null
     private var progressJob: Job? = null
+    private var prefetchedSimilar: List<Song>? = null
 
     // Enum para los modos de repetición
     enum class RepeatMode {
@@ -109,15 +110,24 @@ class MusicService : Service() {
                             }
                         }
                         RepeatMode.OFF -> {
-                            // Comportamiento original: avanzar o parar
                             if (currentIndex < playlist.size - 1) {
                                 next()
                             } else {
-                                // Fin de la cola, detener reproducción
-                                isPlaying = false
-                                updatePlaybackState()
-                                notifyPlaybackStateChanged(false)
-                                showOrUpdateNotification()
+                                // Usar prefetched primero para evitar espera
+                                if (!prefetchedSimilar.isNullOrEmpty()) {
+                                    val toAppend = prefetchedSimilar!!.filter { s -> playlist.none { it.id == s.id } }
+                                    if (toAppend.isNotEmpty()) {
+                                        playlist.addAll(toAppend)
+                                        notifyQueueChanged(playlist.toList())
+                                        prefetchedSimilar = null
+                                        next()
+                                        // Prefetch para la nueva canción en curso
+                                        prefetchSimilarForCurrentSong()
+                                        return
+                                    }
+                                }
+                                // Fin de la cola: intentar continuar con canciones similares (con red)
+                                continueWithSimilarSongs()
                             }
                         }
                     }
@@ -131,6 +141,10 @@ class MusicService : Service() {
                 updateMediaMetadata()
                 notifySongChanged(currentSong)
                 showOrUpdateNotification()
+                // Lanzar prefetch de similares de la canción actual (solo si repeat OFF)
+                if (repeatMode == RepeatMode.OFF) {
+                    prefetchSimilarForCurrentSong()
+                }
             }
         })
 
@@ -594,10 +608,12 @@ class MusicService : Service() {
 
     fun setRepeatMode(mode: RepeatMode) {
         repeatMode = mode
-        // Mapear con ExoPlayer
+        // Mapear con ExoPlayer: solo repetir UNA pista a nivel ExoPlayer.
+        // Para repetir TODA la cola, mantenemos REPEAT_MODE_OFF y dejamos que la lógica
+        // de onPlaybackStateChanged avance por la playlist y regrese al inicio.
         val exoMode = when (mode) {
             RepeatMode.OFF -> com.google.android.exoplayer2.Player.REPEAT_MODE_OFF
-            RepeatMode.ALL -> com.google.android.exoplayer2.Player.REPEAT_MODE_ALL
+            RepeatMode.ALL -> com.google.android.exoplayer2.Player.REPEAT_MODE_OFF
             RepeatMode.ONE -> com.google.android.exoplayer2.Player.REPEAT_MODE_ONE
         }
         exoPlayer?.repeatMode = exoMode
@@ -671,5 +687,71 @@ class MusicService : Service() {
     private fun stopProgressUpdates() {
         progressJob?.cancel()
         progressJob = null
+    }
+
+    private fun prefetchSimilarForCurrentSong() {
+        val base = currentSong ?: return
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                val result = musicRepository.getSimilarSongs(base.id, size = 15)
+                val list = result.getOrNull().orEmpty()
+                    .filter { it.id != base.id }
+                    .filter { s -> playlist.none { it.id == s.id } }
+                if (list.isNotEmpty()) {
+                    prefetchedSimilar = list
+                }
+            } catch (_: Exception) {
+                // Ignorar errores de prefetch
+            }
+        }
+    }
+
+    private fun continueWithSimilarSongs() {
+        val baseSong = currentSong
+        if (baseSong == null) {
+            stopAtEnd()
+            return
+        }
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                val similarResult = musicRepository.getSimilarSongs(baseSong.id, size = 15)
+                val similar = similarResult.getOrNull()
+                    ?.filter { it.id != baseSong.id }
+                    ?.filter { s -> playlist.none { it.id == s.id } }
+                    ?: emptyList()
+
+                if (similar.isNotEmpty()) {
+                    withContext(Dispatchers.Main) {
+                        playlist.addAll(similar)
+                        notifyQueueChanged(playlist.toList())
+                        next()
+                        // Prefetch para la nueva canción
+                        prefetchSimilarForCurrentSong()
+                    }
+                } else {
+                    val randomResult = musicRepository.getRandomSongs(size = 15)
+                    val randomSongs = randomResult.getOrNull()?.filter { s -> playlist.none { it.id == s.id } } ?: emptyList()
+                    if (randomSongs.isNotEmpty()) {
+                        withContext(Dispatchers.Main) {
+                            playlist.addAll(randomSongs)
+                            notifyQueueChanged(playlist.toList())
+                            next()
+                            prefetchSimilarForCurrentSong()
+                        }
+                    } else {
+                        withContext(Dispatchers.Main) { stopAtEnd() }
+                    }
+                }
+            } catch (_: Exception) {
+                withContext(Dispatchers.Main) { stopAtEnd() }
+            }
+        }
+    }
+
+    private fun stopAtEnd() {
+        isPlaying = false
+        updatePlaybackState()
+        notifyPlaybackStateChanged(false)
+        showOrUpdateNotification()
     }
 }

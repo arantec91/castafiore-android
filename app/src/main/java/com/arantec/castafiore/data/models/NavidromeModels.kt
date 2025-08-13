@@ -174,3 +174,21 @@ data class StarredItems(
     val album: List<Album>?,
     val song: List<Song>?
 )
+
+// Similar songs response
+data class SimilarSongsResponse(
+    @SerializedName("subsonic-response")
+    val subsonicResponse: SimilarSongsResult
+)
+
+data class SimilarSongsResult(
+    val status: String,
+    val version: String,
+    @SerializedName(value = "similarSongs", alternate = ["similarSongs2"])
+    val similarSongs: SimilarSongs?,
+    val error: ErrorResponse?
+)
+
+data class SimilarSongs(
+    val song: List<Song>
+)

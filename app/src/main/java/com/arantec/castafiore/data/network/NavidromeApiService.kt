@@ -177,4 +177,16 @@ interface NavidromeApiService {
         @Query("id") id: String,
         @Query("f") format: String = "json"
     ): Response<PlaylistResponse>
+
+    @GET("rest/getSimilarSongs2.view")
+    suspend fun getSimilarSongs(
+        @Query("u") username: String,
+        @Query("t") token: String,
+        @Query("s") salt: String,
+        @Query("v") version: String,
+        @Query("c") client: String,
+        @Query("id") id: String,
+        @Query("size") size: Int = 20,
+        @Query("f") format: String = "json"
+    ): Response<SimilarSongsResponse>
 }

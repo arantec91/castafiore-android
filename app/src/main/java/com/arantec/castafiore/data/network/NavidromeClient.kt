@@ -6,6 +6,7 @@ import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import java.security.MessageDigest
 import java.util.*
+import java.util.concurrent.TimeUnit
 
 object NavidromeClient {
     private var retrofit: Retrofit? = null
@@ -17,6 +18,10 @@ object NavidromeClient {
 
         val client = OkHttpClient.Builder()
             .addInterceptor(logging)
+            .connectTimeout(25, TimeUnit.SECONDS)
+            .readTimeout(25, TimeUnit.SECONDS)
+            .writeTimeout(25, TimeUnit.SECONDS)
+            .retryOnConnectionFailure(true)
             .build()
 
         retrofit = Retrofit.Builder()

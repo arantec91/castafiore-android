@@ -17,7 +17,8 @@
     <ScrollView
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:fillViewport="true">
+        android:fillViewport="true"
+        android:scrollbars="none">
 
         <LinearLayout
             android:layout_width="match_parent"
@@ -276,16 +277,6 @@
                 android:gravity="center"
                 android:layout_marginTop="16dp">
 
-                <!-- Compartir -->
-                <ImageButton
-                    android:id="@+id/btnShare"
-                    android:layout_width="40dp"
-                    android:layout_height="40dp"
-                    android:layout_marginEnd="24dp"
-                    android:background="?attr/selectableItemBackgroundBorderless"
-                    android:contentDescription="Compartir"
-                    android:src="@drawable/ic_share"
-                    app:tint="@color/text_secondary" />
 
                 <!-- Cola de reproducción -->
                 <ImageButton

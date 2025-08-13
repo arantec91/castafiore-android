@@ -113,7 +113,7 @@ class MusicRepository private constructor(private val context: Context) {
         }
     }
 
-    suspend fun getRandomSongs(): Result<List<Song>> {
+    suspend fun getRandomSongs(size: Int = 20): Result<List<Song>> {
         return cacheManager.getRandomSongs(
             key = CacheKeys.RANDOM_SONGS,
             type = CacheTypes.SONG_LIST_TYPE
@@ -125,7 +125,8 @@ class MusicRepository private constructor(private val context: Context) {
                     token = token,
                     salt = salt,
                     version = "1.16.1",
-                    client = "Castafiore"
+                    client = "Castafiore",
+                    size = size
                 )
 
                 if (response.isSuccessful) {
@@ -949,6 +950,32 @@ class MusicRepository private constructor(private val context: Context) {
             } catch (e: Exception) {
                 Result.failure(e)
             }
+        }
+    }
+
+    suspend fun getSimilarSongs(baseSongId: String, size: Int = 15): Result<List<Song>> {
+        return try {
+            val (username, token, salt) = getAuthParams()
+            val response = NavidromeClient.getApiService().getSimilarSongs(
+                username = username,
+                token = token,
+                salt = salt,
+                version = "1.16.1",
+                client = "Castafiore",
+                id = baseSongId,
+                size = size
+            )
+
+            if (response.isSuccessful) {
+                response.body()?.let { similarResponse ->
+                    val songs = similarResponse.subsonicResponse.similarSongs?.song ?: emptyList()
+                    Result.success(songs)
+                } ?: Result.failure(Exception("Empty response"))
+            } else {
+                Result.failure(Exception("HTTP Error: ${response.code()} - ${response.message()}"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
         }
     }
 }
