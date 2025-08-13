@@ -104,4 +104,31 @@
         android:label="Configuración"
         tools:layout="@layout/fragment_settings" />
 
+    <fragment
+        android:id="@+id/libraryFragment"
+        android:name="com.arantec.castafiore.ui.fragments.LibraryFragment"
+        android:label="Biblioteca"
+        tools:layout="@layout/fragment_library">
+        <action
+            android:id="@+id/action_library_to_albumDetail"
+            app:destination="@id/albumDetailFragment"
+            app:enterAnim="@anim/slide_in_right"
+            app:exitAnim="@anim/slide_out_left"
+            app:popEnterAnim="@anim/slide_in_left"
+            app:popExitAnim="@anim/slide_out_right" />
+        <action
+            android:id="@+id/action_library_to_artistDetail"
+            app:destination="@id/artistDetailFragment"
+            app:enterAnim="@anim/slide_in_right"
+            app:exitAnim="@anim/slide_out_left"
+            app:popEnterAnim="@anim/slide_in_left"
+            app:popExitAnim="@anim/slide_out_right" />
+    </fragment>
+
+    <fragment
+        android:id="@+id/favoritesFragment"
+        android:name="com.arantec.castafiore.ui.fragments.FavoritesFragment"
+        android:label="Favoritos"
+        tools:layout="@layout/fragment_favorites" />
+
 </navigation>

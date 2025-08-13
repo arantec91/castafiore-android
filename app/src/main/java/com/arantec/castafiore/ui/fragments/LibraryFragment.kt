@@ -1,0 +1,423 @@
+package com.arantec.castafiore.ui.fragments
+
+import android.os.Bundle
+import android.view.LayoutInflater
+import android.view.View
+import android.view.ViewGroup
+import androidx.fragment.app.Fragment
+import androidx.navigation.fragment.findNavController
+import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
+import com.arantec.castafiore.R
+import com.arantec.castafiore.databinding.FragmentLibraryBinding
+import com.arantec.castafiore.ui.adapters.LibraryAdapter
+import com.arantec.castafiore.data.models.LibraryItem
+import com.arantec.castafiore.data.models.LibraryItemType
+import com.arantec.castafiore.data.models.Album
+import com.arantec.castafiore.data.models.Playlist
+import com.arantec.castafiore.data.repository.MusicRepository
+import com.arantec.castafiore.utils.ImageLoader
+import com.google.android.material.chip.Chip
+
+class LibraryFragment : Fragment() {
+
+    private var _binding: FragmentLibraryBinding? = null
+    private val binding get() = _binding!!
+
+    private lateinit var libraryAdapter: LibraryAdapter
+    private lateinit var musicRepository: MusicRepository
+    private var currentFilter = "all"
+
+    // Listas de datos separadas por tipo
+    private var allItems = mutableListOf<LibraryItem>()
+    private var playlists = mutableListOf<LibraryItem>()
+    private var albums = mutableListOf<LibraryItem>()
+    private var artists = mutableListOf<LibraryItem>()
+
+    // Mapas para mantener referencias a los objetos completos
+    private var albumsMap = mutableMapOf<String, Album>()
+    private var playlistsMap = mutableMapOf<String, Playlist>()
+
+    override fun onCreateView(
+        inflater: LayoutInflater,
+        container: ViewGroup?,
+        savedInstanceState: Bundle?
+    ): View {
+        _binding = FragmentLibraryBinding.inflate(inflater, container, false)
+        return binding.root
+    }
+
+    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+        super.onViewCreated(view, savedInstanceState)
+
+        musicRepository = MusicRepository.getInstance(requireContext())
+
+        setupRecyclerView()
+        setupFilters()
+        setupControls()
+
+        // Establecer estado inicial de los chips
+        updateChipColors()
+
+        loadInitialData()
+    }
+
+    private fun setupRecyclerView() {
+        libraryAdapter = LibraryAdapter { item ->
+            handleItemClick(item)
+        }
+
+        binding.rvLibraryItems.apply {
+            layoutManager = LinearLayoutManager(requireContext())
+            adapter = libraryAdapter
+        }
+    }
+
+    private fun setupFilters() {
+        // Configurar chips de filtros con manejo mejorado
+        binding.chipAll.setOnClickListener {
+            if (!binding.chipAll.isChecked) {
+                selectChip(binding.chipAll, "all")
+            }
+        }
+
+        binding.chipPlaylists.setOnClickListener {
+            if (!binding.chipPlaylists.isChecked) {
+                selectChip(binding.chipPlaylists, "playlists")
+            }
+        }
+
+        binding.chipAlbums.setOnClickListener {
+            if (!binding.chipAlbums.isChecked) {
+                selectChip(binding.chipAlbums, "albums")
+            }
+        }
+
+        binding.chipArtists.setOnClickListener {
+            if (!binding.chipArtists.isChecked) {
+                selectChip(binding.chipArtists, "artists")
+            }
+        }
+    }
+
+    private fun selectChip(selectedChip: Chip, filter: String) {
+        // Desmarcar todos los chips sin disparar listeners
+        val chips = listOf(binding.chipAll, binding.chipPlaylists, binding.chipAlbums, binding.chipArtists)
+        chips.forEach { chip ->
+            chip.isChecked = false
+        }
+
+        // Marcar el chip seleccionado
+        selectedChip.isChecked = true
+
+        // Aplicar filtro
+        currentFilter = filter
+        filterContent()
+
+        // Actualizar colores visuales
+        updateChipColors()
+    }
+
+    private fun updateChipColors() {
+        val primaryColor = androidx.core.content.ContextCompat.getColor(requireContext(), R.color.primary)
+        val onSurfaceColor = androidx.core.content.ContextCompat.getColor(requireContext(), R.color.on_surface)
+        val outlineColor = androidx.core.content.ContextCompat.getColor(requireContext(), R.color.outline)
+        
+        val chips = listOf(
+            binding.chipAll,
+            binding.chipPlaylists,
+            binding.chipAlbums,
+            binding.chipArtists
+        )
+
+        chips.forEach { chip ->
+            if (chip.isChecked) {
+                // Chip seleccionado - color principal (#FF2D55)
+                chip.chipBackgroundColor = android.content.res.ColorStateList.valueOf(android.graphics.Color.TRANSPARENT)
+                chip.setTextColor(primaryColor)
+                chip.chipStrokeColor = android.content.res.ColorStateList.valueOf(primaryColor)
+                chip.chipStrokeWidth = 2f
+                chip.isChipIconVisible = false
+            } else {
+                // Chip no seleccionado - colores por defecto
+                chip.chipBackgroundColor = android.content.res.ColorStateList.valueOf(android.graphics.Color.TRANSPARENT)
+                chip.setTextColor(onSurfaceColor)
+                chip.chipStrokeColor = android.content.res.ColorStateList.valueOf(outlineColor)
+                chip.chipStrokeWidth = 1f
+                chip.isChipIconVisible = false
+            }
+        }
+    }
+
+    private fun setupControls() {
+        binding.tvSortBy.setOnClickListener {
+            // TODO: Mostrar opciones de ordenamiento
+        }
+
+        binding.btnViewMode.setOnClickListener {
+            // TODO: Cambiar entre vista lista y cuadrícula
+        }
+
+        binding.btnCreatePlaylist.setOnClickListener {
+            // TODO: Crear nueva playlist
+        }
+    }
+
+    private fun loadInitialData() {
+        showLoading(true)
+
+        lifecycleScope.launch {
+            try {
+                // Cargar datos por separado
+                loadPlaylists()
+                loadAlbums()
+                loadArtists()
+
+                // Una vez cargado todo, construir lista completa y mostrar contenido
+                buildAllItemsList()
+                filterContent()
+
+            } catch (e: Exception) {
+                showError("Error al cargar la biblioteca: ${e.message}")
+            } finally {
+                showLoading(false)
+            }
+        }
+    }
+
+    private suspend fun loadPlaylists() {
+        try {
+            playlists.clear()
+
+            // Siempre agregar "Canciones que te gustan" primero
+            playlists.add(
+                LibraryItem(
+                    id = "liked_songs",
+                    title = "Canciones que te gustan",
+                    subtitle = "Playlist • Tus favoritas",
+                    imageUrl = null,
+                    type = LibraryItemType.LIKED_SONGS
+                )
+            )
+
+            // Luego cargar las playlists de la API
+            val result = musicRepository.getPlaylists()
+            result.onSuccess { playlistsFromApi ->
+                playlistsFromApi.forEach { playlist ->
+                    val subtitle = "${playlist.songCount ?: 0} canciones"
+
+                    // Construir URL de imagen si la playlist tiene coverArt
+                    var imageUrl: String? = null
+                    if (playlist.coverArt != null) {
+                        val (username, token, salt) = musicRepository.getAuthParams()
+                        imageUrl = playlist.getCoverArtUrl(
+                            musicRepository.serverUrl!!,
+                            username,
+                            token,
+                            salt,
+                            200
+                        )
+                    }
+
+                    playlists.add(
+                        LibraryItem(
+                            id = playlist.id,
+                            title = playlist.name,
+                            subtitle = "Playlist • $subtitle",
+                            imageUrl = imageUrl,
+                            type = LibraryItemType.PLAYLIST
+                        )
+                    )
+
+                    // Agregar al mapa de playlists
+                    playlistsMap[playlist.id] = playlist
+                }
+            }.onFailure {
+                // Si falla la API, al menos tenemos "Canciones que te gustan"
+            }
+        } catch (e: Exception) {
+            // En caso de error, solo mantener "Canciones que te gustan"
+            playlists.clear()
+            playlists.add(
+                LibraryItem(
+                    id = "liked_songs",
+                    title = "Canciones que te gustan",
+                    subtitle = "Playlist • Tus favoritas",
+                    imageUrl = null,
+                    type = LibraryItemType.LIKED_SONGS
+                )
+            )
+        }
+    }
+
+    private suspend fun loadAlbums() {
+        try {
+            val result = musicRepository.getStarredAlbums()
+            result.onSuccess { albumsFromApi ->
+                albums.clear()
+
+                albumsFromApi.forEach { album ->
+                    val (username, token, salt) = musicRepository.getAuthParams()
+                    val imageUrl = ImageLoader.buildCoverArtUrl(
+                        musicRepository.serverUrl!!,
+                        album.id,
+                        username,
+                        token,
+                        salt,
+                        200
+                    )
+
+                    albums.add(
+                        LibraryItem(
+                            id = album.id,
+                            title = album.name,
+                            subtitle = "Álbum • ${album.artist}",
+                            imageUrl = imageUrl,
+                            type = LibraryItemType.ALBUM
+                        )
+                    )
+
+                    // Agregar al mapa de álbumes
+                    albumsMap[album.id] = album
+                }
+            }.onFailure {
+                albums.clear()
+            }
+        } catch (e: Exception) {
+            albums.clear()
+        }
+    }
+
+    private suspend fun loadArtists() {
+        try {
+            val result = musicRepository.getStarredArtists()
+            result.onSuccess { artistsFromApi ->
+                artists.clear()
+
+                artistsFromApi.forEach { artist ->
+                    val (username, token, salt) = musicRepository.getAuthParams()
+                    val imageUrl = ImageLoader.buildArtistImageUrl(
+                        musicRepository.serverUrl!!,
+                        artist.id,
+                        username,
+                        token,
+                        salt,
+                        200
+                    )
+
+                    // Construir subtítulo basado en si albumCount está disponible
+                    val subtitle = if (artist.albumCount != null && artist.albumCount > 0) {
+                        "Artista • ${artist.albumCount} álbumes"
+                    } else {
+                        "Artista"
+                    }
+
+                    artists.add(
+                        LibraryItem(
+                            id = artist.id,
+                            title = artist.name,
+                            subtitle = subtitle,
+                            imageUrl = imageUrl,
+                            type = LibraryItemType.ARTIST
+                        )
+                    )
+                }
+            }.onFailure {
+                artists.clear()
+            }
+        } catch (e: Exception) {
+            artists.clear()
+        }
+    }
+
+    private fun buildAllItemsList() {
+        allItems.clear()
+
+        // Agregar en orden: playlists, álbumes, artistas
+        allItems.addAll(playlists)
+        allItems.addAll(albums)
+        allItems.addAll(artists)
+    }
+
+    private fun filterContent() {
+        val filteredItems = when (currentFilter) {
+            "all" -> allItems.toList()
+            "playlists" -> playlists.toList()
+            "albums" -> albums.toList()
+            "artists" -> artists.toList()
+            else -> allItems.toList()
+        }
+
+        if (filteredItems.isEmpty()) {
+            showEmptyState()
+        } else {
+            hideEmptyState()
+            libraryAdapter.updateItems(filteredItems)
+        }
+    }
+
+    private fun handleItemClick(item: LibraryItem) {
+        when (item.type) {
+            LibraryItemType.PLAYLIST -> {
+                // Navegar a playlist específica
+                val playlist = playlistsMap[item.id]
+                if (playlist != null) {
+                    val bundle = Bundle().apply {
+                        putString("playlistId", playlist.id)
+                        putString("playlistName", playlist.name)
+                    }
+                    // TODO: Verificar si existe playlistDetailFragment en navigation graph
+                    // findNavController().navigate(R.id.playlistDetailFragment, bundle)
+                }
+            }
+            LibraryItemType.ARTIST -> {
+                val bundle = Bundle().apply {
+                    putString("artistId", item.id)
+                    putString("artistName", item.title)
+                }
+                findNavController().navigate(R.id.artistDetailFragment, bundle)
+            }
+            LibraryItemType.ALBUM -> {
+                // Navegar a detalle de álbum usando el mismo patrón que artistas
+                val album = albumsMap[item.id]
+                if (album != null) {
+                    val bundle = Bundle().apply {
+                        putParcelable("album", album)
+                    }
+                    findNavController().navigate(R.id.albumDetailFragment, bundle)
+                }
+            }
+            LibraryItemType.LIKED_SONGS -> {
+                // Navegar a canciones favoritas
+                findNavController().navigate(R.id.songsFragment)
+            }
+        }
+    }
+
+    private fun showLoading(show: Boolean) {
+        binding.progressBar.visibility = if (show) View.VISIBLE else View.GONE
+        binding.rvLibraryItems.visibility = if (show) View.GONE else View.VISIBLE
+    }
+
+    private fun showError(message: String) {
+        binding.layoutEmpty.visibility = View.VISIBLE
+        binding.rvLibraryItems.visibility = View.GONE
+        // TODO: Mostrar mensaje de error específico
+    }
+
+    private fun showEmptyState() {
+        binding.rvLibraryItems.visibility = View.GONE
+        binding.layoutEmpty.visibility = View.VISIBLE
+    }
+
+    private fun hideEmptyState() {
+        binding.layoutEmpty.visibility = View.GONE
+        binding.rvLibraryItems.visibility = View.VISIBLE
+    }
+
+    override fun onDestroyView() {
+        super.onDestroyView()
+        _binding = null
+    }
+}

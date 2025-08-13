@@ -11,8 +11,7 @@
         android:title="Buscar" />
 
     <item
-        android:id="@+id/songsFragment"
+        android:id="@+id/libraryFragment"
         android:icon="@drawable/ic_library_music"
-        android:title="Canciones" />
+        android:title="Biblioteca" />
 </menu>
-

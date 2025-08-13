@@ -113,7 +113,7 @@ class MainActivity : AppCompatActivity() {
             val itemId = when (tab) {
                 "home" -> R.id.homeFragment
                 "search" -> R.id.searchFragment
-                "library" -> R.id.songsFragment
+                "library" -> R.id.libraryFragment
                 else -> R.id.homeFragment
             }
             binding.bottomNavigation.selectedItemId = itemId

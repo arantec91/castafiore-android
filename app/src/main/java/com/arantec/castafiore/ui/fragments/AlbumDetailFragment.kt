@@ -97,70 +97,58 @@ class AlbumDetailFragment : Fragment() {
             return
         }
 
-        setupUI()
+        // Solo mostrar información básica inmediatamente
+        showBasicAlbumInfo()
+
+        // Configurar UI básica
+        setupBasicUI()
         setupRecyclerView()
-        setupClickListeners()
-        loadAlbumDetails()
-        checkFavoriteStatus() // <-- Verificar el estado inicial de favoritos
-    }
 
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-    }
-
-    override fun onStart() {
-        super.onStart()
-        Intent(requireContext(), MusicService::class.java).also { intent ->
-            requireContext().bindService(intent, serviceConnection, Context.BIND_AUTO_CREATE)
+        // Diferir operaciones pesadas para evitar bloqueo de la animación
+        view.post {
+            if (isAdded && _binding != null) {
+                setupUI()  // Cargar imágenes de forma diferida
+                setupClickListeners()
+                loadAlbumDetails()
+                checkFavoriteStatus()
+            }
         }
     }
 
-    override fun onStop() {
-        super.onStop()
+    private fun showBasicAlbumInfo() {
+        currentAlbum?.let { album ->
+            binding.tvAlbumTitle.text = album.name
+            binding.tvArtistName.text = album.artist
 
-        // Limpiar listeners antes de desenlazar el servicio
-        cleanupListeners()
-
-        if (isBound) {
-            requireContext().unbindService(serviceConnection)
-            isBound = false
+            // Formatear información básica del álbum
+            val year = album.year?.toString() ?: getString(R.string.unknown_year)
+            val songCount = album.songCount
+            binding.tvAlbumInfo.text = getString(R.string.album_info, year, songCount, formatAlbumDuration(album.duration))
         }
-        // Note: Removed shuffle_mode save to prevent overwriting PlayerActivity's shuffle state
     }
 
-    override fun onDestroyView() {
-        super.onDestroyView()
-        // Asegurar que se limpien los listeners
-        cleanupListeners()
-        _binding = null
-    }
-
-    private fun setupUI() {
-        // Configurar toolbar
+    private fun setupBasicUI() {
+        // Solo configurar el toolbar inmediatamente
         binding.toolbar.setNavigationOnClickListener {
             findNavController().popBackStack()
         }
-        // Listener para el colapso del AppBarLayout
+
+        // Configurar el AppBarLayout con optimización
         binding.appBarLayout.addOnOffsetChangedListener(
             object : com.google.android.material.appbar.AppBarLayout.OnOffsetChangedListener {
                 override fun onOffsetChanged(appBarLayout: com.google.android.material.appbar.AppBarLayout, verticalOffset: Int) {
-                    // Mantener siempre el color dominante en el icono de navegación
                     dominantNavIconColor?.let { color ->
                         binding.toolbar.navigationIcon?.setTint(color)
                     }
                 }
             }
         )
+    }
 
-        // Obtener álbum de los argumentos (usando método tradicional por ahora)
-        currentAlbum = requireArguments().getParcelable<Album>("album")
-
-        // Mostrar información básica del álbum
+    private fun setupUI() {
+        // Mover la carga de imágenes aquí (diferida)
         currentAlbum?.let { album ->
-            binding.tvAlbumTitle.text = album.name
-            binding.tvArtistName.text = album.artist
-
-            // Mostrar imagen del artista usando ImageLoader optimizado
+            // Cargar imagen del artista de forma asíncrona
             val musicRepo = MusicRepository.getInstance(requireContext())
             val (username, token, salt) = musicRepo.getAuthParams()
             val artistCoverUrl = ImageLoader.buildArtistImageUrl(
@@ -174,12 +162,7 @@ class AlbumDetailFragment : Fragment() {
 
             ImageLoader.loadArtistImageForFragment(this, binding.ivArtistAvatar, artistCoverUrl)
 
-            // Formatear información del álbum
-            val year = album.year?.toString() ?: getString(R.string.unknown_year)
-            val songCount = album.songCount
-            binding.tvAlbumInfo.text = getString(R.string.album_info, year, songCount, formatAlbumDuration(album.duration))
-
-            // Cargar imagen del álbum
+            // Cargar imagen del álbum de forma asíncrona
             loadAlbumCover(album)
         }
     }
