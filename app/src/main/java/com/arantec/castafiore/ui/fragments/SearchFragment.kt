@@ -167,16 +167,6 @@ class SearchFragment : Fragment() {
     }
 
     private fun setupUI() {
-        // Animación de entrada
-        binding.root.alpha = 0f
-        binding.root.translationY = -100f
-        binding.root.animate()
-            .alpha(1f)
-            .translationY(0f)
-            .setDuration(ANIMATION_DURATION)
-            .setInterpolator(AccelerateDecelerateInterpolator())
-            .start()
-
         // No llamar showEmptyState() aquí; se decide en onViewCreated según ViewModel
 
         // Botón limpiar
@@ -193,14 +183,46 @@ class SearchFragment : Fragment() {
     private fun setupRecycler() {
         searchAdapter = SearchResultsAdapter(
             onSongClick = { song -> onSongSelected(song) },
-            onAlbumClick = { album -> onAlbumSelected(album) },
-            onArtistClick = { artist -> onArtistSelected(artist) },
+            onAlbumClick = { album -> handleAlbumNavigation(album) },
+            onArtistClick = { artist -> handleArtistNavigation(artist) },
             onSongMoreClick = { song -> showSongOptions(song) }
         )
         binding.rvSearchResults.apply {
             layoutManager = LinearLayoutManager(requireContext())
             adapter = searchAdapter
             setHasFixedSize(true)
+        }
+    }
+
+    private fun handleAlbumNavigation(album: Album) {
+        // Congelar el RecyclerView antes de navegar para evitar efectos visuales
+        binding.rvSearchResults.isNestedScrollingEnabled = false
+
+        // Forzar que los views se "asienten" antes de la transición
+        binding.root.post {
+            try {
+                val action = SearchFragmentDirections.actionSearchToAlbumDetail(album)
+                findNavController().navigate(action)
+            } catch (e: Exception) {
+                // Restaurar scroll si hay error
+                binding.rvSearchResults.isNestedScrollingEnabled = true
+            }
+        }
+    }
+
+    private fun handleArtistNavigation(artist: Artist) {
+        // Congelar el RecyclerView antes de navegar para evitar efectos visuales
+        binding.rvSearchResults.isNestedScrollingEnabled = false
+
+        // Forzar que los views se "asienten" antes de la transición
+        binding.root.post {
+            try {
+                val action = SearchFragmentDirections.actionSearchToArtistDetail(artist.id, artist.name)
+                findNavController().navigate(action)
+            } catch (e: Exception) {
+                // Restaurar scroll si hay error
+                binding.rvSearchResults.isNestedScrollingEnabled = true
+            }
         }
     }
 
@@ -319,21 +341,6 @@ class SearchFragment : Fragment() {
         }
     }
 
-    private fun onAlbumSelected(album: Album) {
-        // Navegar a detalle de álbum con Safe Args
-        val action = SearchFragmentDirections.actionSearchToAlbumDetail(album)
-        findNavController().navigate(action)
-    }
-
-    private fun onArtistSelected(artist: Artist) {
-        // Navegar a detalle de artista con Safe Args
-        val action = SearchFragmentDirections.actionSearchToArtistDetail(
-            artistId = artist.id,
-            artistName = artist.name
-        )
-        findNavController().navigate(action)
-    }
-
     private fun showSongOptions(song: Song) {
         val bottomSheet = SongOptionsBottomSheet
             .newInstance(song)
@@ -416,14 +423,7 @@ class SearchFragment : Fragment() {
     private fun switchToViewMode(mode: ViewMode) {
         if (currentViewMode == mode) return
         currentViewMode = mode
-        // Animación ligera
-        binding.rvSearchResults.animate()
-            .alpha(0.5f)
-            .setDuration(ANIMATION_DURATION / 2)
-            .withEndAction {
-                binding.rvSearchResults.animate().alpha(1f).setDuration(ANIMATION_DURATION / 2).start()
-            }
-            .start()
+        // No animation for consistency with HomeFragment
     }
 
     private fun showLoading(show: Boolean) {
@@ -474,5 +474,13 @@ class SearchFragment : Fragment() {
         super.onDestroyView()
         searchJob?.cancel()
         _binding = null
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // Restaurar el comportamiento de scroll normal cuando regresemos al fragmento
+        if (_binding != null) {
+            binding.rvSearchResults.isNestedScrollingEnabled = true
+        }
     }
 }

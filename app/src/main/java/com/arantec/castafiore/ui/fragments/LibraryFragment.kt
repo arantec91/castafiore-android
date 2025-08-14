@@ -18,6 +18,7 @@ import com.arantec.castafiore.data.models.Album
 import com.arantec.castafiore.data.models.Playlist
 import com.arantec.castafiore.data.repository.MusicRepository
 import com.arantec.castafiore.utils.ImageLoader
+import com.arantec.castafiore.utils.StatusBarUtils
 import com.google.android.material.chip.Chip
 
 class LibraryFragment : Fragment() {
@@ -123,7 +124,7 @@ class LibraryFragment : Fragment() {
         val primaryColor = androidx.core.content.ContextCompat.getColor(requireContext(), R.color.primary)
         val onSurfaceColor = androidx.core.content.ContextCompat.getColor(requireContext(), R.color.on_surface)
         val outlineColor = androidx.core.content.ContextCompat.getColor(requireContext(), R.color.outline)
-        
+
         val chips = listOf(
             binding.chipAll,
             binding.chipPlaylists,
@@ -358,39 +359,48 @@ class LibraryFragment : Fragment() {
     }
 
     private fun handleItemClick(item: LibraryItem) {
-        when (item.type) {
-            LibraryItemType.PLAYLIST -> {
-                // Navegar a playlist específica
-                val playlist = playlistsMap[item.id]
-                if (playlist != null) {
-                    val bundle = Bundle().apply {
-                        putString("playlistId", playlist.id)
-                        putString("playlistName", playlist.name)
+        // Congelar el RecyclerView y scroll antes de navegar para evitar efectos visuales
+        binding.rvLibraryItems.isNestedScrollingEnabled = false
+        binding.scrollFilters.isNestedScrollingEnabled = false
+
+        // Forzar que los views se "asienten" antes de la transición
+        binding.root.post {
+            when (item.type) {
+                LibraryItemType.PLAYLIST -> {
+                    // Navegar a playlist específica
+                    val playlist = playlistsMap[item.id]
+                    if (playlist != null) {
+                        val bundle = Bundle().apply {
+                            putString("playlistId", playlist.id)
+                            putString("playlistName", playlist.name)
+                        }
+                        // TODO: Verificar si existe playlistDetailFragment en navigation graph
+                        // findNavController().navigate(R.id.playlistDetailFragment, bundle)
                     }
-                    // TODO: Verificar si existe playlistDetailFragment en navigation graph
-                    // findNavController().navigate(R.id.playlistDetailFragment, bundle)
                 }
-            }
-            LibraryItemType.ARTIST -> {
-                val bundle = Bundle().apply {
-                    putString("artistId", item.id)
-                    putString("artistName", item.title)
-                }
-                findNavController().navigate(R.id.artistDetailFragment, bundle)
-            }
-            LibraryItemType.ALBUM -> {
-                // Navegar a detalle de álbum usando el mismo patrón que artistas
-                val album = albumsMap[item.id]
-                if (album != null) {
+                LibraryItemType.ARTIST -> {
                     val bundle = Bundle().apply {
-                        putParcelable("album", album)
+                        putString("artistId", item.id)
+                        putString("artistName", item.title)
                     }
-                    findNavController().navigate(R.id.albumDetailFragment, bundle)
+                    // Usar la acción definida en nav_graph para asegurar que las animaciones se ejecuten
+                    findNavController().navigate(R.id.action_library_to_artistDetail, bundle)
                 }
-            }
-            LibraryItemType.LIKED_SONGS -> {
-                // Navegar a canciones favoritas con animaciones definidas
-                findNavController().navigate(R.id.action_library_to_favorites)
+                LibraryItemType.ALBUM -> {
+                    // Navegar a detalle de álbum usando la acción del nav_graph
+                    val album = albumsMap[item.id]
+                    if (album != null) {
+                        val bundle = Bundle().apply {
+                            putParcelable("album", album)
+                        }
+                        // Usar la acción definida en nav_graph para asegurar que las animaciones se ejecuten
+                        findNavController().navigate(R.id.action_library_to_albumDetail, bundle)
+                    }
+                }
+                LibraryItemType.LIKED_SONGS -> {
+                    // Navegar a canciones favoritas con animaciones definidas
+                    findNavController().navigate(R.id.action_library_to_favorites)
+                }
             }
         }
     }
@@ -419,5 +429,17 @@ class LibraryFragment : Fragment() {
     override fun onDestroyView() {
         super.onDestroyView()
         _binding = null
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // Aplicar el color estático consistente de la app
+        StatusBarUtils.setStatusBarColor(this)
+
+        // Restaurar el comportamiento de scroll normal cuando regresemos al fragmento
+        if (_binding != null) {
+            binding.rvLibraryItems.isNestedScrollingEnabled = true
+            binding.scrollFilters.isNestedScrollingEnabled = true
+        }
     }
 }

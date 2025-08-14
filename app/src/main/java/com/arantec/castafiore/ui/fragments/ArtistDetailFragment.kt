@@ -618,6 +618,7 @@ class ArtistDetailFragment : Fragment() {
 
     // Métodos de UI auxiliares
     private fun showLoading(show: Boolean) {
+        if (!isAdded || _binding == null) return
         binding.progressBar.visibility = if (show) View.VISIBLE else View.GONE
         // Usar el contenedor principal del layout
         binding.root.findViewById<View>(android.R.id.content)?.visibility = if (show) View.GONE else View.VISIBLE

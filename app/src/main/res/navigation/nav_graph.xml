@@ -12,18 +12,10 @@
         tools:layout="@layout/fragment_home">
         <action
             android:id="@+id/action_home_to_albumDetail"
-            app:destination="@id/albumDetailFragment"
-            app:enterAnim="@anim/slide_in_right"
-            app:exitAnim="@anim/slide_out_left"
-            app:popEnterAnim="@anim/slide_in_left"
-            app:popExitAnim="@anim/slide_out_right" />
+            app:destination="@id/albumDetailFragment" />
         <action
             android:id="@+id/action_home_to_settings"
-            app:destination="@id/settingsFragment"
-            app:enterAnim="@anim/slide_in_right"
-            app:exitAnim="@anim/slide_out_left"
-            app:popEnterAnim="@anim/slide_in_left"
-            app:popExitAnim="@anim/slide_out_right" />
+            app:destination="@id/settingsFragment" />
     </fragment>
 
     <fragment
@@ -33,32 +25,10 @@
         tools:layout="@layout/fragment_search">
         <action
             android:id="@+id/action_search_to_albumDetail"
-            app:destination="@id/albumDetailFragment"
-            app:enterAnim="@anim/slide_in_right"
-            app:exitAnim="@anim/slide_out_left"
-            app:popEnterAnim="@anim/slide_in_left"
-            app:popExitAnim="@anim/slide_out_right" />
+            app:destination="@id/albumDetailFragment" />
         <action
             android:id="@+id/action_search_to_artistDetail"
-            app:destination="@id/artistDetailFragment"
-            app:enterAnim="@anim/slide_in_right"
-            app:exitAnim="@anim/slide_out_left"
-            app:popEnterAnim="@anim/slide_in_left"
-            app:popExitAnim="@anim/slide_out_right" />
-    </fragment>
-
-    <fragment
-        android:id="@+id/songsFragment"
-        android:name="com.arantec.castafiore.ui.fragments.SongsFragment"
-        android:label="Songs"
-        tools:layout="@layout/fragment_music_list">
-        <action
-            android:id="@+id/action_songs_to_albumDetail"
-            app:destination="@id/albumDetailFragment"
-            app:enterAnim="@anim/slide_in_right"
-            app:exitAnim="@anim/slide_out_left"
-            app:popEnterAnim="@anim/slide_in_left"
-            app:popExitAnim="@anim/slide_out_right" />
+            app:destination="@id/artistDetailFragment" />
     </fragment>
 
     <fragment
@@ -71,11 +41,7 @@
             app:argType="com.arantec.castafiore.data.models.Album" />
         <action
             android:id="@+id/action_albumDetail_to_artistDetail"
-            app:destination="@id/artistDetailFragment"
-            app:enterAnim="@anim/slide_in_right"
-            app:exitAnim="@anim/slide_out_left"
-            app:popEnterAnim="@anim/slide_in_left"
-            app:popExitAnim="@anim/slide_out_right" />
+            app:destination="@id/artistDetailFragment" />
     </fragment>
 
     <fragment
@@ -91,11 +57,7 @@
             app:argType="string" />
         <action
             android:id="@+id/action_artistDetail_to_albumDetail"
-            app:destination="@id/albumDetailFragment"
-            app:enterAnim="@anim/slide_in_right"
-            app:exitAnim="@anim/slide_out_left"
-            app:popEnterAnim="@anim/slide_in_left"
-            app:popExitAnim="@anim/slide_out_right" />
+            app:destination="@id/albumDetailFragment" />
     </fragment>
 
     <fragment
@@ -111,25 +73,13 @@
         tools:layout="@layout/fragment_library">
         <action
             android:id="@+id/action_library_to_albumDetail"
-            app:destination="@id/albumDetailFragment"
-            app:enterAnim="@anim/slide_in_right"
-            app:exitAnim="@anim/slide_out_left"
-            app:popEnterAnim="@anim/slide_in_left"
-            app:popExitAnim="@anim/slide_out_right" />
+            app:destination="@id/albumDetailFragment" />
         <action
             android:id="@+id/action_library_to_artistDetail"
-            app:destination="@id/artistDetailFragment"
-            app:enterAnim="@anim/slide_in_right"
-            app:exitAnim="@anim/slide_out_left"
-            app:popEnterAnim="@anim/slide_in_left"
-            app:popExitAnim="@anim/slide_out_right" />
+            app:destination="@id/artistDetailFragment" />
         <action
             android:id="@+id/action_library_to_favorites"
-            app:destination="@id/favoritesFragment"
-            app:enterAnim="@anim/slide_in_right"
-            app:exitAnim="@anim/slide_out_left"
-            app:popEnterAnim="@anim/slide_in_left"
-            app:popExitAnim="@anim/slide_out_right" />
+            app:destination="@id/favoritesFragment" />
     </fragment>
 
     <fragment
