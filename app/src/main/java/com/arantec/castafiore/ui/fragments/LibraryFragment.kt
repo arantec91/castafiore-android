@@ -374,8 +374,7 @@ class LibraryFragment : Fragment() {
                             putString("playlistId", playlist.id)
                             putString("playlistName", playlist.name)
                         }
-                        // TODO: Verificar si existe playlistDetailFragment en navigation graph
-                        // findNavController().navigate(R.id.playlistDetailFragment, bundle)
+                        findNavController().navigate(R.id.action_library_to_playlistDetail, bundle)
                     }
                 }
                 LibraryItemType.ARTIST -> {

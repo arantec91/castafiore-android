@@ -17,65 +17,6 @@
             </PendingDiffInfo>
           </value>
         </entry>
-        <entry key="$PROJECT_DIR$/app/src/main/res/anim/favorites_slide_in_left.xml">
-          <value>
-            <PendingDiffInfo>
-              <option name="filePath" value="$PROJECT_DIR$/app/src/main/res/anim/favorites_slide_in_left.xml" />
-              <option name="updatedContent" value="&lt;?xml version=&quot;1.0&quot; encoding=&quot;utf-8&quot;?&gt;&#10;&lt;set xmlns:android=&quot;http://schemas.android.com/apk/res/android&quot;&gt;&#10;    &lt;translate&#10;        android:duration=&quot;250&quot;&#10;        android:fromXDelta=&quot;-100%&quot;&#10;        android:toXDelta=&quot;0%&quot;&#10;        android:interpolator=&quot;@android:anim/decelerate_interpolator&quot; /&gt;&#10;    &lt;alpha&#10;        android:duration=&quot;200&quot;&#10;        android:fromAlpha=&quot;0.8&quot;&#10;        android:toAlpha=&quot;1.0&quot;&#10;        android:startOffset=&quot;50&quot; /&gt;&#10;&lt;/set&gt;" />
-            </PendingDiffInfo>
-          </value>
-        </entry>
-        <entry key="$PROJECT_DIR$/app/src/main/res/anim/favorites_slide_in_right.xml">
-          <value>
-            <PendingDiffInfo>
-              <option name="filePath" value="$PROJECT_DIR$/app/src/main/res/anim/favorites_slide_in_right.xml" />
-              <option name="updatedContent" value="&lt;?xml version=&quot;1.0&quot; encoding=&quot;utf-8&quot;?&gt;&#10;&lt;set xmlns:android=&quot;http://schemas.android.com/apk/res/android&quot;&gt;&#10;    &lt;translate&#10;        android:duration=&quot;250&quot;&#10;        android:fromXDelta=&quot;100%&quot;&#10;        android:toXDelta=&quot;0%&quot;&#10;        android:interpolator=&quot;@android:anim/decelerate_interpolator&quot; /&gt;&#10;    &lt;alpha&#10;        android:duration=&quot;200&quot;&#10;        android:fromAlpha=&quot;0.8&quot;&#10;        android:toAlpha=&quot;1.0&quot;&#10;        android:startOffset=&quot;50&quot; /&gt;&#10;&lt;/set&gt;" />
-            </PendingDiffInfo>
-          </value>
-        </entry>
-        <entry key="$PROJECT_DIR$/app/src/main/res/anim/favorites_slide_out_left.xml">
-          <value>
-            <PendingDiffInfo>
-              <option name="filePath" value="$PROJECT_DIR$/app/src/main/res/anim/favorites_slide_out_left.xml" />
-              <option name="updatedContent" value="&lt;?xml version=&quot;1.0&quot; encoding=&quot;utf-8&quot;?&gt;&#10;&lt;set xmlns:android=&quot;http://schemas.android.com/apk/res/android&quot;&gt;&#10;    &lt;translate&#10;        android:duration=&quot;250&quot;&#10;        android:fromXDelta=&quot;0%&quot;&#10;        android:toXDelta=&quot;-100%&quot;&#10;        android:interpolator=&quot;@android:anim/accelerate_interpolator&quot; /&gt;&#10;    &lt;alpha&#10;        android:duration=&quot;150&quot;&#10;        android:fromAlpha=&quot;1.0&quot;&#10;        android:toAlpha=&quot;0.8&quot;&#10;        android:startOffset=&quot;100&quot; /&gt;&#10;&lt;/set&gt;" />
-            </PendingDiffInfo>
-          </value>
-        </entry>
-        <entry key="$PROJECT_DIR$/app/src/main/res/anim/favorites_slide_out_right.xml">
-          <value>
-            <PendingDiffInfo>
-              <option name="filePath" value="$PROJECT_DIR$/app/src/main/res/anim/favorites_slide_out_right.xml" />
-              <option name="updatedContent" value="&lt;?xml version=&quot;1.0&quot; encoding=&quot;utf-8&quot;?&gt;&#10;&lt;set xmlns:android=&quot;http://schemas.android.com/apk/res/android&quot;&gt;&#10;    &lt;translate&#10;        android:duration=&quot;250&quot;&#10;        android:fromXDelta=&quot;0%&quot;&#10;        android:toXDelta=&quot;100%&quot;&#10;        android:interpolator=&quot;@android:anim/accelerate_interpolator&quot; /&gt;&#10;    &lt;alpha&#10;        android:duration=&quot;150&quot;&#10;        android:fromAlpha=&quot;1.0&quot;&#10;        android:toAlpha=&quot;0.8&quot;&#10;        android:startOffset=&quot;100&quot; /&gt;&#10;&lt;/set&gt;" />
-            </PendingDiffInfo>
-          </value>
-        </entry>
-        <entry key="$PROJECT_DIR$/app/src/main/res/anim/slide_in_left.xml">
-          <value>
-            <PendingDiffInfo>
-              <option name="filePath" value="$PROJECT_DIR$/app/src/main/res/anim/slide_in_left.xml" />
-              <option name="originalContent" value="&lt;?xml version=&quot;1.0&quot; encoding=&quot;utf-8&quot;?&gt;&#10;&lt;set xmlns:android=&quot;http://schemas.android.com/apk/res/android&quot;&gt;&#10;    &lt;translate&#10;        android:duration=&quot;300&quot;&#10;        android:fromXDelta=&quot;-100%&quot;&#10;        android:toXDelta=&quot;0%&quot; /&gt;&#10;        android:duration=&quot;150&quot;&#10;        android:duration=&quot;150&quot;&#10;        android:toAlpha=&quot;1.0&quot; /&gt;&#10;        android:toAlpha=&quot;1.0&quot; /&gt;&#10;" />
-              <option name="updatedContent" value="&lt;?xml version=&quot;1.0&quot; encoding=&quot;utf-8&quot;?&gt;&#13;&#10;&lt;set xmlns:android=&quot;http://schemas.android.com/apk/res/android&quot;&gt;&#13;&#10;    &lt;translate&#13;&#10;        android:duration=&quot;400&quot;&#13;&#10;        android:fromXDelta=&quot;-100%&quot;&#13;&#10;        android:toXDelta=&quot;0%&quot;&#13;&#10;        android:interpolator=&quot;@android:anim/decelerate_interpolator&quot; /&gt;&#13;&#10;    &lt;alpha&#13;&#10;        android:duration=&quot;300&quot;&#13;&#10;        android:fromAlpha=&quot;0.0&quot;&#13;&#10;        android:toAlpha=&quot;1.0&quot;&#13;&#10;        android:startOffset=&quot;100&quot; /&gt;&#13;&#10;    &lt;scale&#13;&#10;        android:duration=&quot;400&quot;&#13;&#10;        android:fromXScale=&quot;0.95&quot;&#13;&#10;        android:fromYScale=&quot;0.95&quot;&#13;&#10;        android:toXScale=&quot;1.0&quot;&#13;&#10;        android:toYScale=&quot;1.0&quot;&#13;&#10;        android:pivotX=&quot;50%&quot;&#13;&#10;        android:pivotY=&quot;50%&quot;&#13;&#10;        android:interpolator=&quot;@android:anim/decelerate_interpolator&quot; /&gt;&#13;&#10;&lt;/set&gt;" />
-            </PendingDiffInfo>
-          </value>
-        </entry>
-        <entry key="$PROJECT_DIR$/app/src/main/res/anim/slide_in_right.xml">
-          <value>
-            <PendingDiffInfo>
-              <option name="filePath" value="$PROJECT_DIR$/app/src/main/res/anim/slide_in_right.xml" />
-              <option name="originalContent" value="&lt;?xml version=&quot;1.0&quot; encoding=&quot;utf-8&quot;?&gt;&#10;&lt;set xmlns:android=&quot;http://schemas.android.com/apk/res/android&quot;&gt;&#10;    &lt;translate&#10;        android:duration=&quot;300&quot;&#10;        android:fromXDelta=&quot;100%&quot;&#10;        android:toXDelta=&quot;0%&quot; /&gt;&#10;        android:duration=&quot;150&quot;&#10;        android:duration=&quot;150&quot;&#10;        android:toAlpha=&quot;1.0&quot; /&gt;&#10;        android:toAlpha=&quot;1.0&quot; /&gt;&#10;" />
-              <option name="updatedContent" value="&lt;?xml version=&quot;1.0&quot; encoding=&quot;utf-8&quot;?&gt;&#10;&lt;set xmlns:android=&quot;http://schemas.android.com/apk/res/android&quot;&gt;&#10;    &lt;translate&#10;        android:duration=&quot;400&quot;&#10;        android:fromXDelta=&quot;100%&quot;&#10;        android:toXDelta=&quot;0%&quot;&#10;        android:interpolator=&quot;@android:anim/decelerate_interpolator&quot; /&gt;&#10;    &lt;alpha&#10;        android:duration=&quot;300&quot;&#10;        android:fromAlpha=&quot;0.0&quot;&#10;        android:toAlpha=&quot;1.0&quot;&#10;        android:startOffset=&quot;100&quot; /&gt;&#10;    &lt;scale&#10;        android:duration=&quot;400&quot;&#10;        android:fromXScale=&quot;0.95&quot;&#10;        android:fromYScale=&quot;0.95&quot;&#10;        android:toXScale=&quot;1.0&quot;&#10;        android:toYScale=&quot;1.0&quot;&#10;        android:pivotX=&quot;50%&quot;&#10;        android:pivotY=&quot;50%&quot;&#10;        android:interpolator=&quot;@android:anim/decelerate_interpolator&quot; /&gt;&#10;&lt;/set&gt;" />
-            </PendingDiffInfo>
-          </value>
-        </entry>
-        <entry key="$PROJECT_DIR$/app/src/main/res/anim/slide_out_left.xml">
-          <value>
-            <PendingDiffInfo>
-              <option name="filePath" value="$PROJECT_DIR$/app/src/main/res/anim/slide_out_left.xml" />
-              <option name="originalContent" value="&lt;?xml version=&quot;1.0&quot; encoding=&quot;utf-8&quot;?&gt;&#10;&lt;set xmlns:android=&quot;http://schemas.android.com/apk/res/android&quot;&gt;&#10;    &lt;translate&#10;        android:duration=&quot;300&quot;&#10;        android:fromXDelta=&quot;0%&quot;&#10;        android:toXDelta=&quot;-100%&quot; /&gt;&#10;        android:duration=&quot;150&quot;&#10;        android:duration=&quot;150&quot;&#10;        android:toAlpha=&quot;0.0&quot; /&gt;&#10;        android:toAlpha=&quot;0.0&quot; /&gt;&#10;" />
-              <option name="updatedContent" value="&lt;?xml version=&quot;1.0&quot; encoding=&quot;utf-8&quot;?&gt;&#13;&#10;&lt;set xmlns:android=&quot;http://schemas.android.com/apk/res/android&quot;&gt;&#13;&#10;    &lt;translate&#13;&#10;        android:duration=&quot;400&quot;&#13;&#10;        android:fromXDelta=&quot;0%&quot;&#13;&#10;        android:toXDelta=&quot;-100%&quot;&#13;&#10;        android:interpolator=&quot;@android:anim/accelerate_interpolator&quot; /&gt;&#13;&#10;    &lt;alpha&#13;&#10;        android:duration=&quot;300&quot;&#13;&#10;        android:fromAlpha=&quot;1.0&quot;&#13;&#10;        android:toAlpha=&quot;0.0&quot;&#13;&#10;        android:startOffset=&quot;100&quot; /&gt;&#13;&#10;    &lt;scale&#13;&#10;        android:duration=&quot;400&quot;&#13;&#10;        android:fromXScale=&quot;1.0&quot;&#13;&#10;        android:fromYScale=&quot;1.0&quot;&#13;&#10;        android:toXScale=&quot;0.95&quot;&#13;&#10;        android:toYScale=&quot;0.95&quot;&#13;&#10;        android:pivotX=&quot;50%&quot;&#13;&#10;        android:pivotY=&quot;50%&quot;&#13;&#10;        android:interpolator=&quot;@android:anim/accelerate_interpolator&quot; /&gt;&#13;&#10;&lt;/set&gt;" />
-            </PendingDiffInfo>
-          </value>
-        </entry>
         <entry key="$PROJECT_DIR$/app/src/main/res/values-night/themes.xml">
           <value>
             <PendingDiffInfo>

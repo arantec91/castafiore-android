@@ -50,6 +50,9 @@ class AlbumDetailFragment : Fragment() {
     private var playbackStateListener: ((Boolean) -> Unit)? = null
     private var songChangeListener: ((Song?) -> Unit)? = null
 
+    // Acción de reproducción pendiente mientras se enlaza el servicio
+    private var pendingAction: (() -> Unit)? = null
+
     // Color original de la status bar ahora manejado por StatusBarUtils
 
     private val serviceConnection = object : ServiceConnection {
@@ -67,6 +70,10 @@ class AlbumDetailFragment : Fragment() {
 
             // Actualizar el estado de la canción en reproducción al conectarse
             updateCurrentPlayingSong()
+
+            // Ejecutar acción pendiente si existe
+            pendingAction?.invoke()
+            pendingAction = null
         }
 
         override fun onServiceDisconnected(name: ComponentName?) {
@@ -177,7 +184,12 @@ class AlbumDetailFragment : Fragment() {
         songAdapter = SongAdapter(
             onSongClick = { song, position ->
                 // Reproducir el álbum completo desde la canción seleccionada
-                musicService?.playQueue(albumSongs, position)
+                if (isBound && musicService != null) {
+                    musicService?.playQueue(albumSongs, position)
+                } else {
+                    pendingAction = { musicService?.playQueue(albumSongs, position) }
+                    bindMusicService()
+                }
             },
             onSongMoreClick = { song ->
                 showSongOptions(song)
@@ -289,22 +301,36 @@ class AlbumDetailFragment : Fragment() {
         }
 
         binding.fabPlay.setOnClickListener {
-            musicService?.let { service ->
-                if (isCurrentAlbumPlaying()) {
-                    // Si este álbum es el que se está reproduciendo actualmente
-                    if (service.isPlaying()) {
-                        // Si está reproduciéndose, pausar
-                        service.pause()
+            if (isBound && musicService != null) {
+                musicService?.let { service ->
+                    if (isCurrentAlbumPlaying()) {
+                        // Si este álbum es el que se está reproduciendo actualmente
+                        if (service.isPlaying()) {
+                            // Si está reproduciéndose, pausar
+                            service.pause()
+                        } else {
+                            // Si está pausado, reanudar (no reiniciar la cola)
+                            service.play()
+                        }
                     } else {
-                        // Si está pausado, reanudar (no reiniciar la cola)
-                        service.play()
-                    }
-                } else {
-                    // Si este álbum NO se está reproduciendo, iniciar desde el principio
-                    if (albumSongs.isNotEmpty()) {
-                        playAlbum()
+                        // Si este álbum NO se está reproduciendo, iniciar desde el principio
+                        if (albumSongs.isNotEmpty()) {
+                            playAlbum()
+                        }
                     }
                 }
+            } else {
+                // Posponer acción hasta que el servicio esté enlazado
+                pendingAction = {
+                    musicService?.let { service ->
+                        if (isCurrentAlbumPlaying()) {
+                            if (service.isPlaying()) service.pause() else service.play()
+                        } else if (albumSongs.isNotEmpty()) {
+                            playAlbum()
+                        }
+                    }
+                }
+                bindMusicService()
             }
         }
 
@@ -908,6 +934,23 @@ class AlbumDetailFragment : Fragment() {
         StatusBarUtils.setStatusBarColor(this)
     }
 
+    override fun onStart() {
+        super.onStart()
+        // Conectar al servicio cuando el fragment sea visible
+        bindMusicService()
+    }
+
+    override fun onStop() {
+        super.onStop()
+        // Desconectar del servicio cuando el fragment no sea visible
+        unbindMusicService()
+    }
+
+    override fun onDestroyView() {
+        super.onDestroyView()
+        _binding = null
+    }
+
     companion object {
         fun newInstance(album: Album): AlbumDetailFragment {
             val fragment = AlbumDetailFragment()
@@ -915,6 +958,23 @@ class AlbumDetailFragment : Fragment() {
             args.putParcelable("album", album)
             fragment.arguments = args
             return fragment
+        }
+    }
+
+    private fun bindMusicService() {
+        if (!isBound) {
+            val intent = Intent(requireContext(), MusicService::class.java)
+            requireContext().bindService(intent, serviceConnection, Context.BIND_AUTO_CREATE)
+        }
+    }
+
+    private fun unbindMusicService() {
+        if (isBound) {
+            // Remover listeners específicos de este fragment
+            cleanupListeners()
+            requireContext().unbindService(serviceConnection)
+            isBound = false
+            musicService = null
         }
     }
 }

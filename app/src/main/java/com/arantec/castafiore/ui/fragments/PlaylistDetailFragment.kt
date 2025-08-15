@@ -7,24 +7,30 @@ import android.content.ServiceConnection
 import android.os.Bundle
 import android.os.IBinder
 import android.view.LayoutInflater
+import android.view.MenuItem
 import android.view.View
 import android.view.ViewGroup
+import android.widget.EditText
+import android.widget.Toast
+import androidx.appcompat.app.AlertDialog
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.fragment.findNavController
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.arantec.castafiore.R
+import com.arantec.castafiore.data.models.Playlist
 import com.arantec.castafiore.data.models.Song
 import com.arantec.castafiore.data.repository.MusicRepository
-import com.arantec.castafiore.databinding.FragmentFavoritesBinding
+import com.arantec.castafiore.databinding.FragmentPlaylistDetailBinding
 import com.arantec.castafiore.service.MusicService
 import com.arantec.castafiore.ui.adapters.SongAdapter
+import com.arantec.castafiore.utils.ImageLoader
 import com.arantec.castafiore.utils.StatusBarUtils
 import kotlinx.coroutines.launch
 
-class FavoritesFragment : Fragment() {
+class PlaylistDetailFragment : Fragment() {
 
-    private var _binding: FragmentFavoritesBinding? = null
+    private var _binding: FragmentPlaylistDetailBinding? = null
     private val binding get() = _binding!!
 
     private lateinit var musicRepository: MusicRepository
@@ -32,7 +38,11 @@ class FavoritesFragment : Fragment() {
     private var musicService: MusicService? = null
     private var isBound = false
 
-    private val favoriteSongs = mutableListOf<Song>()
+    private var playlistId: String? = null
+    private var playlistName: String? = null
+    private var playlistInfo: Playlist? = null
+
+    private val playlistSongs = mutableListOf<Song>()
     private var isPlaying = false
 
     private var playbackStateListener: ((Boolean) -> Unit)? = null
@@ -45,7 +55,7 @@ class FavoritesFragment : Fragment() {
             isBound = true
             setupMusicServiceListeners()
             // Estado inicial
-            isPlaying = musicService?.isPlaying() == true && isFavoritesQueuePlaying()
+            isPlaying = musicService?.isPlaying() == true && isPlaylistQueuePlaying()
             updatePlayButton()
             songAdapter.setPlayingSong(musicService?.getCurrentSong()?.id)
         }
@@ -58,10 +68,8 @@ class FavoritesFragment : Fragment() {
     }
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
-        // Ensure consistent status bar color using utility
         StatusBarUtils.setStatusBarColor(this)
-
-        _binding = FragmentFavoritesBinding.inflate(inflater, container, false)
+        _binding = FragmentPlaylistDetailBinding.inflate(inflater, container, false)
         return binding.root
     }
 
@@ -70,33 +78,52 @@ class FavoritesFragment : Fragment() {
 
         musicRepository = MusicRepository.getInstance(requireContext())
 
+        // Args
+        playlistId = arguments?.getString("playlistId")
+        playlistName = arguments?.getString("playlistName")
+        if (playlistId.isNullOrEmpty()) {
+            findNavController().popBackStack()
+            return
+        }
+
         setupToolbar()
         setupRecyclerView()
-        bindMusicService()
-        loadFavorites()
         setupFab()
+        bindMusicService()
+        loadPlaylist()
     }
 
     private fun setupToolbar() {
-        binding.toolbar.setNavigationOnClickListener {
-            findNavController().popBackStack()
+        binding.toolbar.setNavigationOnClickListener { findNavController().popBackStack() }
+        binding.toolbar.inflateMenu(R.menu.menu_playlist_detail)
+        binding.toolbar.setOnMenuItemClickListener { item: MenuItem ->
+            when (item.itemId) {
+                R.id.action_edit_playlist -> {
+                    showRenameDialog()
+                    true
+                }
+                R.id.action_delete_playlist -> {
+                    confirmDeletePlaylist()
+                    true
+                }
+                else -> false
+            }
         }
-        // Fondo estático oscuro para mantener coherencia con AlbumDetail
+        binding.tvTitle.text = playlistName ?: getString(R.string.app_name)
         binding.gradientBackground.setBackgroundColor(0xFF121212.toInt())
     }
 
     private fun setupRecyclerView() {
         songAdapter = SongAdapter(
             onSongClick = { _, position ->
-                if (favoriteSongs.isNotEmpty()) {
-                    musicService?.playQueue(favoriteSongs, position)
+                if (playlistSongs.isNotEmpty()) {
+                    musicService?.playQueue(playlistSongs, position)
                 }
             },
             onSongMoreClick = { song ->
-                showSongOptions(song)
+                showSongOptionsWithRemove(song)
             }
         )
-
         binding.rvSongs.apply {
             layoutManager = LinearLayoutManager(context)
             adapter = songAdapter
@@ -107,10 +134,10 @@ class FavoritesFragment : Fragment() {
     private fun setupFab() {
         binding.fabPlay.setOnClickListener {
             val service = musicService ?: return@setOnClickListener
-            if (isFavoritesQueuePlaying()) {
+            if (isPlaylistQueuePlaying()) {
                 if (service.isPlaying()) service.pause() else service.play()
-            } else if (favoriteSongs.isNotEmpty()) {
-                service.playQueue(favoriteSongs, 0)
+            } else if (playlistSongs.isNotEmpty()) {
+                service.playQueue(playlistSongs, 0)
             }
         }
     }
@@ -120,31 +147,49 @@ class FavoritesFragment : Fragment() {
         requireContext().bindService(intent, serviceConnection, Context.BIND_AUTO_CREATE)
     }
 
-    private fun loadFavorites() {
+    private fun loadPlaylist() {
         binding.progressBar.visibility = View.VISIBLE
         binding.emptyLayout.visibility = View.GONE
         binding.rvSongs.visibility = View.GONE
 
         viewLifecycleOwner.lifecycleScope.launch {
-            musicRepository.getStarredSongs().fold(
-                onSuccess = { songs ->
-                    favoriteSongs.clear()
-                    favoriteSongs.addAll(songs)
-                    songAdapter.updateSongs(favoriteSongs)
+            val id = playlistId ?: return@launch
 
-                    // Info header
-                    binding.tvTitle.text = getString(R.string.favorite_songs_title)
-                    binding.tvInfo.text = buildInfoText(favoriteSongs)
+            // Info básica de la playlist (nombre, cover, etc.)
+            musicRepository.getPlaylistInfo(id).onSuccess { info ->
+                playlistInfo = info
+                binding.tvTitle.text = info.name
+                // Cover art
+                val (username, token, salt) = musicRepository.getAuthParams()
+                val coverUrl = info.getCoverArtUrl(
+                    musicRepository.serverUrl ?: "",
+                    username,
+                    token,
+                    salt,
+                    300
+                )
+                ImageLoader.loadAlbumCover(requireContext(), binding.ivHeaderCover, coverUrl)
+            }
+
+            // Canciones
+            musicRepository.getPlaylistSongs(id).fold(
+                onSuccess = { songs ->
+                    playlistSongs.clear()
+                    playlistSongs.addAll(songs)
+                    songAdapter.updateSongs(playlistSongs)
+
+                    // Info
+                    binding.tvInfo.text = buildInfoText(playlistSongs)
 
                     binding.progressBar.visibility = View.GONE
-                    if (favoriteSongs.isEmpty()) {
+                    if (playlistSongs.isEmpty()) {
                         binding.emptyLayout.visibility = View.VISIBLE
                     } else {
                         binding.rvSongs.visibility = View.VISIBLE
                     }
 
                     // Actualizar botón play según estado actual
-                    isPlaying = musicService?.isPlaying() == true && isFavoritesQueuePlaying()
+                    isPlaying = musicService?.isPlaying() == true && isPlaylistQueuePlaying()
                     updatePlayButton()
                 },
                 onFailure = {
@@ -166,9 +211,9 @@ class FavoritesFragment : Fragment() {
         return "$count canciones • $durationText"
     }
 
-    private fun isFavoritesQueuePlaying(): Boolean {
+    private fun isPlaylistQueuePlaying(): Boolean {
         val current = musicService?.getCurrentSong() ?: return false
-        return favoriteSongs.any { it.id == current.id }
+        return playlistSongs.any { it.id == current.id }
     }
 
     private fun setupMusicServiceListeners() {
@@ -178,7 +223,7 @@ class FavoritesFragment : Fragment() {
             playbackStateListener = { playing ->
                 if (isAdded && _binding != null) {
                     requireActivity().runOnUiThread {
-                        isPlaying = playing && isFavoritesQueuePlaying()
+                        isPlaying = playing && isPlaylistQueuePlaying()
                         updatePlayButton()
                     }
                 }
@@ -187,7 +232,7 @@ class FavoritesFragment : Fragment() {
             songChangeListener = { song ->
                 if (isAdded && _binding != null) {
                     requireActivity().runOnUiThread {
-                        isPlaying = service.isPlaying() && isFavoritesQueuePlaying()
+                        isPlaying = service.isPlaying() && isPlaylistQueuePlaying()
                         updatePlayButton()
                         songAdapter.setPlayingSong(song?.id)
                     }
@@ -221,6 +266,46 @@ class FavoritesFragment : Fragment() {
         }
     }
 
+    private fun showSongOptionsWithRemove(song: Song) {
+        // Show a small chooser: default options or remove from playlist
+        val options = arrayOf(getString(R.string.more_options), getString(R.string.remove_from_playlist))
+        AlertDialog.Builder(requireContext())
+            .setItems(options) { dialog, which ->
+                when (which) {
+                    0 -> showSongOptions(song)
+                    1 -> confirmRemoveSong(song)
+                }
+            }
+            .show()
+    }
+
+    private fun confirmRemoveSong(song: Song) {
+        val id = playlistId ?: return
+        val index = playlistSongs.indexOfFirst { it.id == song.id }
+        if (index == -1) {
+            Toast.makeText(requireContext(), getString(R.string.remove_from_playlist_error), Toast.LENGTH_SHORT).show()
+            return
+        }
+        viewLifecycleOwner.lifecycleScope.launch {
+            musicRepository.removeSongFromPlaylist(id, index).fold(
+                onSuccess = {
+                    // Update local list and UI
+                    playlistSongs.removeAt(index)
+                    songAdapter.updateSongs(playlistSongs)
+                    binding.tvInfo.text = buildInfoText(playlistSongs)
+                    if (playlistSongs.isEmpty()) {
+                        binding.emptyLayout.visibility = View.VISIBLE
+                        binding.rvSongs.visibility = View.GONE
+                    }
+                    Toast.makeText(requireContext(), getString(R.string.removed_from_playlist), Toast.LENGTH_SHORT).show()
+                },
+                onFailure = {
+                    Toast.makeText(requireContext(), getString(R.string.remove_from_playlist_error), Toast.LENGTH_SHORT).show()
+                }
+            )
+        }
+    }
+
     private fun showSongOptions(song: Song) {
         val bottomSheet = com.arantec.castafiore.ui.dialogs.SongOptionsBottomSheet
             .newInstance(song, false)
@@ -228,42 +313,42 @@ class FavoritesFragment : Fragment() {
                 val downloadManager = com.arantec.castafiore.data.download.SongDownloadManager.getInstance(requireContext())
                 when {
                     downloadManager.isSongDownloaded(selectedSong.id) -> {
-                        android.widget.Toast.makeText(requireContext(), getString(R.string.song_already_downloaded), android.widget.Toast.LENGTH_SHORT).show()
+                        Toast.makeText(requireContext(), getString(R.string.song_already_downloaded), Toast.LENGTH_SHORT).show()
                     }
                     downloadManager.isSongDownloading(selectedSong.id) -> {
                         downloadManager.cancelDownload(selectedSong.id)
-                        android.widget.Toast.makeText(requireContext(), getString(R.string.download_canceled, selectedSong.title), android.widget.Toast.LENGTH_SHORT).show()
+                        Toast.makeText(requireContext(), getString(R.string.download_canceled, selectedSong.title), Toast.LENGTH_SHORT).show()
                     }
                     else -> {
                         downloadManager.downloadSong(selectedSong)
-                        android.widget.Toast.makeText(requireContext(), getString(R.string.download_started, selectedSong.title), android.widget.Toast.LENGTH_SHORT).show()
+                        Toast.makeText(requireContext(), getString(R.string.download_started, selectedSong.title), Toast.LENGTH_SHORT).show()
                     }
                 }
             }
             .setOnDeleteDownloadClickListener { selectedSong ->
                 val downloadManager = com.arantec.castafiore.data.download.SongDownloadManager.getInstance(requireContext())
                 if (downloadManager.isSongDownloaded(selectedSong.id)) {
-                    val builder = android.app.AlertDialog.Builder(requireContext())
+                    val builder = AlertDialog.Builder(requireContext())
                     builder.setTitle(R.string.delete_download)
                     builder.setMessage(getString(R.string.delete_download_confirm, selectedSong.title))
-                    builder.setPositiveButton(R.string.delete) { dialogInterface: android.content.DialogInterface, _: Int ->
+                    builder.setPositiveButton(R.string.delete) { _: android.content.DialogInterface, _: Int ->
                         val success = downloadManager.deleteSong(selectedSong.id)
                         val msg = if (success) R.string.download_deleted else R.string.download_delete_error
-                        android.widget.Toast.makeText(requireContext(), getString(msg), android.widget.Toast.LENGTH_SHORT).show()
+                        Toast.makeText(requireContext(), getString(msg), Toast.LENGTH_SHORT).show()
                     }
                     builder.setNegativeButton(R.string.cancel, null)
                     builder.show()
                 } else {
-                    android.widget.Toast.makeText(requireContext(), getString(R.string.song_not_downloaded), android.widget.Toast.LENGTH_SHORT).show()
+                    Toast.makeText(requireContext(), getString(R.string.song_not_downloaded), Toast.LENGTH_SHORT).show()
                 }
             }
             .setOnAddToQueueClickListener { selectedSong ->
                 val service = musicService
                 if (service != null) {
                     service.addToQueue(selectedSong)
-                    android.widget.Toast.makeText(requireContext(), getString(R.string.added_to_queue, selectedSong.title), android.widget.Toast.LENGTH_SHORT).show()
+                    Toast.makeText(requireContext(), getString(R.string.added_to_queue, selectedSong.title), Toast.LENGTH_SHORT).show()
                 } else {
-                    android.widget.Toast.makeText(requireContext(), getString(R.string.music_service_unavailable), android.widget.Toast.LENGTH_SHORT).show()
+                    Toast.makeText(requireContext(), getString(R.string.music_service_unavailable), Toast.LENGTH_SHORT).show()
                     bindMusicService()
                 }
             }
@@ -271,9 +356,9 @@ class FavoritesFragment : Fragment() {
                 val service = musicService
                 if (service != null) {
                     service.playNext(selectedSong)
-                    android.widget.Toast.makeText(requireContext(), getString(R.string.will_play_next, selectedSong.title), android.widget.Toast.LENGTH_SHORT).show()
+                    Toast.makeText(requireContext(), getString(R.string.will_play_next, selectedSong.title), Toast.LENGTH_SHORT).show()
                 } else {
-                    android.widget.Toast.makeText(requireContext(), getString(R.string.music_service_unavailable), android.widget.Toast.LENGTH_SHORT).show()
+                    Toast.makeText(requireContext(), getString(R.string.music_service_unavailable), Toast.LENGTH_SHORT).show()
                     bindMusicService()
                 }
             }
@@ -288,38 +373,36 @@ class FavoritesFragment : Fragment() {
                     viewLifecycleOwner.lifecycleScope.launch {
                         musicRepository.getAlbumDetail(albumId).fold(
                             onSuccess = { album ->
-                                val args = android.os.Bundle().apply {
-                                    putParcelable("album", album)
-                                }
+                                val args = Bundle().apply { putParcelable("album", album) }
                                 try {
                                     findNavController().navigate(R.id.albumDetailFragment, args)
                                 } catch (_: Exception) {
-                                    android.widget.Toast.makeText(requireContext(), "No se pudo abrir el álbum", android.widget.Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(requireContext(), "No se pudo abrir el álbum", Toast.LENGTH_SHORT).show()
                                 }
                             },
                             onFailure = {
-                                android.widget.Toast.makeText(requireContext(), "No se pudo abrir el álbum", android.widget.Toast.LENGTH_SHORT).show()
+                                Toast.makeText(requireContext(), "No se pudo abrir el álbum", Toast.LENGTH_SHORT).show()
                             }
                         )
                     }
                 } else {
-                    android.widget.Toast.makeText(requireContext(), "Álbum no disponible", android.widget.Toast.LENGTH_SHORT).show()
+                    Toast.makeText(requireContext(), "Álbum no disponible", Toast.LENGTH_SHORT).show()
                 }
             }
             .setOnViewArtistClickListener { selectedSong ->
                 val artistId = selectedSong.artistId
                 if (!artistId.isNullOrEmpty()) {
-                    val args = android.os.Bundle().apply {
+                    val args = Bundle().apply {
                         putString("artistId", artistId)
                         putString("artistName", selectedSong.artist)
                     }
                     try {
                         findNavController().navigate(R.id.artistDetailFragment, args)
                     } catch (_: Exception) {
-                        android.widget.Toast.makeText(requireContext(), "No se pudo abrir el artista", android.widget.Toast.LENGTH_SHORT).show()
+                        Toast.makeText(requireContext(), "No se pudo abrir el artista", Toast.LENGTH_SHORT).show()
                     }
                 } else {
-                    android.widget.Toast.makeText(requireContext(), "Artista no disponible", android.widget.Toast.LENGTH_SHORT).show()
+                    Toast.makeText(requireContext(), "Artista no disponible", Toast.LENGTH_SHORT).show()
                 }
             }
             .setOnSongInfoClickListener { selectedSong ->
@@ -330,61 +413,45 @@ class FavoritesFragment : Fragment() {
 
     private fun showSongInfo(song: Song) {
         val dialogBuilder = androidx.appcompat.app.AlertDialog.Builder(requireContext())
-        val inflater = android.view.LayoutInflater.from(requireContext())
-        val dialogView = inflater.inflate(com.arantec.castafiore.R.layout.dialog_song_info, null)
+        val inflater = LayoutInflater.from(requireContext())
+        val dialogView = inflater.inflate(R.layout.dialog_song_info, null)
 
-        // Referencias a las vistas del diálogo
-        val ivInfoCover = dialogView.findViewById<android.widget.ImageView>(com.arantec.castafiore.R.id.iv_info_cover)
-        val tvInfoTitle = dialogView.findViewById<android.widget.TextView>(com.arantec.castafiore.R.id.tv_info_title)
-        val tvInfoArtist = dialogView.findViewById<android.widget.TextView>(com.arantec.castafiore.R.id.tv_info_artist)
-        val tvInfoAlbum = dialogView.findViewById<android.widget.TextView>(com.arantec.castafiore.R.id.tv_info_album)
-        val tvInfoDuration = dialogView.findViewById<android.widget.TextView>(com.arantec.castafiore.R.id.tv_info_duration)
-        val tvInfoGenre = dialogView.findViewById<android.widget.TextView>(com.arantec.castafiore.R.id.tv_info_genre)
-        val tvInfoYear = dialogView.findViewById<android.widget.TextView>(com.arantec.castafiore.R.id.tv_info_year)
-        val tvInfoBitrate = dialogView.findViewById<android.widget.TextView>(com.arantec.castafiore.R.id.tv_info_bitrate)
-        val tvInfoFormat = dialogView.findViewById<android.widget.TextView>(com.arantec.castafiore.R.id.tv_info_format)
-        val tvInfoFileSize = dialogView.findViewById<android.widget.TextView>(com.arantec.castafiore.R.id.tv_info_file_size)
+        val ivInfoCover = dialogView.findViewById<android.widget.ImageView>(R.id.iv_info_cover)
+        val tvInfoTitle = dialogView.findViewById<android.widget.TextView>(R.id.tv_info_title)
+        val tvInfoArtist = dialogView.findViewById<android.widget.TextView>(R.id.tv_info_artist)
+        val tvInfoAlbum = dialogView.findViewById<android.widget.TextView>(R.id.tv_info_album)
+        val tvInfoDuration = dialogView.findViewById<android.widget.TextView>(R.id.tv_info_duration)
+        val tvInfoGenre = dialogView.findViewById<android.widget.TextView>(R.id.tv_info_genre)
+        val tvInfoYear = dialogView.findViewById<android.widget.TextView>(R.id.tv_info_year)
+        val tvInfoBitrate = dialogView.findViewById<android.widget.TextView>(R.id.tv_info_bitrate)
+        val tvInfoFormat = dialogView.findViewById<android.widget.TextView>(R.id.tv_info_format)
+        val tvInfoFileSize = dialogView.findViewById<android.widget.TextView>(R.id.tv_info_file_size)
 
-        // Configurar la información básica
         tvInfoTitle.text = song.title
         tvInfoArtist.text = song.artist
         tvInfoAlbum.text = song.album
         tvInfoDuration.text = formatSongDuration(song.duration)
 
-        // Configurar información opcional
         tvInfoGenre.text = song.genre ?: "Desconocido"
         tvInfoYear.text = song.year?.toString() ?: "Desconocido"
         tvInfoBitrate.text = if (song.bitRate != null) "${song.bitRate} kbps" else "Desconocido"
         tvInfoFormat.text = song.suffix?.uppercase() ?: "Desconocido"
+        tvInfoFileSize.text = song.size?.let { formatFileSize(it) } ?: "Desconocido"
 
-        // Formatear el tamaño del archivo
-        tvInfoFileSize.text = if (song.size != null) {
-            formatFileSize(song.size)
-        } else {
-            "Desconocido"
-        }
-
-        // Cargar la imagen de la canción
         try {
             if (musicRepository.serverUrl != null && song.coverArt != null) {
                 val (username, token, salt) = musicRepository.getAuthParams()
-                val coverUrl = song.getCoverArtUrl(
-                    musicRepository.serverUrl!!,
-                    username,
-                    token,
-                    salt
-                )
-
+                val coverUrl = song.getCoverArtUrl(musicRepository.serverUrl!!, username, token, salt)
                 com.bumptech.glide.Glide.with(this)
                     .load(coverUrl)
-                    .placeholder(com.arantec.castafiore.R.drawable.ic_album_placeholder)
-                    .error(com.arantec.castafiore.R.drawable.ic_album_placeholder)
+                    .placeholder(R.drawable.ic_album_placeholder)
+                    .error(R.drawable.ic_album_placeholder)
                     .into(ivInfoCover)
             } else {
-                ivInfoCover.setImageResource(com.arantec.castafiore.R.drawable.ic_album_placeholder)
+                ivInfoCover.setImageResource(R.drawable.ic_album_placeholder)
             }
-        } catch (e: Exception) {
-            ivInfoCover.setImageResource(com.arantec.castafiore.R.drawable.ic_album_placeholder)
+        } catch (_: Exception) {
+            ivInfoCover.setImageResource(R.drawable.ic_album_placeholder)
         }
 
         dialogBuilder.setView(dialogView)
@@ -411,14 +478,68 @@ class FavoritesFragment : Fragment() {
         }
     }
 
+    private fun showRenameDialog() {
+        val id = playlistId ?: return
+        val input = EditText(requireContext())
+        input.setText(playlistInfo?.name ?: playlistName ?: "")
+        AlertDialog.Builder(requireContext())
+            .setTitle(R.string.rename_playlist)
+            .setView(input)
+            .setPositiveButton(R.string.rename) { _, _ ->
+                val newName = input.text?.toString()?.trim().orEmpty()
+                if (newName.isNotEmpty()) {
+                    viewLifecycleOwner.lifecycleScope.launch {
+                        musicRepository.updatePlaylistMetadata(id, name = newName).fold(
+                            onSuccess = {
+                                binding.tvTitle.text = newName
+                                playlistName = newName
+                                Toast.makeText(requireContext(), getString(R.string.playlist_rename_success), Toast.LENGTH_SHORT).show()
+                            },
+                            onFailure = {
+                                Toast.makeText(requireContext(), getString(R.string.playlist_rename_error), Toast.LENGTH_SHORT).show()
+                            }
+                        )
+                    }
+                }
+            }
+            .setNegativeButton(R.string.cancel, null)
+            .show()
+    }
+
+    private fun confirmDeletePlaylist() {
+        val id = playlistId ?: return
+        val name = playlistInfo?.name ?: playlistName ?: ""
+        AlertDialog.Builder(requireContext())
+            .setTitle(R.string.delete_playlist)
+            .setMessage(getString(R.string.delete_playlist_confirm, name))
+            .setPositiveButton(R.string.delete) { _, _ ->
+                viewLifecycleOwner.lifecycleScope.launch {
+                    musicRepository.deletePlaylist(id).fold(
+                        onSuccess = {
+                            Toast.makeText(requireContext(), getString(R.string.playlist_deleted_success), Toast.LENGTH_SHORT).show()
+                            findNavController().popBackStack()
+                        },
+                        onFailure = {
+                            Toast.makeText(requireContext(), getString(R.string.playlist_delete_error), Toast.LENGTH_SHORT).show()
+                        }
+                    )
+                }
+            }
+            .setNegativeButton(R.string.cancel, null)
+            .show()
+    }
+
     override fun onResume() {
         super.onResume()
-        // Ensure consistent status bar color on resume
         StatusBarUtils.setStatusBarColor(this)
     }
 
     override fun onDestroyView() {
         super.onDestroyView()
         _binding = null
+        if (isBound) {
+            requireContext().unbindService(serviceConnection)
+            isBound = false
+        }
     }
 }

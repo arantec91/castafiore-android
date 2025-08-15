@@ -45,3 +45,31 @@ data class PlaylistData(
     val changed: String? = null,
     val coverArt: String? = null
 )
+
+// Nuevos modelos para getPlaylist (detalle con entradas)
+data class PlaylistDetailResponse(
+    @SerializedName("subsonic-response")
+    val subsonicResponse: PlaylistDetailResult
+)
+
+data class PlaylistDetailResult(
+    val status: String,
+    val version: String,
+    val playlist: PlaylistDetail?,
+    val error: ErrorResponse?
+)
+
+// PlaylistDetail incluye las mismas propiedades que PlaylistData y la lista de canciones como `entry`
+data class PlaylistDetail(
+    val id: String,
+    val name: String,
+    val comment: String? = null,
+    val owner: String? = null,
+    val public: Boolean? = false,
+    val songCount: Int? = 0,
+    val duration: Int? = 0,
+    val created: String? = null,
+    val changed: String? = null,
+    val coverArt: String? = null,
+    @SerializedName("entry") val entries: List<Song>? = null
+)

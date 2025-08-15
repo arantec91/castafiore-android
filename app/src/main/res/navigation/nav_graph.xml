@@ -80,6 +80,9 @@
         <action
             android:id="@+id/action_library_to_favorites"
             app:destination="@id/favoritesFragment" />
+        <action
+            android:id="@+id/action_library_to_playlistDetail"
+            app:destination="@id/playlistDetailFragment" />
     </fragment>
 
     <fragment
@@ -87,5 +90,18 @@
         android:name="com.arantec.castafiore.ui.fragments.FavoritesFragment"
         android:label="Favoritos"
         tools:layout="@layout/fragment_favorites" />
+
+    <fragment
+        android:id="@+id/playlistDetailFragment"
+        android:name="com.arantec.castafiore.ui.fragments.PlaylistDetailFragment"
+        android:label="Playlist"
+        tools:layout="@layout/fragment_playlist_detail">
+        <argument
+            android:name="playlistId"
+            app:argType="string" />
+        <argument
+            android:name="playlistName"
+            app:argType="string" />
+    </fragment>
 
 </navigation>

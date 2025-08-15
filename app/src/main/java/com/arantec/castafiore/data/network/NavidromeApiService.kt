@@ -162,6 +162,9 @@ interface NavidromeApiService {
         @Query("v") version: String,
         @Query("c") client: String,
         @Query("playlistId") playlistId: String,
+        @Query("name") name: String? = null,
+        @Query("comment") comment: String? = null,
+        @Query("public") isPublic: Boolean? = null,
         @Query("songIdToAdd") songIdToAdd: String? = null,
         @Query("songIndexToRemove") songIndexToRemove: Int? = null,
         @Query("f") format: String = "json"
@@ -189,4 +192,15 @@ interface NavidromeApiService {
         @Query("size") size: Int = 20,
         @Query("f") format: String = "json"
     ): Response<SimilarSongsResponse>
+
+    @GET("rest/getPlaylist.view")
+    suspend fun getPlaylist(
+        @Query("u") username: String,
+        @Query("t") token: String,
+        @Query("s") salt: String,
+        @Query("v") version: String,
+        @Query("c") client: String,
+        @Query("id") id: String,
+        @Query("f") format: String = "json"
+    ): Response<PlaylistDetailResponse>
 }

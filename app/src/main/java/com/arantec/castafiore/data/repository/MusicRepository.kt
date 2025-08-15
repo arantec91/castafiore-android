@@ -984,4 +984,158 @@ class MusicRepository private constructor(private val context: Context) {
             Result.failure(e)
         }
     }
+
+    // Obtener información de una playlist específica
+    suspend fun getPlaylistInfo(playlistId: String): Result<Playlist> {
+        return cacheManager.getPlaylists(
+            key = CacheKeys.playlistDetail(playlistId),
+            type = CacheTypes.PLAYLIST_TYPE
+        ) {
+            try {
+                val (username, token, salt) = getAuthParams()
+                val response = NavidromeClient.getApiService().getPlaylist(
+                    username = username,
+                    token = token,
+                    salt = salt,
+                    version = "1.16.1",
+                    client = "Castafiore",
+                    id = playlistId
+                )
+
+                if (response.isSuccessful) {
+                    val body = response.body()
+                    val status = body?.subsonicResponse?.status
+                    if (status == "ok") {
+                        val p = body.subsonicResponse.playlist
+                        if (p != null) {
+                            val playlist = Playlist(
+                                id = p.id,
+                                name = p.name,
+                                comment = p.comment,
+                                owner = p.owner,
+                                public = p.public ?: false,
+                                songCount = p.songCount ?: (p.entries?.size ?: 0),
+                                duration = p.duration ?: (p.entries?.sumOf { it.duration } ?: 0),
+                                created = p.created,
+                                changed = p.changed,
+                                coverArt = p.coverArt
+                            )
+                            Result.success(playlist)
+                        } else {
+                            Result.failure(Exception("Playlist not found"))
+                        }
+                    } else {
+                        val error = body?.subsonicResponse?.error
+                        Result.failure(Exception("API Error: ${error?.message ?: "Unknown"}"))
+                    }
+                } else {
+                    Result.failure(Exception("HTTP Error: ${response.code()} - ${response.message()}"))
+                }
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
+        }
+    }
+
+    // Obtener canciones de una playlist específica
+    suspend fun getPlaylistSongs(playlistId: String): Result<List<Song>> {
+        return cacheManager.getSongs(
+            key = CacheKeys.playlistSongs(playlistId),
+            type = CacheTypes.SONG_LIST_TYPE
+        ) {
+            try {
+                val (username, token, salt) = getAuthParams()
+                val response = NavidromeClient.getApiService().getPlaylist(
+                    username = username,
+                    token = token,
+                    salt = salt,
+                    version = "1.16.1",
+                    client = "Castafiore",
+                    id = playlistId
+                )
+
+                if (response.isSuccessful) {
+                    val body = response.body()
+                    val status = body?.subsonicResponse?.status
+                    if (status == "ok") {
+                        val songs = body.subsonicResponse.playlist?.entries ?: emptyList()
+                        Result.success(songs)
+                    } else {
+                        val error = body?.subsonicResponse?.error
+                        Result.failure(Exception("API Error: ${error?.message ?: "Unknown"}"))
+                    }
+                } else {
+                    Result.failure(Exception("HTTP Error: ${response.code()} - ${response.message()}"))
+                }
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
+        }
+    }
+
+    suspend fun updatePlaylistMetadata(
+        playlistId: String,
+        name: String? = null,
+        comment: String? = null,
+        isPublic: Boolean? = null
+    ): Result<Boolean> {
+        return try {
+            val (username, token, salt) = getAuthParams()
+            val response = NavidromeClient.getApiService().updatePlaylist(
+                username = username,
+                token = token,
+                salt = salt,
+                version = "1.16.1",
+                client = "Castafiore",
+                playlistId = playlistId,
+                name = name,
+                comment = comment,
+                isPublic = isPublic
+            )
+
+            if (response.isSuccessful) {
+                val body = response.body()
+                if (body?.subsonicResponse?.status == "ok") {
+                    // Invalidate playlist caches
+                    CacheInvalidation.invalidatePlaylistCache(cacheManager, playlistId)
+                    Result.success(true)
+                } else {
+                    Result.failure(Exception("Failed to update playlist"))
+                }
+            } else {
+                Result.failure(Exception("HTTP Error: ${response.code()} - ${response.message()}"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun removeSongFromPlaylist(playlistId: String, indexToRemove: Int): Result<Boolean> {
+        return try {
+            val (username, token, salt) = getAuthParams()
+            val response = NavidromeClient.getApiService().updatePlaylist(
+                username = username,
+                token = token,
+                salt = salt,
+                version = "1.16.1",
+                client = "Castafiore",
+                playlistId = playlistId,
+                songIndexToRemove = indexToRemove
+            )
+
+            if (response.isSuccessful) {
+                val body = response.body()
+                if (body?.subsonicResponse?.status == "ok") {
+                    CacheInvalidation.invalidatePlaylistCache(cacheManager, playlistId)
+                    Result.success(true)
+                } else {
+                    Result.failure(Exception("Failed to remove song from playlist"))
+                }
+            } else {
+                Result.failure(Exception("HTTP Error: ${response.code()} - ${response.message()}"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
 }

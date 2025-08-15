@@ -40,16 +40,16 @@
                     android:background="#121212"
                     android:elevation="0dp" />
 
+                <!-- Playlist cover (or placeholder) -->
                 <ImageView
-                    android:id="@+id/ivHeaderIcon"
+                    android:id="@+id/ivHeaderCover"
                     android:layout_width="220dp"
                     android:layout_height="220dp"
                     android:layout_centerInParent="true"
                     android:layout_marginTop="60dp"
-                    android:src="@drawable/ic_favorite"
-                    app:tint="#FFFFFF"
-                    android:alpha="0.12"
-                    android:contentDescription="@string/favorites_icon_desc" />
+                    android:scaleType="centerCrop"
+                    android:contentDescription="@string/album_icon"
+                    tools:src="@drawable/ic_album_placeholder" />
 
             </RelativeLayout>
 
@@ -95,7 +95,7 @@
                     android:textColor="@color/text_primary"
                     android:textSize="28sp"
                     android:textStyle="bold"
-                    tools:text="Canciones favoritas" />
+                    tools:text="Nombre de la playlist" />
 
                 <LinearLayout
                     android:layout_width="match_parent"
@@ -166,10 +166,10 @@
                 <ImageView
                     android:layout_width="80dp"
                     android:layout_height="80dp"
-                    android:src="@drawable/ic_favorite"
+                    android:src="@drawable/ic_music_note"
                     app:tint="#404040"
                     android:layout_marginBottom="16dp"
-                    android:contentDescription="@string/favorites_icon_desc" />
+                    android:contentDescription="@string/music_info_icon_desc" />
 
                 <TextView
                     android:id="@+id/tvEmpty"

@@ -44,4 +44,24 @@
     <string name="favorites_icon_desc">Icono de favoritos</string>
     <string name="music_info_icon_desc">Icono de información musical</string>
     <string name="empty_favorites">Aún no tienes canciones favoritas</string>
+
+    <!-- Playlist detail -->
+    <string name="no_songs">No hay canciones</string>
+
+    <!-- Playlist actions -->
+    <string name="edit_playlist">Editar playlist</string>
+    <string name="delete_playlist">Eliminar playlist</string>
+    <string name="delete_playlist_confirm">¿Eliminar la playlist "%1$s"? Esta acción no se puede deshacer.</string>
+    <string name="playlist_deleted_success">Playlist eliminada</string>
+    <string name="playlist_delete_error">Error al eliminar la playlist</string>
+    <string name="rename_playlist">Renombrar playlist</string>
+    <string name="rename">Renombrar</string>
+    <string name="playlist_rename_success">Playlist renombrada</string>
+    <string name="playlist_rename_error">Error al renombrar la playlist</string>
+    <string name="remove_from_playlist">Quitar de la playlist</string>
+    <string name="removed_from_playlist">Canción quitada de la playlist</string>
+    <string name="remove_from_playlist_error">Error al quitar la canción de la playlist</string>
+    <string name="added_to_queue">Agregada a la cola: %1$s</string>
+    <string name="will_play_next">Se reproducirá a continuación: %1$s</string>
+    <string name="music_service_unavailable">Servicio de música no disponible</string>
 </resources>
