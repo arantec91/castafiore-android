@@ -74,7 +74,7 @@ class SettingsFragment : Fragment() {
             when (item.id) {
                 "account" -> findNavController().navigate(R.id.accountFragment)
                 "playback" -> findNavController().navigate(R.id.playbackFragment)
-                "info" -> showAppInfoDialog()
+                "info" -> findNavController().navigate(R.id.infoFragment)
             }
         }
 

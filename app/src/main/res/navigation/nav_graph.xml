@@ -116,4 +116,10 @@
         android:label="Reproducción"
         tools:layout="@layout/fragment_playback" />
 
+    <fragment
+        android:id="@+id/infoFragment"
+        android:name="com.arantec.castafiore.ui.fragments.InfoFragment"
+        android:label="Información"
+        tools:layout="@layout/fragment_info" />
+
 </navigation>
