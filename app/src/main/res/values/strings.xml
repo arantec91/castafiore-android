@@ -70,4 +70,13 @@
     <string name="popular_title">Populares</string>
     <string name="albums_count_singular">%1$d álbum</string>
     <string name="albums_count_plural">%1$d álbumes</string>
+
+    <!-- Login / Setup -->
+    <string name="login_title">Iniciar sesión</string>
+    <string name="login_subtitle">Ingresa tu usuario y contraseña</string>
+    <string name="login">Iniciar sesión</string>
+    <string name="logging_in">Iniciando sesión…</string>
+    <string name="user_hint">Usuario</string>
+    <string name="password_hint">Contraseña</string>
+    <string name="server_info">Servidor: http://65.109.23.109:4533</string>
 </resources>

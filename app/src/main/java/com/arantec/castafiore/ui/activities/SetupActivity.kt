@@ -18,6 +18,8 @@ class SetupActivity : AppCompatActivity() {
     private lateinit var binding: ActivitySetupBinding
     private lateinit var musicRepository: MusicRepository
 
+    private val FIXED_SERVER_URL = "http://65.109.23.109:4533"
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivitySetupBinding.inflate(layoutInflater)
@@ -28,46 +30,42 @@ class SetupActivity : AppCompatActivity() {
 
         musicRepository = MusicRepository.getInstance(this)
 
-        // Load saved values
-        binding.etServerUrl.setText(musicRepository.serverUrl ?: "")
+        // Load saved values (only username)
         binding.etUsername.setText(musicRepository.username ?: "")
 
+        binding.btnConnect.text = getString(R.string.login)
         binding.btnConnect.setOnClickListener {
             testConnection()
         }
     }
 
     private fun testConnection() {
-        val serverUrl = binding.etServerUrl.text.toString().trim()
+        val serverUrl = FIXED_SERVER_URL
         val username = binding.etUsername.text.toString().trim()
         val password = binding.etPassword.text.toString().trim()
 
-        // Validar campos vacíos
-        if (serverUrl.isEmpty()) {
-            showFieldError("etServerUrl", "La URL del servidor es requerida")
-            return
-        }
-
+        // Validación simple: solo mensaje principal
         if (username.isEmpty()) {
-            showFieldError("etUsername", "El nombre de usuario es requerido")
+            showStatus("El nombre de usuario es requerido", true)
+            binding.etUsername.requestFocus()
             return
         }
-
         if (password.isEmpty()) {
-            showFieldError("etPassword", "La contraseña es requerida")
+            showStatus("La contraseña es requerida", true)
+            binding.etPassword.requestFocus()
             return
         }
 
-        // Limpiar errores anteriores
-        clearFieldErrors()
+        // Limpiar estado previo
+        showStatus("", false)
 
         binding.btnConnect.isEnabled = false
-        binding.btnConnect.text = "Conectando..."
+        binding.btnConnect.text = getString(R.string.logging_in)
         showStatus("Verificando credenciales...", false)
 
         lifecycleScope.launch {
             try {
-                // Test connection
+                // Initialize client with fixed server URL
                 val client = NavidromeClient
                 client.initialize(serverUrl)
 
@@ -83,73 +81,50 @@ class SetupActivity : AppCompatActivity() {
                 if (response.isSuccessful) {
                     val body = response.body()
                     if (body?.subsonicResponse?.status == "ok") {
-                        // Save credentials
+                        // Save credentials with fixed server
                         musicRepository.serverUrl = serverUrl
                         musicRepository.username = username
                         musicRepository.password = password
 
-                        showStatus("✓ Conexión exitosa", false)
+                        showStatus("✓ Inicio de sesión exitoso", false)
 
                         // Navigate to main activity
                         val intent = Intent(this@SetupActivity, MainActivity::class.java)
                         startActivity(intent)
                         finish()
                     } else {
-                        // Error en la respuesta del servidor
                         val errorMessage = body?.subsonicResponse?.error?.message ?: "Error desconocido"
                         when (body?.subsonicResponse?.error?.code) {
-                            40 -> showAuthError("Usuario o contraseña incorrectos")
-                            50 -> showAuthError("Usuario no autorizado para esta operación")
+                            40 -> showStatus("Usuario o contraseña incorrectos", true)
+                            50 -> showStatus("Usuario no autorizado para esta operación", true)
                             else -> showStatus("Error del servidor: $errorMessage", true)
                         }
                     }
                 } else {
-                    // Errores HTTP
                     when (response.code()) {
-                        401 -> showAuthError("Credenciales inválidas")
-                        403 -> showAuthError("Acceso denegado")
-                        404 -> showStatus("Servidor no encontrado. Verifica la URL", true)
+                        401 -> showStatus("Credenciales inválidas", true)
+                        403 -> showStatus("Acceso denegado", true)
+                        404 -> showStatus("Servidor no disponible", true)
                         500 -> showStatus("Error interno del servidor", true)
                         else -> showStatus("Error de conexión: ${response.code()} - ${response.message()}", true)
                     }
                 }
 
-            } catch (e: java.net.UnknownHostException) {
-                showStatus("No se puede conectar al servidor. Verifica la URL", true)
-            } catch (e: java.net.ConnectException) {
-                showStatus("Error de conexión. Verifica la URL y tu conexión a internet", true)
-            } catch (e: java.net.SocketTimeoutException) {
+            } catch (_: java.net.UnknownHostException) {
+                showStatus("No se puede conectar al servidor", true)
+            } catch (_: java.net.ConnectException) {
+                showStatus("Error de conexión. Reintenta más tarde", true)
+            } catch (_: java.net.SocketTimeoutException) {
                 showStatus("Tiempo de conexión agotado. Intenta nuevamente", true)
-            } catch (e: javax.net.ssl.SSLException) {
-                showStatus("Error de certificado SSL. Verifica la URL", true)
+            } catch (_: javax.net.ssl.SSLException) {
+                showStatus("Error de certificado SSL", true)
             } catch (e: Exception) {
                 showStatus("Error inesperado: ${e.message}", true)
             } finally {
                 binding.btnConnect.isEnabled = true
-                binding.btnConnect.text = "Conectar"
+                binding.btnConnect.text = getString(R.string.login)
             }
         }
-    }
-
-    private fun showAuthError(message: String) {
-        showStatus("❌ $message", true)
-        // Resaltar campos de usuario y contraseña
-        binding.etUsername.error = "Verifica tus credenciales"
-        binding.etPassword.error = "Verifica tus credenciales"
-    }
-
-    private fun showFieldError(fieldName: String, message: String) {
-        when (fieldName) {
-            "etServerUrl" -> binding.etServerUrl.error = message
-            "etUsername" -> binding.etUsername.error = message
-            "etPassword" -> binding.etPassword.error = message
-        }
-    }
-
-    private fun clearFieldErrors() {
-        binding.etServerUrl.error = null
-        binding.etUsername.error = null
-        binding.etPassword.error = null
     }
 
     private fun showStatus(message: String, isError: Boolean) {

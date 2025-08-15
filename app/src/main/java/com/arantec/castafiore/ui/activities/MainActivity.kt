@@ -22,10 +22,10 @@ import com.arantec.castafiore.data.models.Song
 import com.arantec.castafiore.data.repository.MusicRepository
 import com.arantec.castafiore.databinding.ActivityMainBinding
 import com.arantec.castafiore.service.MusicService
-import com.arantec.castafiore.ui.activities.PlayerActivity
 import com.arantec.castafiore.utils.ImageLoader
 import com.arantec.castafiore.utils.StatusBarUtils
-import com.bumptech.glide.Glide
+import com.arantec.castafiore.data.network.NavidromeClient
+import android.content.Context.BIND_AUTO_CREATE
 
 class MainActivity : AppCompatActivity() {
 
@@ -74,6 +74,9 @@ class MainActivity : AppCompatActivity() {
             finish()
             return
         }
+
+        // Initialize API client with saved server URL
+        musicRepository.serverUrl?.let { NavidromeClient.initialize(it) }
 
         // Inicializar el sistema de cache
         CacheConfig.initialize(this)
@@ -213,7 +216,7 @@ class MainActivity : AppCompatActivity() {
             try {
                 val intent = Intent(this, PlayerActivity::class.java)
                 startActivity(intent)
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 // Handle launch error silently
             }
         }
@@ -221,7 +224,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun bindMusicService() {
         val intent = Intent(this, MusicService::class.java)
-        bindService(intent, serviceConnection, Context.BIND_AUTO_CREATE)
+        bindService(intent, serviceConnection, BIND_AUTO_CREATE)
     }
 
     private fun requestNotificationPermission() {

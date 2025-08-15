@@ -54,12 +54,17 @@ class LibraryFragment : Fragment() {
 
         musicRepository = MusicRepository.getInstance(requireContext())
 
+        // Restaurar filtro si viene de estado guardado
+        savedInstanceState?.getString("currentFilter")?.let { restored ->
+            currentFilter = restored
+        }
+
         setupRecyclerView()
         setupFilters()
         setupControls()
 
-        // Establecer estado inicial de los chips
-        updateChipColors()
+        // Asegurar que el chip resaltado corresponda al filtro actual
+        applyCheckedChipFromFilter()
 
         loadInitialData()
     }
@@ -142,6 +147,21 @@ class LibraryFragment : Fragment() {
                 chip.isChipIconVisible = false
             }
         }
+    }
+
+    private fun applyCheckedChipFromFilter() {
+        // Establecer el checked real según el filtro actual y luego pintar
+        val isAll = currentFilter == "all"
+        val isPlaylists = currentFilter == "playlists"
+        val isAlbums = currentFilter == "albums"
+        val isArtists = currentFilter == "artists"
+
+        binding.chipAll.isChecked = isAll
+        binding.chipPlaylists.isChecked = isPlaylists
+        binding.chipAlbums.isChecked = isAlbums
+        binding.chipArtists.isChecked = isArtists
+
+        updateChipColors()
     }
 
     private fun setupControls() {
@@ -432,6 +452,13 @@ class LibraryFragment : Fragment() {
         if (_binding != null) {
             binding.rvLibraryItems.isNestedScrollingEnabled = true
             binding.scrollFilters.isNestedScrollingEnabled = true
+            // Reaplicar colores de chips en caso de que el estado visual haya sido alterado
+            applyCheckedChipFromFilter()
         }
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        outState.putString("currentFilter", currentFilter)
     }
 }

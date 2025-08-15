@@ -6,7 +6,7 @@
     <color name="primary_light">#FF8FA3</color>
     <color name="secondary">#FF6B35</color>
     <color name="secondary_dark">#E55A2B</color>
-    <color name="accent">#FFD23F</color>
+    <color name="accent">#FF2D55</color>
 
     <!-- Colores de superficie y fondo - MODO OSCURO -->
     <color name="surface">#1E1E1E</color>
