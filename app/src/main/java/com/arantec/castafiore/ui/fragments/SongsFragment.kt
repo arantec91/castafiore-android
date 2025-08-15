@@ -56,7 +56,6 @@ class SongsFragment : Fragment() {
 
         musicRepository = MusicRepository.getInstance(requireContext())
         setupRecyclerView()
-        bindMusicService()
         loadRandomSongs()
     }
 
@@ -81,9 +80,24 @@ class SongsFragment : Fragment() {
         requireContext().bindService(intent, serviceConnection, Context.BIND_AUTO_CREATE)
     }
 
+    private fun unbindMusicService() {
+        if (isBound) {
+            requireContext().unbindService(serviceConnection)
+            isBound = false
+            musicService = null
+        }
+    }
+
     private fun playSong(song: Song) {
         if (isBound && musicService != null) {
-            musicService?.playSong(song)
+            musicService?.playSong(
+                song,
+                MusicService.PlaybackSource(
+                    MusicService.SourceType.SONGS,
+                    null,
+                    "Canciones"
+                )
+            )
         }
     }
 
@@ -169,12 +183,19 @@ class SongsFragment : Fragment() {
         }
     }
 
+    override fun onStart() {
+        super.onStart()
+        bindMusicService()
+    }
+
+    override fun onStop() {
+        super.onStop()
+        unbindMusicService()
+    }
+
     override fun onDestroy() {
         super.onDestroy()
-        if (isBound) {
-            requireContext().unbindService(serviceConnection)
-            isBound = false
-        }
+        unbindMusicService()
         _binding = null
     }
 }

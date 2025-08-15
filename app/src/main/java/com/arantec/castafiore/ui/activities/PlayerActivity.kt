@@ -1,10 +1,8 @@
 package com.arantec.castafiore.ui.activities
 
 import android.content.ComponentName
-import android.content.Context
 import android.content.Intent
 import android.content.ServiceConnection
-import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
@@ -16,7 +14,6 @@ import android.widget.SeekBar
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import androidx.palette.graphics.Palette
-import kotlinx.coroutines.launch
 import com.arantec.castafiore.R
 import com.arantec.castafiore.data.models.Song
 import com.arantec.castafiore.data.repository.MusicRepository
@@ -31,6 +28,10 @@ import com.bumptech.glide.request.target.CustomTarget
 import com.bumptech.glide.request.transition.Transition
 import android.graphics.Bitmap
 import android.graphics.drawable.Drawable
+import androidx.core.content.edit
+import androidx.core.graphics.toColorInt
+import java.util.Locale
+import kotlinx.coroutines.launch
 
 class PlayerActivity : AppCompatActivity() {
 
@@ -93,10 +94,10 @@ class PlayerActivity : AppCompatActivity() {
         musicRepository = MusicRepository.getInstance(this)
 
         // Restaurar el estado de shuffle y repeat desde SharedPreferences
-        val prefs = getSharedPreferences("player_prefs", Context.MODE_PRIVATE)
+        val prefs = getSharedPreferences("player_prefs", MODE_PRIVATE)
         isShuffleEnabled = prefs.getBoolean("shuffle_mode", false)
         val savedRepeatMode = prefs.getInt("repeat_mode", RepeatMode.OFF.ordinal)
-        repeatMode = RepeatMode.values()[savedRepeatMode]
+        repeatMode = RepeatMode.entries[savedRepeatMode]
         android.util.Log.d("PlayerActivity", "[DEBUG_LOG] onCreate: Restored shuffle state from SharedPreferences = $isShuffleEnabled")
         android.util.Log.d("PlayerActivity", "[DEBUG_LOG] onCreate: Restored repeat mode from SharedPreferences = $repeatMode")
         updateShuffleButton()
@@ -242,7 +243,7 @@ class PlayerActivity : AppCompatActivity() {
 
     private fun bindMusicService() {
         val intent = Intent(this, MusicService::class.java)
-        bindService(intent, serviceConnection, Context.BIND_AUTO_CREATE)
+        bindService(intent, serviceConnection, BIND_AUTO_CREATE)
     }
 
     private fun unbindMusicService() {
@@ -274,6 +275,13 @@ class PlayerActivity : AppCompatActivity() {
                     loadAlbumArt(it)
                     checkFavoriteStatus(it)
                 }
+                // Actualizar fuente de reproducción
+                updatePlayingFrom()
+            }
+
+            // Agregar listener para cambios en la cola (para detectar cambio de origen)
+            service.addQueueChangeListener {
+                updatePlayingFrom()
             }
         }
     }
@@ -290,6 +298,9 @@ class PlayerActivity : AppCompatActivity() {
                 checkFavoriteStatus(song)
             }
 
+            // Mostrar de dónde se está reproduciendo
+            updatePlayingFrom()
+
             updatePlayPauseButton()
             updateShuffleButton()
             updateRepeatButton()
@@ -305,11 +316,10 @@ class PlayerActivity : AppCompatActivity() {
     private fun updateSongInfo(song: Song) {
         binding.tvSongTitle.text = song.title
         binding.tvArtistName.text = song.artist
-        binding.tvPlayingFrom.text = song.album ?: "Unknown Album"
-        binding.tvTotalTime.text = formatTime(song.duration?.toLong() ?: 0)
+        // No establecer tvPlayingFrom aquí; se gestiona por updatePlayingFrom()
+        binding.tvTotalTime.text = formatTime(song.duration.toLong())
 
         // Actualizar el máximo del SeekBar
-        val duration = song.duration ?: 0
         binding.seekBarProgress.max = 100 // Usamos porcentajes para mejor control
     }
 
@@ -343,31 +353,37 @@ class PlayerActivity : AppCompatActivity() {
                 binding.ivAlbumCover.setImageResource(R.drawable.ic_album_placeholder)
                 applyDefaultTheme()
             }
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             binding.ivAlbumCover.setImageResource(R.drawable.ic_album_placeholder)
             applyDefaultTheme()
         }
     }
 
     private fun extractColorsAndApplyTheme(bitmap: Bitmap) {
-        Palette.from(bitmap).generate { palette ->
-            palette?.let {
-                val dominantColor = it.getDominantColor(Color.parseColor("#121212"))
-                val vibrantColor = it.getVibrantColor(dominantColor)
-
-                // Aplicar color estático por ahora (consistente con el resto de la app)
-                applyDefaultTheme()
-            } ?: applyDefaultTheme()
+        Palette.from(bitmap).generate {
+            // Por ahora, mantener tema estático para consistencia
+            applyDefaultTheme()
         }
     }
 
     private fun applyDefaultTheme() {
-        // Aplicar tema estático consistente
-        val staticColor = android.graphics.Color.parseColor("#121212")
+        val staticColor = "#121212".toColorInt()
         binding.gradientBackground.setBackgroundColor(staticColor)
-
-        // Use centralized utility for status bar consistency
+        // Asegurar status bar consistente
         StatusBarUtils.setStatusBarColor(this)
+    }
+
+    private fun updatePlayingFrom() {
+        val source = musicService?.getPlaybackSource()
+        val text = when (source?.type) {
+            MusicService.SourceType.ALBUM -> source.name ?: "Álbum"
+            MusicService.SourceType.ARTIST -> "Artista: ${source.name ?: "Desconocido"}"
+            MusicService.SourceType.PLAYLIST -> "Playlist: ${source.name ?: "Desconocida"}"
+            MusicService.SourceType.FAVORITES -> getString(R.string.favorite_songs_title)
+            MusicService.SourceType.SONGS -> getString(R.string.songs)
+            MusicService.SourceType.UNKNOWN, null -> currentSong?.album ?: "Álbum desconocido"
+        }
+        binding.tvPlayingFrom.text = text
     }
 
     private fun togglePlayPause() {
@@ -396,8 +412,8 @@ class PlayerActivity : AppCompatActivity() {
         updateShuffleButton()
 
         // Guardar el estado en SharedPreferences
-        val prefs = getSharedPreferences("player_prefs", Context.MODE_PRIVATE)
-        prefs.edit().putBoolean("shuffle_mode", isShuffleEnabled).apply()
+        val prefs = getSharedPreferences("player_prefs", MODE_PRIVATE)
+        prefs.edit { putBoolean("shuffle_mode", isShuffleEnabled) }
         android.util.Log.d("PlayerActivity", "[DEBUG_LOG] toggleShuffle: Saved to SharedPreferences = $isShuffleEnabled")
 
         if (isShuffleEnabled) {
@@ -418,8 +434,8 @@ class PlayerActivity : AppCompatActivity() {
         updateRepeatButton()
 
         // Guardar el estado en SharedPreferences
-        val prefs = getSharedPreferences("player_prefs", Context.MODE_PRIVATE)
-        prefs.edit().putInt("repeat_mode", repeatMode.ordinal).apply()
+        val prefs = getSharedPreferences("player_prefs", MODE_PRIVATE)
+        prefs.edit { putInt("repeat_mode", repeatMode.ordinal) }
         android.util.Log.d("PlayerActivity", "[DEBUG_LOG] toggleRepeat: Saved to SharedPreferences = $repeatMode")
 
         // Sincronizar el estado con el servicio
@@ -483,7 +499,7 @@ class PlayerActivity : AppCompatActivity() {
                         updateFavoriteButton()
                     }
                 )
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 // En caso de excepción, asumir que no es favorito
                 isFavorite = false
                 updateFavoriteButton()
@@ -579,7 +595,7 @@ class PlayerActivity : AppCompatActivity() {
     private fun formatTime(seconds: Long): String {
         val minutes = seconds / 60
         val secs = seconds % 60
-        return String.format("%d:%02d", minutes, secs)
+        return String.format(Locale.getDefault(), "%d:%02d", minutes, secs)
     }
 
     private fun showMessage(message: String) {
@@ -591,7 +607,7 @@ class PlayerActivity : AppCompatActivity() {
         val albumId = song.albumId
         val albumName = song.album
 
-        if (albumId != null && albumName != null) {
+        if (albumId != null) {
             // Como AlbumDetailFragment usa Navigation Component, necesitamos volver a MainActivity
             // y navegar usando Navigation Component
             val intent = Intent(this, MainActivity::class.java).apply {
@@ -619,7 +635,7 @@ class PlayerActivity : AppCompatActivity() {
 
         android.util.Log.d("PlayerActivity", "navigateToArtist called - artistId: $artistId, artistName: $artistName")
 
-        if (artistId != null && artistName != null) {
+        if (artistId != null) {
             // Como ArtistDetailFragment usa Navigation Component, necesitamos volver a MainActivity
             val intent = Intent(this, MainActivity::class.java).apply {
                 // Agregar flags para limpiar el stack y crear una nueva tarea
@@ -657,16 +673,16 @@ class PlayerActivity : AppCompatActivity() {
 
         // Llenar la información
         tvTitle.text = song.title
-        tvArtist.text = song.artist ?: "Artista desconocido"
-        tvAlbum.text = song.album ?: "Álbum desconocido"
-        tvDuration.text = formatTime(song.duration?.toLong() ?: 0)
+        tvArtist.text = song.artist
+        tvAlbum.text = song.album
+        tvDuration.text = formatTime(song.duration.toLong())
         tvGenre.text = song.genre ?: "Género desconocido"
         tvYear.text = song.year?.toString() ?: "Año desconocido"
         tvBitrate.text = if (song.bitRate != null) "${song.bitRate} kbps" else "Bitrate desconocido"
         tvFormat.text = song.suffix?.uppercase() ?: "Formato desconocido"
         tvFileSize.text = if (song.size != null) {
             val sizeInMB = song.size / (1024.0 * 1024.0)
-            String.format("%.1f MB", sizeInMB)
+            String.format(Locale.getDefault(), "%.1f MB", sizeInMB)
         } else {
             "Tamaño desconocido"
         }
@@ -689,7 +705,7 @@ class PlayerActivity : AppCompatActivity() {
             } else {
                 ivCover.setImageResource(R.drawable.ic_album_placeholder)
             }
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             ivCover.setImageResource(R.drawable.ic_album_placeholder)
         }
 

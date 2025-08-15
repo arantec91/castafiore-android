@@ -21,6 +21,8 @@ import com.arantec.castafiore.service.MusicService
 import com.arantec.castafiore.ui.adapters.SongAdapter
 import com.arantec.castafiore.utils.StatusBarUtils
 import kotlinx.coroutines.launch
+import com.bumptech.glide.Glide
+import java.util.Locale
 
 class FavoritesFragment : Fragment() {
 
@@ -45,9 +47,13 @@ class FavoritesFragment : Fragment() {
             isBound = true
             setupMusicServiceListeners()
             // Estado inicial
-            isPlaying = musicService?.isPlaying() == true && isFavoritesQueuePlaying()
+            val serviceIsPlaying = musicService?.isPlaying() == true
+            val inContext = isFavoritesQueuePlaying()
+            isPlaying = serviceIsPlaying && inContext
             updatePlayButton()
-            songAdapter.setPlayingSong(musicService?.getCurrentSong()?.id)
+            // Solo marcar canción si este contexto está activo
+            val currentId = musicService?.getCurrentSong()?.id
+            songAdapter.setPlayingSong(if (inContext) currentId else null)
         }
 
         override fun onServiceDisconnected(name: ComponentName?) {
@@ -72,7 +78,8 @@ class FavoritesFragment : Fragment() {
 
         setupToolbar()
         setupRecyclerView()
-        bindMusicService()
+        // Removed eager bind here; we'll bind in onStart so only visible fragment listens
+        // bindMusicService()
         loadFavorites()
         setupFab()
     }
@@ -89,7 +96,15 @@ class FavoritesFragment : Fragment() {
         songAdapter = SongAdapter(
             onSongClick = { _, position ->
                 if (favoriteSongs.isNotEmpty()) {
-                    musicService?.playQueue(favoriteSongs, position)
+                    musicService?.playQueue(
+                        favoriteSongs,
+                        position,
+                        MusicService.PlaybackSource(
+                            MusicService.SourceType.FAVORITES,
+                            null,
+                            getString(R.string.favorite_songs_title)
+                        )
+                    )
                 }
             },
             onSongMoreClick = { song ->
@@ -110,7 +125,15 @@ class FavoritesFragment : Fragment() {
             if (isFavoritesQueuePlaying()) {
                 if (service.isPlaying()) service.pause() else service.play()
             } else if (favoriteSongs.isNotEmpty()) {
-                service.playQueue(favoriteSongs, 0)
+                service.playQueue(
+                    favoriteSongs,
+                    0,
+                    MusicService.PlaybackSource(
+                        MusicService.SourceType.FAVORITES,
+                        null,
+                        getString(R.string.favorite_songs_title)
+                    )
+                )
             }
         }
     }
@@ -118,6 +141,16 @@ class FavoritesFragment : Fragment() {
     private fun bindMusicService() {
         val intent = Intent(requireContext(), MusicService::class.java)
         requireContext().bindService(intent, serviceConnection, Context.BIND_AUTO_CREATE)
+    }
+
+    private fun unbindMusicService() {
+        if (isBound) {
+            // Remove listeners and unbind so this fragment stops receiving updates when not visible
+            cleanupListeners()
+            requireContext().unbindService(serviceConnection)
+            isBound = false
+            musicService = null
+        }
     }
 
     private fun loadFavorites() {
@@ -167,8 +200,10 @@ class FavoritesFragment : Fragment() {
     }
 
     private fun isFavoritesQueuePlaying(): Boolean {
-        val current = musicService?.getCurrentSong() ?: return false
-        return favoriteSongs.any { it.id == current.id }
+        val service = musicService ?: return false
+        val src = service.getPlaybackSource()
+        // Solo considerar FAVORITES explícito
+        return src?.type == MusicService.SourceType.FAVORITES
     }
 
     private fun setupMusicServiceListeners() {
@@ -187,9 +222,10 @@ class FavoritesFragment : Fragment() {
             songChangeListener = { song ->
                 if (isAdded && _binding != null) {
                     requireActivity().runOnUiThread {
-                        isPlaying = service.isPlaying() && isFavoritesQueuePlaying()
+                        val inContext = isFavoritesQueuePlaying()
+                        isPlaying = service.isPlaying() && inContext
                         updatePlayButton()
-                        songAdapter.setPlayingSong(song?.id)
+                        songAdapter.setPlayingSong(if (inContext) song?.id else null)
                     }
                 }
             }
@@ -288,7 +324,7 @@ class FavoritesFragment : Fragment() {
                     viewLifecycleOwner.lifecycleScope.launch {
                         musicRepository.getAlbumDetail(albumId).fold(
                             onSuccess = { album ->
-                                val args = android.os.Bundle().apply {
+                                val args = Bundle().apply {
                                     putParcelable("album", album)
                                 }
                                 try {
@@ -309,7 +345,7 @@ class FavoritesFragment : Fragment() {
             .setOnViewArtistClickListener { selectedSong ->
                 val artistId = selectedSong.artistId
                 if (!artistId.isNullOrEmpty()) {
-                    val args = android.os.Bundle().apply {
+                    val args = Bundle().apply {
                         putString("artistId", artistId)
                         putString("artistName", selectedSong.artist)
                     }
@@ -330,20 +366,20 @@ class FavoritesFragment : Fragment() {
 
     private fun showSongInfo(song: Song) {
         val dialogBuilder = androidx.appcompat.app.AlertDialog.Builder(requireContext())
-        val inflater = android.view.LayoutInflater.from(requireContext())
-        val dialogView = inflater.inflate(com.arantec.castafiore.R.layout.dialog_song_info, null)
+        val inflater = LayoutInflater.from(requireContext())
+        val dialogView = inflater.inflate(R.layout.dialog_song_info, null)
 
         // Referencias a las vistas del diálogo
-        val ivInfoCover = dialogView.findViewById<android.widget.ImageView>(com.arantec.castafiore.R.id.iv_info_cover)
-        val tvInfoTitle = dialogView.findViewById<android.widget.TextView>(com.arantec.castafiore.R.id.tv_info_title)
-        val tvInfoArtist = dialogView.findViewById<android.widget.TextView>(com.arantec.castafiore.R.id.tv_info_artist)
-        val tvInfoAlbum = dialogView.findViewById<android.widget.TextView>(com.arantec.castafiore.R.id.tv_info_album)
-        val tvInfoDuration = dialogView.findViewById<android.widget.TextView>(com.arantec.castafiore.R.id.tv_info_duration)
-        val tvInfoGenre = dialogView.findViewById<android.widget.TextView>(com.arantec.castafiore.R.id.tv_info_genre)
-        val tvInfoYear = dialogView.findViewById<android.widget.TextView>(com.arantec.castafiore.R.id.tv_info_year)
-        val tvInfoBitrate = dialogView.findViewById<android.widget.TextView>(com.arantec.castafiore.R.id.tv_info_bitrate)
-        val tvInfoFormat = dialogView.findViewById<android.widget.TextView>(com.arantec.castafiore.R.id.tv_info_format)
-        val tvInfoFileSize = dialogView.findViewById<android.widget.TextView>(com.arantec.castafiore.R.id.tv_info_file_size)
+        val ivInfoCover = dialogView.findViewById<android.widget.ImageView>(R.id.iv_info_cover)
+        val tvInfoTitle = dialogView.findViewById<android.widget.TextView>(R.id.tv_info_title)
+        val tvInfoArtist = dialogView.findViewById<android.widget.TextView>(R.id.tv_info_artist)
+        val tvInfoAlbum = dialogView.findViewById<android.widget.TextView>(R.id.tv_info_album)
+        val tvInfoDuration = dialogView.findViewById<android.widget.TextView>(R.id.tv_info_duration)
+        val tvInfoGenre = dialogView.findViewById<android.widget.TextView>(R.id.tv_info_genre)
+        val tvInfoYear = dialogView.findViewById<android.widget.TextView>(R.id.tv_info_year)
+        val tvInfoBitrate = dialogView.findViewById<android.widget.TextView>(R.id.tv_info_bitrate)
+        val tvInfoFormat = dialogView.findViewById<android.widget.TextView>(R.id.tv_info_format)
+        val tvInfoFileSize = dialogView.findViewById<android.widget.TextView>(R.id.tv_info_file_size)
 
         // Configurar la información básica
         tvInfoTitle.text = song.title
@@ -375,16 +411,16 @@ class FavoritesFragment : Fragment() {
                     salt
                 )
 
-                com.bumptech.glide.Glide.with(this)
+                Glide.with(this)
                     .load(coverUrl)
-                    .placeholder(com.arantec.castafiore.R.drawable.ic_album_placeholder)
-                    .error(com.arantec.castafiore.R.drawable.ic_album_placeholder)
+                    .placeholder(R.drawable.ic_album_placeholder)
+                    .error(R.drawable.ic_album_placeholder)
                     .into(ivInfoCover)
             } else {
-                ivInfoCover.setImageResource(com.arantec.castafiore.R.drawable.ic_album_placeholder)
+                ivInfoCover.setImageResource(R.drawable.ic_album_placeholder)
             }
-        } catch (e: Exception) {
-            ivInfoCover.setImageResource(com.arantec.castafiore.R.drawable.ic_album_placeholder)
+        } catch (_: Exception) {
+            ivInfoCover.setImageResource(R.drawable.ic_album_placeholder)
         }
 
         dialogBuilder.setView(dialogView)
@@ -396,7 +432,7 @@ class FavoritesFragment : Fragment() {
     private fun formatSongDuration(seconds: Int): String {
         val minutes = seconds / 60
         val remainingSeconds = seconds % 60
-        return String.format("%d:%02d", minutes, remainingSeconds)
+        return String.format(Locale.getDefault(), "%d:%02d", minutes, remainingSeconds)
     }
 
     private fun formatFileSize(sizeInBytes: Long): String {
@@ -404,11 +440,23 @@ class FavoritesFragment : Fragment() {
         val mb = kb * 1024
         val gb = mb * 1024
         return when {
-            sizeInBytes >= gb -> String.format("%.1f GB", sizeInBytes / gb)
-            sizeInBytes >= mb -> String.format("%.1f MB", sizeInBytes / mb)
-            sizeInBytes >= kb -> String.format("%.1f KB", sizeInBytes / kb)
+            sizeInBytes >= gb -> String.format(Locale.getDefault(), "%.1f GB", sizeInBytes / gb)
+            sizeInBytes >= mb -> String.format(Locale.getDefault(), "%.1f MB", sizeInBytes / mb)
+            sizeInBytes >= kb -> String.format(Locale.getDefault(), "%.1f KB", sizeInBytes / kb)
             else -> "$sizeInBytes bytes"
         }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        // Bind when fragment becomes visible
+        bindMusicService()
+    }
+
+    override fun onStop() {
+        super.onStop()
+        // Unbind when fragment is no longer visible
+        unbindMusicService()
     }
 
     override fun onResume() {
@@ -419,6 +467,8 @@ class FavoritesFragment : Fragment() {
 
     override fun onDestroyView() {
         super.onDestroyView()
+        // Extra safety: ensure unbound
+        unbindMusicService()
         _binding = null
     }
 }

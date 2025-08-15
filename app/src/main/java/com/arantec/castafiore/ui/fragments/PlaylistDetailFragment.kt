@@ -27,6 +27,8 @@ import com.arantec.castafiore.ui.adapters.SongAdapter
 import com.arantec.castafiore.utils.ImageLoader
 import com.arantec.castafiore.utils.StatusBarUtils
 import kotlinx.coroutines.launch
+import com.bumptech.glide.Glide
+import java.util.Locale
 
 class PlaylistDetailFragment : Fragment() {
 
@@ -55,9 +57,13 @@ class PlaylistDetailFragment : Fragment() {
             isBound = true
             setupMusicServiceListeners()
             // Estado inicial
-            isPlaying = musicService?.isPlaying() == true && isPlaylistQueuePlaying()
+            val serviceIsPlaying = musicService?.isPlaying() == true
+            val inContext = isPlaylistQueuePlaying()
+            isPlaying = serviceIsPlaying && inContext
             updatePlayButton()
-            songAdapter.setPlayingSong(musicService?.getCurrentSong()?.id)
+            // Solo resaltar canción si este contexto está activo
+            val currentId = musicService?.getCurrentSong()?.id
+            songAdapter.setPlayingSong(if (inContext) currentId else null)
         }
 
         override fun onServiceDisconnected(name: ComponentName?) {
@@ -89,7 +95,8 @@ class PlaylistDetailFragment : Fragment() {
         setupToolbar()
         setupRecyclerView()
         setupFab()
-        bindMusicService()
+        // Defer binding to onStart so only visible fragment attaches listeners
+        // bindMusicService()
         loadPlaylist()
     }
 
@@ -117,7 +124,15 @@ class PlaylistDetailFragment : Fragment() {
         songAdapter = SongAdapter(
             onSongClick = { _, position ->
                 if (playlistSongs.isNotEmpty()) {
-                    musicService?.playQueue(playlistSongs, position)
+                    musicService?.playQueue(
+                        playlistSongs,
+                        position,
+                        MusicService.PlaybackSource(
+                            MusicService.SourceType.PLAYLIST,
+                            playlistId,
+                            playlistName
+                        )
+                    )
                 }
             },
             onSongMoreClick = { song ->
@@ -137,7 +152,15 @@ class PlaylistDetailFragment : Fragment() {
             if (isPlaylistQueuePlaying()) {
                 if (service.isPlaying()) service.pause() else service.play()
             } else if (playlistSongs.isNotEmpty()) {
-                service.playQueue(playlistSongs, 0)
+                service.playQueue(
+                    playlistSongs,
+                    0,
+                    MusicService.PlaybackSource(
+                        MusicService.SourceType.PLAYLIST,
+                        playlistId,
+                        playlistName
+                    )
+                )
             }
         }
     }
@@ -145,6 +168,16 @@ class PlaylistDetailFragment : Fragment() {
     private fun bindMusicService() {
         val intent = Intent(requireContext(), MusicService::class.java)
         requireContext().bindService(intent, serviceConnection, Context.BIND_AUTO_CREATE)
+    }
+
+    private fun unbindMusicService() {
+        if (isBound) {
+            // Remove listeners and unbind when fragment is not visible
+            cleanupListeners()
+            requireContext().unbindService(serviceConnection)
+            isBound = false
+            musicService = null
+        }
     }
 
     private fun loadPlaylist() {
@@ -212,8 +245,9 @@ class PlaylistDetailFragment : Fragment() {
     }
 
     private fun isPlaylistQueuePlaying(): Boolean {
-        val current = musicService?.getCurrentSong() ?: return false
-        return playlistSongs.any { it.id == current.id }
+        val service = musicService ?: return false
+        val src = service.getPlaybackSource() ?: return false
+        return src.type == MusicService.SourceType.PLAYLIST && src.id == playlistId
     }
 
     private fun setupMusicServiceListeners() {
@@ -232,9 +266,10 @@ class PlaylistDetailFragment : Fragment() {
             songChangeListener = { song ->
                 if (isAdded && _binding != null) {
                     requireActivity().runOnUiThread {
-                        isPlaying = service.isPlaying() && isPlaylistQueuePlaying()
+                        val inContext = isPlaylistQueuePlaying()
+                        isPlaying = service.isPlaying() && inContext
                         updatePlayButton()
-                        songAdapter.setPlayingSong(song?.id)
+                        songAdapter.setPlayingSong(if (inContext) song?.id else null)
                     }
                 }
             }
@@ -412,7 +447,7 @@ class PlaylistDetailFragment : Fragment() {
     }
 
     private fun showSongInfo(song: Song) {
-        val dialogBuilder = androidx.appcompat.app.AlertDialog.Builder(requireContext())
+        val dialogBuilder = AlertDialog.Builder(requireContext())
         val inflater = LayoutInflater.from(requireContext())
         val dialogView = inflater.inflate(R.layout.dialog_song_info, null)
 
@@ -442,7 +477,7 @@ class PlaylistDetailFragment : Fragment() {
             if (musicRepository.serverUrl != null && song.coverArt != null) {
                 val (username, token, salt) = musicRepository.getAuthParams()
                 val coverUrl = song.getCoverArtUrl(musicRepository.serverUrl!!, username, token, salt)
-                com.bumptech.glide.Glide.with(this)
+                Glide.with(this)
                     .load(coverUrl)
                     .placeholder(R.drawable.ic_album_placeholder)
                     .error(R.drawable.ic_album_placeholder)
@@ -463,7 +498,7 @@ class PlaylistDetailFragment : Fragment() {
     private fun formatSongDuration(seconds: Int): String {
         val minutes = seconds / 60
         val remainingSeconds = seconds % 60
-        return String.format("%d:%02d", minutes, remainingSeconds)
+        return String.format(Locale.getDefault(), "%d:%02d", minutes, remainingSeconds)
     }
 
     private fun formatFileSize(sizeInBytes: Long): String {
@@ -471,9 +506,9 @@ class PlaylistDetailFragment : Fragment() {
         val mb = kb * 1024
         val gb = mb * 1024
         return when {
-            sizeInBytes >= gb -> String.format("%.1f GB", sizeInBytes / gb)
-            sizeInBytes >= mb -> String.format("%.1f MB", sizeInBytes / mb)
-            sizeInBytes >= kb -> String.format("%.1f KB", sizeInBytes / kb)
+            sizeInBytes >= gb -> String.format(Locale.getDefault(), "%.1f GB", sizeInBytes / gb)
+            sizeInBytes >= mb -> String.format(Locale.getDefault(), "%.1f MB", sizeInBytes / mb)
+            sizeInBytes >= kb -> String.format(Locale.getDefault(), "%.1f KB", sizeInBytes / kb)
             else -> "$sizeInBytes bytes"
         }
     }
@@ -534,12 +569,20 @@ class PlaylistDetailFragment : Fragment() {
         StatusBarUtils.setStatusBarColor(this)
     }
 
+    override fun onStart() {
+        super.onStart()
+        bindMusicService()
+    }
+
+    override fun onStop() {
+        super.onStop()
+        unbindMusicService()
+    }
+
     override fun onDestroyView() {
         super.onDestroyView()
         _binding = null
-        if (isBound) {
-            requireContext().unbindService(serviceConnection)
-            isBound = false
-        }
+        // Ensure unbound
+        unbindMusicService()
     }
 }

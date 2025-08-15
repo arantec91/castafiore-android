@@ -9,6 +9,7 @@
     <string name="play_album">Reproducir álbum</string>
     <string name="album_info">Álbum • %1$s • %2$d canciones, %3$s</string>
     <string name="unknown_year">Desconocido</string>
+    <string name="unknown_album">Álbum desconocido</string>
 
     <!-- Strings para el bottom sheet de opciones de canción -->
     <string name="song_cover">Portada de la canción</string>
@@ -108,4 +109,5 @@
     <string name="settings_option_playback">Reproducción</string>
     <string name="settings_option_info">Información</string>
     <string name="account_user_label">Nombre de usuario</string>
+    <string name="songs">Canciones</string>
 </resources>

@@ -7,7 +7,6 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.media.session.MediaButtonReceiver
@@ -22,7 +21,6 @@ import android.support.v4.media.session.PlaybackStateCompat
 import com.arantec.castafiore.R
 import com.arantec.castafiore.data.models.Song
 import com.arantec.castafiore.data.repository.MusicRepository
-import com.arantec.castafiore.utils.ImageLoader
 import com.google.android.exoplayer2.ExoPlayer
 import com.google.android.exoplayer2.MediaItem
 import kotlinx.coroutines.CoroutineScope
@@ -264,7 +262,7 @@ class MusicService : Service() {
         notifyPlaybackStateChanged(false)
         exoPlayer?.stop()
         stopForeground(true)
-        (getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).cancel(NOTIFICATION_ID)
+        (getSystemService(NOTIFICATION_SERVICE) as NotificationManager).cancel(NOTIFICATION_ID)
         stopSelf()
         stopProgressUpdates()
     }
@@ -315,11 +313,13 @@ class MusicService : Service() {
         exoPlayer?.seekTo(position)
     }
 
-    fun playQueue(songs: List<Song>, startIndex: Int = 0) {
+    fun playQueue(songs: List<Song>, startIndex: Int = 0, source: PlaybackSource? = null) {
         playlist.clear()
         playlist.addAll(songs)
         currentIndex = startIndex
         currentSong = if (songs.isNotEmpty()) songs[startIndex] else null
+        // Set playback source (default to SONGS if not provided)
+        playbackSource = source ?: PlaybackSource(SourceType.SONGS, null, "Canciones")
         notifySongChanged(currentSong)
         notifyQueueChanged(playlist.toList())
 
@@ -331,11 +331,13 @@ class MusicService : Service() {
         showOrUpdateNotification()
     }
 
-    fun playSong(song: Song) {
+    fun playSong(song: Song, source: PlaybackSource? = null) {
         playlist.clear()
         playlist.add(song)
         currentIndex = 0
         currentSong = song
+        // Set playback source (default to SONGS if not provided)
+        playbackSource = source ?: PlaybackSource(SourceType.SONGS, null, "Canciones")
         notifySongChanged(currentSong)
         notifyQueueChanged(playlist.toList())
 
@@ -431,7 +433,7 @@ class MusicService : Service() {
     }
 
     private fun showOrUpdateNotification() {
-        val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val nm = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
         val isForeground = isPlaying
 
         // Cargar carátula en background y actualizar notificación
@@ -498,6 +500,7 @@ class MusicService : Service() {
     fun getDuration(): Long = exoPlayer?.duration ?: 0L
     fun getQueue(): List<Song> = playlist.toList()
     fun getCurrentIndex(): Int = currentIndex
+    fun getPlaybackSource(): PlaybackSource? = playbackSource
 
     // Métodos públicos para registrar listeners (compatibilidad con ArtistDetailFragment)
     fun setOnSongChangeListener(listener: ((Song?) -> Unit)?) {
@@ -792,4 +795,10 @@ class MusicService : Service() {
             } catch (_: Exception) { /* Ignorar errores */ }
         }
     }
+
+    // Playback source tracking
+    data class PlaybackSource(val type: SourceType, val id: String? = null, val name: String? = null)
+    enum class SourceType { ALBUM, ARTIST, PLAYLIST, FAVORITES, SONGS, UNKNOWN }
+
+    private var playbackSource: PlaybackSource? = null
 }

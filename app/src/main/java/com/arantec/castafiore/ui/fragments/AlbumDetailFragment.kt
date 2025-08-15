@@ -185,9 +185,27 @@ class AlbumDetailFragment : Fragment() {
             onSongClick = { song, position ->
                 // Reproducir el álbum completo desde la canción seleccionada
                 if (isBound && musicService != null) {
-                    musicService?.playQueue(albumSongs, position)
+                    musicService?.playQueue(
+                        albumSongs,
+                        position,
+                        com.arantec.castafiore.service.MusicService.PlaybackSource(
+                            com.arantec.castafiore.service.MusicService.SourceType.ALBUM,
+                            currentAlbum?.id,
+                            currentAlbum?.name
+                        )
+                    )
                 } else {
-                    pendingAction = { musicService?.playQueue(albumSongs, position) }
+                    pendingAction = {
+                        musicService?.playQueue(
+                            albumSongs,
+                            position,
+                            com.arantec.castafiore.service.MusicService.PlaybackSource(
+                                com.arantec.castafiore.service.MusicService.SourceType.ALBUM,
+                                currentAlbum?.id,
+                                currentAlbum?.name
+                            )
+                        )
+                    }
                     bindMusicService()
                 }
             },
@@ -240,17 +258,9 @@ class AlbumDetailFragment : Fragment() {
      * Verifica si el álbum actual es el que se está reproduciendo actualmente
      */
     private fun isCurrentAlbumPlaying(): Boolean {
-        val currentSong = musicService?.getCurrentSong()
-        val currentAlbumId = currentAlbum?.id
-
-        return when {
-            currentSong == null || currentAlbumId == null -> false
-            // Verificar si la canción actual pertenece a este álbum
-            currentSong.albumId == currentAlbumId -> true
-            // Verificar también por el nombre del álbum como fallback
-            currentSong.album == currentAlbum?.name -> true
-            else -> false
-        }
+        val currentAlbumId = currentAlbum?.id ?: return false
+        val src = musicService?.getPlaybackSource() ?: return false
+        return src.type == com.arantec.castafiore.service.MusicService.SourceType.ALBUM && src.id == currentAlbumId
     }
 
     private fun cleanupListeners() {
@@ -492,12 +502,28 @@ class AlbumDetailFragment : Fragment() {
 
     private fun playAlbum() {
         if (albumSongs.isNotEmpty()) {
-            musicService?.playQueue(albumSongs, 0)
+            musicService?.playQueue(
+                albumSongs,
+                0,
+                com.arantec.castafiore.service.MusicService.PlaybackSource(
+                    com.arantec.castafiore.service.MusicService.SourceType.ALBUM,
+                    currentAlbum?.id,
+                    currentAlbum?.name
+                )
+            )
         }
     }
 
     private fun playSongFromAlbum(position: Int) {
-        musicService?.playQueue(albumSongs, position)
+        musicService?.playQueue(
+            albumSongs,
+            position,
+            com.arantec.castafiore.service.MusicService.PlaybackSource(
+                com.arantec.castafiore.service.MusicService.SourceType.ALBUM,
+                currentAlbum?.id,
+                currentAlbum?.name
+            )
+        )
     }
 
     private fun showSongOptions(song: Song) {

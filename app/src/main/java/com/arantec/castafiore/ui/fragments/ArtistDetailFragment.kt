@@ -5,14 +5,11 @@ import android.content.Context
 import android.content.Intent
 import android.content.ServiceConnection
 import android.graphics.Color
-import android.os.Build
 import android.os.Bundle
 import android.os.IBinder
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.view.WindowInsetsController
-import androidx.core.view.WindowCompat
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.fragment.findNavController
@@ -33,6 +30,9 @@ import com.arantec.castafiore.ui.adapters.SongAdapter
 import com.arantec.castafiore.ui.dialogs.SongOptionsBottomSheet
 import com.arantec.castafiore.utils.StatusBarUtils
 import com.arantec.castafiore.utils.ImageLoader
+import androidx.core.graphics.toColorInt
+import com.bumptech.glide.Glide
+import java.util.Locale
 
 class ArtistDetailFragment : Fragment() {
 
@@ -91,16 +91,8 @@ class ArtistDetailFragment : Fragment() {
             val args: ArtistDetailFragmentArgs by navArgs()
             artistId = args.artistId
             artistName = args.artistName
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             // Si SafeArgs falla, intentar con argumentos tradicionales
-            arguments?.let { bundle ->
-                artistId = bundle.getString("artistId")
-                artistName = bundle.getString("artistName")
-            }
-        }
-
-        // Si aún no tenemos los argumentos, intentar con argumentos tradicionales directamente
-        if (artistId == null || artistName == null) {
             arguments?.let { bundle ->
                 artistId = bundle.getString("artistId")
                 artistName = bundle.getString("artistName")
@@ -186,7 +178,7 @@ class ArtistDetailFragment : Fragment() {
                 // Verificar si se sigue al artista
                 checkFollowStatus()
 
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 showError("Error al cargar la información del artista")
             } finally {
                 showLoading(false)
@@ -285,24 +277,17 @@ class ArtistDetailFragment : Fragment() {
 
     private fun setStaticBackground() {
         // Aplicar el color estático predeterminado al fondo y status bar
-        val staticColor = android.graphics.Color.parseColor("#121212")
+        val staticColor = "#121212".toColorInt()
 
         binding.gradientBackground.setBackgroundColor(staticColor)
         binding.collapsingToolbar.setContentScrimColor(staticColor)
         binding.collapsingToolbar.setStatusBarScrimColor(staticColor)
 
         // Usar iconos blancos para el toolbar (apropiado para fondo oscuro)
-        binding.toolbar.navigationIcon?.setTint(android.graphics.Color.WHITE)
+        binding.toolbar.navigationIcon?.setTint(Color.WHITE)
 
         // Use centralized status bar color utility
         StatusBarUtils.setStatusBarColor(this)
-    }
-
-    private fun darkenColor(color: Int, factor: Float): Int {
-        val r = (Color.red(color) * factor).toInt()
-        val g = (Color.green(color) * factor).toInt()
-        val b = (Color.blue(color) * factor).toInt()
-        return Color.rgb(r, g, b)
     }
 
     private fun updateArtistInfo() {
@@ -328,7 +313,7 @@ class ArtistDetailFragment : Fragment() {
                         updateFollowButton()
                     }
                 )
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 isFollowing = false
                 updateFollowButton()
             }
@@ -338,10 +323,10 @@ class ArtistDetailFragment : Fragment() {
     private fun updateFollowButton() {
         if (isFollowing) {
             binding.btnFollow.setImageResource(R.drawable.ic_favorite)
-            binding.btnFollow.setColorFilter(android.graphics.Color.parseColor("#FF2D55")) // Color principal
+            binding.btnFollow.setColorFilter("#FF2D55".toColorInt()) // Color principal
         } else {
             binding.btnFollow.setImageResource(R.drawable.ic_favorite_border)
-            binding.btnFollow.setColorFilter(android.graphics.Color.parseColor("#B3FFFFFF")) // Color texto secundario
+            binding.btnFollow.setColorFilter("#B3FFFFFF".toColorInt()) // Color texto secundario
         }
     }
 
@@ -366,7 +351,7 @@ class ArtistDetailFragment : Fragment() {
                         showError("Error al actualizar el estado de seguimiento")
                     }
                 )
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 showError("Error al actualizar el estado de seguimiento")
             }
         }
@@ -393,13 +378,21 @@ class ArtistDetailFragment : Fragment() {
                 }
             } else {
                 // Reproducir todas las canciones populares del artista
-                musicService?.playQueue(topSongs, 0)
+                musicService?.playQueue(
+                    topSongs,
+                    0,
+                    MusicService.PlaybackSource(
+                        MusicService.SourceType.ARTIST,
+                        artistId,
+                        artistName
+                    )
+                )
             }
 
             // Actualizar el estado inmediatamente después de la acción
             updatePlaybackState()
-        } catch (e: Exception) {
-            showError("Error al reproducir: ${e.message}")
+        } catch (_: Exception) {
+            showError("Error al reproducir")
         }
     }
 
@@ -414,16 +407,32 @@ class ArtistDetailFragment : Fragment() {
             val position = topSongs.indexOfFirst { it.id == song.id }
             if (position != -1) {
                 // Reproducir desde esa posición en la cola de canciones del artista
-                musicService?.playQueue(topSongs, position)
+                musicService?.playQueue(
+                    topSongs,
+                    position,
+                    MusicService.PlaybackSource(
+                        MusicService.SourceType.ARTIST,
+                        artistId,
+                        artistName
+                    )
+                )
             } else {
                 // Si no está en la lista actual, crear una nueva cola con esa canción
-                musicService?.playQueue(listOf(song), 0)
+                musicService?.playQueue(
+                    listOf(song),
+                    0,
+                    MusicService.PlaybackSource(
+                        MusicService.SourceType.ARTIST,
+                        artistId,
+                        artistName
+                    )
+                )
             }
 
             // Actualizar el estado inmediatamente después de la acción
             updatePlaybackState()
-        } catch (e: Exception) {
-            showError("Error al reproducir canción: ${e.message}")
+        } catch (_: Exception) {
+            showError("Error al reproducir canción")
         }
     }
 
@@ -491,7 +500,7 @@ class ArtistDetailFragment : Fragment() {
                 selectedSong.albumId?.let { albumId ->
                     try {
                         // Crear un objeto Album temporal para la navegación
-                        val album = com.arantec.castafiore.data.models.Album(
+                        val album = Album(
                             id = albumId,
                             name = selectedSong.album,
                             artist = selectedSong.artist,
@@ -505,7 +514,7 @@ class ArtistDetailFragment : Fragment() {
                         )
                         val action = ArtistDetailFragmentDirections.actionArtistDetailToAlbumDetail(album)
                         findNavController().navigate(action)
-                    } catch (e: Exception) {
+                    } catch (_: Exception) {
                         android.widget.Toast.makeText(requireContext(), "Error al navegar al álbum", android.widget.Toast.LENGTH_SHORT).show()
                     }
                 } ?: run {
@@ -527,7 +536,7 @@ class ArtistDetailFragment : Fragment() {
             // Usar Navigation Component para navegar al detalle del álbum
             val action = ArtistDetailFragmentDirections.actionArtistDetailToAlbumDetail(album)
             findNavController().navigate(action)
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             showError("Error al navegar al álbum")
         }
     }
@@ -537,11 +546,14 @@ class ArtistDetailFragment : Fragment() {
         // Configurar listener para cambios de canción
         songChangeListener = { currentSong ->
             updateCurrentPlayingSong(currentSong)
+            // Recalcular el estado de reproducción en función del contexto actual (artista)
+            updatePlaybackState()
         }
 
         // Configurar listener para cambios de estado de reproducción
         playbackStateListener = { isPlaying ->
-            this.isPlaying = isPlaying
+            // Solo mostrar "pausa" si el artista actual es el que se está reproduciendo
+            this.isPlaying = isPlaying && isCurrentArtistPlaying()
             updatePlayButton()
         }
 
@@ -555,8 +567,9 @@ class ArtistDetailFragment : Fragment() {
     }
 
     private fun updateCurrentPlayingSong(currentSong: Song?) {
-        // Actualizar el adaptador de canciones con la canción actual
-        songAdapter.setPlayingSong(currentSong?.id)
+        // Solo resaltar canción si este contexto está activo
+        val inContext = isCurrentArtistPlaying()
+        songAdapter.setPlayingSong(if (inContext) currentSong?.id else null)
     }
 
     private fun updatePlaybackState() {
@@ -572,9 +585,9 @@ class ArtistDetailFragment : Fragment() {
     }
 
     private fun isCurrentArtistPlaying(): Boolean {
-        val currentSong = musicService?.getCurrentSong()
-        return currentSong?.artistId == artistId ||
-                topSongs.any { it.id == currentSong?.id }
+        val service = musicService ?: return false
+        val src = service.getPlaybackSource() ?: return false
+        return src.type == MusicService.SourceType.ARTIST && src.id == artistId
     }
 
     private fun updatePlayButton() {
@@ -632,16 +645,16 @@ class ArtistDetailFragment : Fragment() {
     // Métodos auxiliares para el bottom sheet de opciones de canciones
     private fun shareSong(song: Song) {
         val shareText = "Escucha \"${song.title}\" de ${song.artist} en el álbum \"${song.album}\""
-        val shareIntent = android.content.Intent().apply {
-            action = android.content.Intent.ACTION_SEND
-            putExtra(android.content.Intent.EXTRA_TEXT, shareText)
+        val shareIntent = Intent().apply {
+            action = Intent.ACTION_SEND
+            putExtra(Intent.EXTRA_TEXT, shareText)
             type = "text/plain"
         }
 
-        val chooser = android.content.Intent.createChooser(shareIntent, "Compartir canción")
+        val chooser = Intent.createChooser(shareIntent, "Compartir canción")
         try {
             startActivity(chooser)
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             android.widget.Toast.makeText(requireContext(), "No se pudo compartir la canción", android.widget.Toast.LENGTH_SHORT).show()
         }
     }
@@ -694,7 +707,7 @@ class ArtistDetailFragment : Fragment() {
                     salt
                 )
 
-                com.bumptech.glide.Glide.with(this)
+                Glide.with(this)
                     .load(coverUrl)
                     .placeholder(R.drawable.ic_album_placeholder)
                     .error(R.drawable.ic_album_placeholder)
@@ -702,7 +715,7 @@ class ArtistDetailFragment : Fragment() {
             } else {
                 ivInfoCover.setImageResource(R.drawable.ic_album_placeholder)
             }
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             ivInfoCover.setImageResource(R.drawable.ic_album_placeholder)
         }
 
@@ -721,7 +734,7 @@ class ArtistDetailFragment : Fragment() {
     private fun formatSongDuration(seconds: Int): String {
         val minutes = seconds / 60
         val remainingSeconds = seconds % 60
-        return String.format("%d:%02d", minutes, remainingSeconds)
+        return String.format(Locale.getDefault(), "%d:%02d", minutes, remainingSeconds)
     }
 
     /**
@@ -733,9 +746,9 @@ class ArtistDetailFragment : Fragment() {
         val gb = mb * 1024
 
         return when {
-            sizeInBytes >= gb -> String.format("%.1f GB", sizeInBytes / gb)
-            sizeInBytes >= mb -> String.format("%.1f MB", sizeInBytes / mb)
-            sizeInBytes >= kb -> String.format("%.1f KB", sizeInBytes / kb)
+            sizeInBytes >= gb -> String.format(Locale.getDefault(), "%.1f GB", sizeInBytes / gb)
+            sizeInBytes >= mb -> String.format(Locale.getDefault(), "%.1f MB", sizeInBytes / mb)
+            sizeInBytes >= kb -> String.format(Locale.getDefault(), "%.1f KB", sizeInBytes / kb)
             else -> "$sizeInBytes bytes"
         }
     }
