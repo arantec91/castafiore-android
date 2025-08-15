@@ -164,7 +164,7 @@ class ArtistDetailFragment : Fragment() {
             toggleFollowArtist()
         }
 
-        binding.fabPlay.setOnClickListener {
+        binding.btnPlay.setOnClickListener {
             playArtistTopSongs()
         }
     }
@@ -307,7 +307,8 @@ class ArtistDetailFragment : Fragment() {
 
     private fun updateArtistInfo() {
         val albumCount = albums.size
-        binding.tvArtistInfo.text = "$albumCount álbum${if (albumCount != 1) "es" else ""}"
+        val resId = if (albumCount == 1) R.string.albums_count_singular else R.string.albums_count_plural
+        binding.tvArtistInfo.text = getString(resId, albumCount)
     }
 
     private fun checkFollowStatus() {
@@ -582,19 +583,12 @@ class ArtistDetailFragment : Fragment() {
             return
         }
 
-        if (isPlaying) {
-            binding.fabPlay.setImageResource(R.drawable.ic_pause)
+        // Cambiar el texto del botón según el estado de reproducción
+        binding.btnPlay.text = if (isPlaying) {
+            getString(R.string.pause)
         } else {
-            binding.fabPlay.setImageResource(R.drawable.ic_play)
+            getString(R.string.play)
         }
-
-        // Usar nuestro color principal #FF2D55 en lugar del verde de Spotify
-        binding.fabPlay.backgroundTintList = android.content.res.ColorStateList.valueOf(
-            android.graphics.Color.parseColor("#FF2D55")
-        )
-        binding.fabPlay.imageTintList = android.content.res.ColorStateList.valueOf(
-            android.graphics.Color.parseColor("#FFFFFF")
-        )
     }
 
     // Métodos de conexión al servicio

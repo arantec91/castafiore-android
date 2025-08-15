@@ -239,6 +239,10 @@ class CacheManager private constructor(private val context: Context) {
         return getOrFetch(key, RANDOM_SONGS_TTL, type, provider)
     }
 
+    suspend fun <T> getRandomAlbums(key: String, type: Type, provider: suspend () -> Result<T>): Result<T> {
+        return getOrFetch(key, RANDOM_SONGS_TTL, type, provider)
+    }
+
     /**
      * Invalidar cache específico
      */

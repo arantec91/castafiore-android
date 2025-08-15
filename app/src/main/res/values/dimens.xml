@@ -1,0 +1,4 @@
+<resources>
+    <dimen name="artist_image_size">220dp</dimen>
+    <dimen name="artist_button_top">276dp</dimen>
+</resources>

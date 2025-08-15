@@ -221,6 +221,8 @@ class HomeFragment : Fragment() {
                 if (isManualRefresh || forceRefresh) {
                     // Para refresh manual, limpiar más cache para asegurar datos completamente frescos
                     clearExtensiveCache()
+                    // Invalidar específicamente las listas del Home por si acaso
+                    musicRepository.invalidateHomeLists()
                 }
 
                 // Recargar datos
@@ -244,8 +246,8 @@ class HomeFragment : Fragment() {
      */
     private fun clearSelectiveCache() {
         try {
-            // Usar métodos públicos del repository para invalidar cache
-            musicRepository.clearCache() // Esto ya existe y es seguro
+            // Limpiar solo cache expirado para auto-refresh ligero
+            musicRepository.cleanupCache()
 
             android.util.Log.d(TAG, "Cache selectivo limpiado para auto-refresh")
         } catch (e: Exception) {
@@ -258,8 +260,8 @@ class HomeFragment : Fragment() {
      */
     private fun clearExtensiveCache() {
         try {
-            // Limpiar más cache para refresh manual completo
-            musicRepository.cleanupCache()
+            // Limpiar TODO el cache para asegurar datos completamente frescos
+            musicRepository.clearCache()
 
             android.util.Log.d(TAG, "Cache extensivo limpiado para refresh manual")
         } catch (e: Exception) {
@@ -312,6 +314,9 @@ class HomeFragment : Fragment() {
             showError("Configura tu servidor Navidrome para ver contenido")
             return
         }
+
+        // Asegurar que el cache se resetee si cambió server/usuario
+        musicRepository.ensureCacheScope()
 
         // DEBUG: Agregar logs para diagnóstico
         android.util.Log.d(TAG, "Starting data load...")

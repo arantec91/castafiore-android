@@ -192,3 +192,9 @@ data class SimilarSongsResult(
 data class SimilarSongs(
     val song: List<Song>
 )
+
+// Simple base response (status only)
+data class SimpleResponse(
+    @SerializedName("subsonic-response")
+    val subsonicResponse: SubsonicResponse
+)

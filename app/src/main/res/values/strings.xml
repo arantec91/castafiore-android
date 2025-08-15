@@ -64,4 +64,10 @@
     <string name="added_to_queue">Agregada a la cola: %1$s</string>
     <string name="will_play_next">Se reproducirá a continuación: %1$s</string>
     <string name="music_service_unavailable">Servicio de música no disponible</string>
+
+    <!-- Artist detail -->
+    <string name="albums_title">Álbumes</string>
+    <string name="popular_title">Populares</string>
+    <string name="albums_count_singular">%1$d álbum</string>
+    <string name="albums_count_plural">%1$d álbumes</string>
 </resources>

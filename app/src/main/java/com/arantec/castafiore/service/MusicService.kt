@@ -51,6 +51,10 @@ class MusicService : Service() {
     private var progressJob: Job? = null
     private var prefetchedSimilar: List<Song>? = null
 
+    // Scrobble tracking
+    private var scrobbleSentForCurrent = false
+    private var trackStartTimeMillis: Long = 0L
+
     // Enum para los modos de repetición
     enum class RepeatMode {
         OFF, ALL, ONE
@@ -92,6 +96,8 @@ class MusicService : Service() {
         exoPlayer?.addListener(object : com.google.android.exoplayer2.Player.Listener {
             override fun onPlaybackStateChanged(state: Int) {
                 if (state == com.google.android.exoplayer2.Player.STATE_ENDED) {
+                    // Enviar scrobble si aún no se envió (canción completada)
+                    sendScrobbleIfNeeded(force = true)
                     when (repeatMode) {
                         RepeatMode.ONE -> { startNewSong() }
                         RepeatMode.ALL -> {
@@ -218,6 +224,10 @@ class MusicService : Service() {
         exoPlayer?.setMediaItem(mediaItem)
         exoPlayer?.prepare()
         exoPlayer?.play()
+        // Reiniciar tracking de scrobble
+        scrobbleSentForCurrent = false
+        trackStartTimeMillis = System.currentTimeMillis()
+        reportNowPlayingSafe(song)
         updateMediaMetadata()
         showOrUpdateNotification()
         startProgressUpdates()
@@ -673,6 +683,8 @@ class MusicService : Service() {
         progressJob = CoroutineScope(Dispatchers.Main).launch {
             while (isPlaying) {
                 updatePlaybackState()
+                // Verificar umbral de scrobble (50% o 240s, lo que ocurra primero)
+                maybeScrobbleByProgress()
                 delay(1000L)
             }
         }
@@ -747,5 +759,37 @@ class MusicService : Service() {
         updatePlaybackState()
         notifyPlaybackStateChanged(false)
         showOrUpdateNotification()
+    }
+
+    private fun maybeScrobbleByProgress() {
+        if (scrobbleSentForCurrent) return
+        val durationMs = exoPlayer?.duration ?: 0L
+        val positionMs = exoPlayer?.currentPosition ?: 0L
+        if (durationMs <= 0L) return
+        val halfMs = durationMs / 2
+        val fourMinMs = 240_000L
+        val threshold = minOf(halfMs, fourMinMs)
+        if (positionMs >= threshold) {
+            sendScrobbleIfNeeded(force = false)
+        }
+    }
+
+    private fun sendScrobbleIfNeeded(force: Boolean) {
+        val song = currentSong ?: return
+        if (!force && scrobbleSentForCurrent) return
+        scrobbleSentForCurrent = true
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                musicRepository.scrobbleSong(song.id, playedAtMillis = trackStartTimeMillis, submission = true)
+            } catch (_: Exception) { /* Ignorar errores de red */ }
+        }
+    }
+
+    private fun reportNowPlayingSafe(song: Song) {
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                musicRepository.reportNowPlaying(song.id)
+            } catch (_: Exception) { /* Ignorar errores */ }
+        }
     }
 }

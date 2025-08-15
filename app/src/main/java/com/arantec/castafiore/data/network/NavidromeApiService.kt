@@ -203,4 +203,28 @@ interface NavidromeApiService {
         @Query("id") id: String,
         @Query("f") format: String = "json"
     ): Response<PlaylistDetailResponse>
+
+    @GET("rest/setNowPlaying.view")
+    suspend fun setNowPlaying(
+        @Query("u") username: String,
+        @Query("t") token: String,
+        @Query("s") salt: String,
+        @Query("v") version: String,
+        @Query("c") client: String,
+        @Query("id") id: String,
+        @Query("f") format: String = "json"
+    ): Response<SimpleResponse>
+
+    @GET("rest/scrobble.view")
+    suspend fun scrobble(
+        @Query("u") username: String,
+        @Query("t") token: String,
+        @Query("s") salt: String,
+        @Query("v") version: String,
+        @Query("c") client: String,
+        @Query("id") id: String,
+        @Query("time") time: Long? = null,
+        @Query("submission") submission: Boolean? = null,
+        @Query("f") format: String = "json"
+    ): Response<SimpleResponse>
 }

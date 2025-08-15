@@ -225,7 +225,8 @@ class MusicRepository private constructor(private val context: Context) {
                     salt = salt,
                     version = "1.16.1",
                     client = "Castafiore",
-                    type = "newest"
+                    type = "newest",
+                    size = 40
                 )
 
                 if (response.isSuccessful) {
@@ -255,7 +256,8 @@ class MusicRepository private constructor(private val context: Context) {
                     salt = salt,
                     version = "1.16.1",
                     client = "Castafiore",
-                    type = "recent"
+                    type = "recent",
+                    size = 40
                 )
 
                 if (response.isSuccessful) {
@@ -285,7 +287,8 @@ class MusicRepository private constructor(private val context: Context) {
                     salt = salt,
                     version = "1.16.1",
                     client = "Castafiore",
-                    type = "frequent"
+                    type = "frequent",
+                    size = 40
                 )
 
                 if (response.isSuccessful) {
@@ -300,6 +303,17 @@ class MusicRepository private constructor(private val context: Context) {
                 Result.failure(e)
             }
         }
+    }
+
+    fun invalidateUsageLists() {
+        cacheManager.invalidateCache("recent_albums")
+        cacheManager.invalidateCache("frequent_albums")
+    }
+
+    fun invalidateHomeLists() {
+        cacheManager.invalidateCache("newest_albums")
+        cacheManager.invalidateCache("recent_albums")
+        cacheManager.invalidateCache("frequent_albums")
     }
 
     suspend fun getArtists(): Result<List<Artist>> {
@@ -906,7 +920,7 @@ class MusicRepository private constructor(private val context: Context) {
     }
 
     suspend fun getRandomAlbums(size: Int = 50): Result<List<Album>> {
-        return cacheManager.getAlbums(
+        return cacheManager.getRandomAlbums(
             key = "random_albums_$size",
             type = CacheTypes.ALBUM_LIST_TYPE
         ) {
@@ -929,24 +943,23 @@ class MusicRepository private constructor(private val context: Context) {
                         // Extraer álbumes únicos de las canciones aleatorias
                         val uniqueAlbums = songs
                             .mapNotNull { song ->
-                                // Crear objeto Album basado en la información de la canción
-                                if (song.albumId != null && song.album != null) {
+                                song.albumId?.let { id ->
                                     Album(
-                                        id = song.albumId!!,
-                                        name = song.album!!,
-                                        artist = song.artist ?: "Artista Desconocido",
+                                        id = id,
+                                        name = song.album,
+                                        artist = song.artist,
                                         artistId = song.artistId ?: "",
                                         coverArt = song.coverArt,
-                                        songCount = 0, // No tenemos esta información desde las canciones
-                                        duration = 0, // No tenemos esta información desde las canciones
-                                        created = "", // Esta propiedad no existe en Song
+                                        songCount = 0,
+                                        duration = 0,
+                                        created = "",
                                         year = song.year,
                                         genre = song.genre
                                     )
-                                } else null
+                                }
                             }
-                            .distinctBy { it.id } // Eliminar álbumes duplicados
-                            .shuffled() // Mezclar para mayor aleatoriedad
+                            .distinctBy { it.id }
+                            .shuffled()
 
                         Result.success(uniqueAlbums)
                     } ?: Result.failure(Exception("Empty response"))
@@ -1136,6 +1149,75 @@ class MusicRepository private constructor(private val context: Context) {
             }
         } catch (e: Exception) {
             Result.failure(e)
+        }
+    }
+
+    // Reportar canción en reproducción (now playing)
+    suspend fun reportNowPlaying(songId: String): Result<Boolean> {
+        return try {
+            val (username, token, salt) = getAuthParams()
+            val response = NavidromeClient.getApiService().setNowPlaying(
+                username = username,
+                token = token,
+                salt = salt,
+                version = "1.16.1",
+                client = "Castafiore",
+                id = songId
+            )
+            if (response.isSuccessful) {
+                val status = response.body()?.subsonicResponse?.status
+                if (status == "ok") Result.success(true) else Result.failure(Exception("setNowPlaying failed"))
+            } else {
+                Result.failure(Exception("HTTP Error: ${response.code()} - ${response.message()}"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    // Scrobble de canción reproducida; invalida caches de recientes y frecuentes
+    suspend fun scrobbleSong(songId: String, playedAtMillis: Long? = System.currentTimeMillis(), submission: Boolean = true): Result<Boolean> {
+        return try {
+            val (username, token, salt) = getAuthParams()
+            val response = NavidromeClient.getApiService().scrobble(
+                username = username,
+                token = token,
+                salt = salt,
+                version = "1.16.1",
+                client = "Castafiore",
+                id = songId,
+                time = playedAtMillis,
+                submission = submission
+            )
+            if (response.isSuccessful) {
+                val status = response.body()?.subsonicResponse?.status
+                if (status == "ok") {
+                    // Invalidar listas dependientes
+                    cacheManager.invalidateCache("recent_albums")
+                    cacheManager.invalidateCache("frequent_albums")
+                    Result.success(true)
+                } else {
+                    Result.failure(Exception("scrobble failed"))
+                }
+            } else {
+                Result.failure(Exception("HTTP Error: ${response.code()} - ${response.message()}"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    // Ensure cache is scoped per (serverUrl|username) and reset when it changes
+    fun ensureCacheScope() {
+        val server = serverUrl
+        val user = username
+        if (server.isNullOrEmpty() || user.isNullOrEmpty()) return
+        val currentScope = "$server|$user"
+        val storedScope = prefs.getString("cache_scope", null)
+        if (storedScope != currentScope) {
+            // New scope detected: clear all caches and persist scope
+            cacheManager.clearAllCache()
+            prefs.edit().putString("cache_scope", currentScope).apply()
         }
     }
 }
