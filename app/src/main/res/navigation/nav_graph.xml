@@ -110,4 +110,10 @@
         android:label="Cuenta"
         tools:layout="@layout/fragment_account" />
 
+    <fragment
+        android:id="@+id/playbackFragment"
+        android:name="com.arantec.castafiore.ui.fragments.PlaybackFragment"
+        android:label="Reproducción"
+        tools:layout="@layout/fragment_playback" />
+
 </navigation>

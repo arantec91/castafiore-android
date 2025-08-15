@@ -73,7 +73,7 @@ class SettingsFragment : Fragment() {
         val adapter = SettingsAdapter(items) { item ->
             when (item.id) {
                 "account" -> findNavController().navigate(R.id.accountFragment)
-                "playback" -> showMessage("Configuración de reproducción próximamente")
+                "playback" -> findNavController().navigate(R.id.playbackFragment)
                 "info" -> showAppInfoDialog()
             }
         }
