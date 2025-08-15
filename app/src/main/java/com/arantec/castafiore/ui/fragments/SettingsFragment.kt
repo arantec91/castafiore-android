@@ -1,20 +1,19 @@
 package com.arantec.castafiore.ui.fragments
 
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import androidx.fragment.app.Fragment
-import androidx.lifecycle.lifecycleScope
 import androidx.navigation.fragment.findNavController
+import androidx.recyclerview.widget.LinearLayoutManager
+import com.arantec.castafiore.R
 import com.arantec.castafiore.data.repository.MusicRepository
 import com.arantec.castafiore.databinding.FragmentSettingsBinding
 import com.arantec.castafiore.ui.activities.SetupActivity
-import com.arantec.castafiore.utils.ImageLoader
+import com.arantec.castafiore.ui.adapters.SettingsAdapter
 import com.arantec.castafiore.utils.StatusBarUtils
-import kotlinx.coroutines.launch
 
 class SettingsFragment : Fragment() {
 
@@ -40,139 +39,97 @@ class SettingsFragment : Fragment() {
 
         musicRepository = MusicRepository.getInstance(requireContext())
 
-        setupUI()
-        loadServerInfo()
-        setupClickListeners()
+        setupToolbar()
+        setupRecycler()
+        // Wire bottom logout button
+        binding.btnLogout.setOnClickListener { showLogoutConfirmation() }
     }
 
-    private fun setupUI() {
-        // Configurar toolbar
+    private fun setupToolbar() {
         binding.toolbar.setNavigationOnClickListener {
             findNavController().popBackStack()
         }
-
-        // Mostrar versión de la app usando PackageManager
-        try {
-            val packageInfo = requireContext().packageManager.getPackageInfo(requireContext().packageName, 0)
-            binding.tvAppVersion.text = packageInfo.versionName
-        } catch (e: PackageManager.NameNotFoundException) {
-            binding.tvAppVersion.text = "1.0.0"
-        }
     }
 
-    private fun loadServerInfo() {
-        if (musicRepository.isConfigured()) {
-            binding.tvServerUrl.text = musicRepository.serverUrl ?: "Sin servidor configurado"
-            binding.tvUsername.text = "Usuario: ${musicRepository.username ?: "Sin usuario"}"
-            binding.btnDisconnect.isEnabled = true
-        } else {
-            binding.tvServerUrl.text = "Sin servidor configurado"
-            binding.tvUsername.text = "Sin usuario configurado"
-            binding.btnDisconnect.isEnabled = false
-        }
-    }
+    private fun setupRecycler() {
+        val items = listOf(
+            SettingsAdapter.SettingItem(
+                id = "account",
+                title = getString(R.string.settings_option_account),
+                iconRes = R.drawable.ic_person
+            ),
+            SettingsAdapter.SettingItem(
+                id = "playback",
+                title = getString(R.string.settings_option_playback),
+                iconRes = R.drawable.ic_queue_music
+            ),
+            SettingsAdapter.SettingItem(
+                id = "info",
+                title = getString(R.string.settings_option_info),
+                iconRes = R.drawable.ic_info
+            )
+        )
 
-    private fun setupClickListeners() {
-        // Botón para desconectar del servidor
-        binding.btnDisconnect.setOnClickListener {
-            showDisconnectConfirmation()
-        }
-
-        // Botón para limpiar caché
-        binding.btnClearCache.setOnClickListener {
-            clearImageCache()
-        }
-
-        // Switch: continuar con canciones similares
-        binding.switchContinueWithSimilar.isChecked = musicRepository.continueWithSimilarEnabled
-        binding.switchContinueWithSimilar.setOnCheckedChangeListener { _, isChecked ->
-            musicRepository.continueWithSimilarEnabled = isChecked
-            showMessage(if (isChecked) "Reproducir similares activado" else "Reproducir similares desactivado")
-        }
-    }
-
-    private fun showDisconnectConfirmation() {
-        val dialog = androidx.appcompat.app.AlertDialog.Builder(requireContext())
-            .setTitle("Desconectar del servidor")
-            .setMessage("¿Estás seguro de que deseas desconectarte del servidor? Tendrás que configurar la conexión nuevamente.")
-            .setPositiveButton("Desconectar") { _, _ ->
-                disconnectFromServer()
+        val adapter = SettingsAdapter(items) { item ->
+            when (item.id) {
+                "account" -> findNavController().navigate(R.id.accountFragment)
+                "playback" -> showMessage("Configuración de reproducción próximamente")
+                "info" -> showAppInfoDialog()
             }
-            .setNegativeButton("Cancelar", null)
-            .create()
+        }
 
+        binding.rvSettings.layoutManager = LinearLayoutManager(requireContext())
+        binding.rvSettings.adapter = adapter
+    }
+
+    private fun showLogoutConfirmation() {
+        val dialog = androidx.appcompat.app.AlertDialog.Builder(requireContext())
+            .setTitle(getString(R.string.settings_logout_title))
+            .setMessage(getString(R.string.settings_logout_message))
+            .setPositiveButton(getString(R.string.settings_logout)) { _, _ -> logout() }
+            .setNegativeButton(getString(R.string.cancel), null)
+            .create()
         dialog.show()
     }
 
-    private fun disconnectFromServer() {
+    private fun logout() {
         showLoading(true)
-
-        lifecycleScope.launch {
-            try {
-                // Limpiar todas las configuraciones del servidor
-                musicRepository.serverUrl = null
-                musicRepository.username = null
-                musicRepository.password = null
-
-                // Limpiar caché de imágenes
-                ImageLoader.clearMemoryCache(requireContext())
-                ImageLoader.clearDiskCache(requireContext())
-
-                showLoading(false)
-                showMessage("Desconectado del servidor exitosamente")
-
-                // Navegar a la pantalla de configuración inicial
-                navigateToSetup()
-
-            } catch (e: Exception) {
-                showLoading(false)
-                showError("Error al desconectar del servidor: ${e.message}")
-            }
+        try {
+            musicRepository.serverUrl = null
+            musicRepository.username = null
+            musicRepository.password = null
+            showLoading(false)
+            showMessage(getString(R.string.settings_logout_success))
+            navigateToSetup()
+        } catch (e: Exception) {
+            showLoading(false)
+            showError(getString(R.string.settings_logout_error, e.message ?: ""))
         }
     }
 
-    private fun clearImageCache() {
-        showLoading(true)
-
-        lifecycleScope.launch {
-            try {
-                // Limpiar caché de memoria
-                ImageLoader.clearMemoryCache(requireContext())
-
-                // Limpiar caché de disco
-                ImageLoader.clearDiskCache(requireContext())
-
-                showLoading(false)
-                showMessage("Caché de imágenes limpiado exitosamente")
-
-            } catch (e: Exception) {
-                showLoading(false)
-                showError("Error al limpiar caché: ${e.message}")
-            }
+    private fun showAppInfoDialog() {
+        val versionName = try {
+            requireContext().packageManager.getPackageInfo(requireContext().packageName, 0).versionName
+        } catch (_: Exception) {
+            getString(R.string.settings_unknown_version)
         }
+        val msg = "Versión: $versionName"
+        androidx.appcompat.app.AlertDialog.Builder(requireContext())
+            .setTitle(getString(R.string.settings_option_info))
+            .setMessage(msg)
+            .setPositiveButton(getString(R.string.cancel), null)
+            .show()
     }
 
     private fun navigateToSetup() {
-        try {
-            // Crear intent para ir a SetupActivity
-            val intent = Intent(requireContext(), SetupActivity::class.java)
-            intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-            startActivity(intent)
-
-            // Finalizar la actividad actual
-            requireActivity().finish()
-
-        } catch (e: Exception) {
-            showError("Error al navegar a configuración inicial")
-        }
+        val intent = Intent(requireContext(), SetupActivity::class.java)
+        intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+        startActivity(intent)
+        requireActivity().finish()
     }
 
     private fun showLoading(show: Boolean) {
         binding.progressBar.visibility = if (show) View.VISIBLE else View.GONE
-
-        // Deshabilitar interacciones mientras carga
-        binding.btnDisconnect.isEnabled = !show && musicRepository.isConfigured()
-        binding.btnClearCache.isClickable = !show
     }
 
     private fun showMessage(message: String) {
@@ -185,12 +142,7 @@ class SettingsFragment : Fragment() {
 
     override fun onResume() {
         super.onResume()
-
-        // Ensure consistent status bar color on resume
         StatusBarUtils.setStatusBarColor(this)
-
-        // Recargar información del servidor por si cambió
-        loadServerInfo()
     }
 
     override fun onDestroyView() {

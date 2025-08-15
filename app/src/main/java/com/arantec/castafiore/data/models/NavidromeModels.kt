@@ -1,6 +1,7 @@
 package com.arantec.castafiore.data.models
 
 import com.google.gson.annotations.SerializedName
+import com.google.gson.JsonObject
 
 // Response models for Navidrome API
 data class PingResponse(
@@ -31,6 +32,11 @@ data class ArtistResponse(
 data class AlbumResponse(
     @SerializedName("subsonic-response")
     val subsonicResponse: AlbumResult
+)
+
+data class UserResponse(
+    @SerializedName("subsonic-response")
+    val subsonicResponse: UserResult
 )
 
 // Base response structure
@@ -197,4 +203,11 @@ data class SimilarSongs(
 data class SimpleResponse(
     @SerializedName("subsonic-response")
     val subsonicResponse: SubsonicResponse
+)
+
+data class UserResult(
+    val status: String,
+    val version: String,
+    val user: JsonObject?,
+    val error: ErrorResponse?
 )

@@ -227,4 +227,15 @@ interface NavidromeApiService {
         @Query("submission") submission: Boolean? = null,
         @Query("f") format: String = "json"
     ): Response<SimpleResponse>
+
+    @GET("rest/getUser.view")
+    suspend fun getUser(
+        @Query("u") username: String,
+        @Query("t") token: String,
+        @Query("s") salt: String,
+        @Query("v") version: String,
+        @Query("c") client: String,
+        @Query("username") userToGet: String,
+        @Query("f") format: String = "json"
+    ): Response<UserResponse>
 }

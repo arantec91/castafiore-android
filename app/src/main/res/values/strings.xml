@@ -79,4 +79,33 @@
     <string name="user_hint">Usuario</string>
     <string name="password_hint">Contraseña</string>
     <string name="server_info">Servidor: http://65.109.23.109:4533</string>
+
+    <!-- Settings -->
+    <string name="settings_section_server">SERVIDOR</string>
+    <string name="settings_server_info_title">Información del servidor</string>
+    <string name="settings_no_server">Sin servidor configurado</string>
+    <string name="settings_user">Usuario: %1$s</string>
+    <string name="settings_no_user">Sin usuario configurado</string>
+    <string name="settings_logout">Cerrar sesión</string>
+    <string name="settings_section_app">APLICACIÓN</string>
+    <string name="settings_app_version_title">Versión de la aplicación</string>
+    <string name="settings_unknown_version">1.0.0</string>
+    <string name="settings_clear_cache_title">Limpiar caché de imágenes</string>
+    <string name="settings_clear_cache_desc">Libera espacio eliminando imágenes almacenadas</string>
+    <string name="settings_section_playback">REPRODUCCIÓN</string>
+    <string name="settings_play_continue_similar_title">Reproducir similares al terminar</string>
+    <string name="settings_play_continue_similar_desc">Continúa con canciones similares al finalizar la cola</string>
+    <string name="settings_logout_title">Cerrar sesión</string>
+    <string name="settings_logout_message">¿Deseas cerrar sesión? Deberás iniciar sesión nuevamente.</string>
+    <string name="settings_logout_success">Sesión cerrada</string>
+    <string name="settings_clear_cache_success">Caché de imágenes limpiado exitosamente</string>
+    <string name="settings_clear_cache_error">Error al limpiar caché: %1$s</string>
+    <string name="settings_logout_error">Error al cerrar sesión: %1$s</string>
+    <string name="settings_navigate_login_error">Error al navegar al inicio de sesión</string>
+    <string name="cd_info_icon">Icono de información</string>
+    <string name="cd_delete_icon">Icono eliminar</string>
+    <string name="settings_option_account">Cuenta</string>
+    <string name="settings_option_playback">Reproducción</string>
+    <string name="settings_option_info">Información</string>
+    <string name="account_user_label">Nombre de usuario</string>
 </resources>

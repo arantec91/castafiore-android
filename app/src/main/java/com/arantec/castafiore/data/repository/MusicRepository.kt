@@ -10,6 +10,7 @@ import com.arantec.castafiore.data.cache.CacheTypes
 import com.arantec.castafiore.data.cache.CacheInvalidation
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
+import com.google.gson.JsonObject
 
 class MusicRepository private constructor(private val context: Context) {
 
@@ -1218,6 +1219,34 @@ class MusicRepository private constructor(private val context: Context) {
             // New scope detected: clear all caches and persist scope
             cacheManager.clearAllCache()
             prefs.edit().putString("cache_scope", currentScope).apply()
+        }
+    }
+
+    suspend fun getCurrentUserInfo(): Result<JsonObject> {
+        return try {
+            val (user, token, salt) = getAuthParams()
+            val response = NavidromeClient.getApiService().getUser(
+                username = user,
+                token = token,
+                salt = salt,
+                version = "1.16.1",
+                client = "Castafiore",
+                userToGet = user
+            )
+            if (response.isSuccessful) {
+                val body = response.body()
+                val status = body?.subsonicResponse?.status
+                if (status == "ok" && body.subsonicResponse.user != null) {
+                    Result.success(body.subsonicResponse.user!!)
+                } else {
+                    val msg = body?.subsonicResponse?.error?.message ?: "Unknown error"
+                    Result.failure(IllegalStateException("API error: $msg"))
+                }
+            } else {
+                Result.failure(IllegalStateException("HTTP ${response.code()} ${response.message()}"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
         }
     }
 }
