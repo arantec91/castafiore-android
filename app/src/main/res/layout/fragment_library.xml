@@ -52,43 +52,59 @@
             <com.google.android.material.chip.Chip
                 android:id="@+id/chipAll"
                 android:layout_width="wrap_content"
-                android:layout_height="32dp"
+                android:layout_height="wrap_content"
                 android:layout_marginEnd="8dp"
                 android:checked="true"
                 android:text="Todo"
                 android:textColor="#FFFFFF"
-                android:textSize="12sp"
-                app:chipCornerRadius="16dp" />
+                android:textSize="14sp"
+                android:checkable="true"
+                app:chipCornerRadius="20dp"
+                app:chipMinHeight="40dp"
+                app:chipStartPadding="14dp"
+                app:chipEndPadding="14dp" />
 
             <com.google.android.material.chip.Chip
                 android:id="@+id/chipPlaylists"
                 android:layout_width="wrap_content"
-                android:layout_height="32dp"
+                android:layout_height="wrap_content"
                 android:layout_marginEnd="8dp"
                 android:text="Playlists"
                 android:textColor="#FFFFFF"
-                android:textSize="12sp"
-                app:chipCornerRadius="16dp" />
+                android:textSize="14sp"
+                android:checkable="true"
+                app:chipCornerRadius="20dp"
+                app:chipMinHeight="40dp"
+                app:chipStartPadding="14dp"
+                app:chipEndPadding="14dp" />
 
             <com.google.android.material.chip.Chip
                 android:id="@+id/chipAlbums"
                 android:layout_width="wrap_content"
-                android:layout_height="32dp"
+                android:layout_height="wrap_content"
                 android:layout_marginEnd="8dp"
                 android:text="Álbumes"
                 android:textColor="#FFFFFF"
-                android:textSize="12sp"
-                app:chipCornerRadius="16dp" />
+                android:textSize="14sp"
+                android:checkable="true"
+                app:chipCornerRadius="20dp"
+                app:chipMinHeight="40dp"
+                app:chipStartPadding="14dp"
+                app:chipEndPadding="14dp" />
 
             <com.google.android.material.chip.Chip
                 android:id="@+id/chipArtists"
                 android:layout_width="wrap_content"
-                android:layout_height="32dp"
+                android:layout_height="wrap_content"
                 android:layout_marginEnd="8dp"
                 android:text="Artistas"
                 android:textColor="#FFFFFF"
-                android:textSize="12sp"
-                app:chipCornerRadius="16dp" />
+                android:textSize="14sp"
+                android:checkable="true"
+                app:chipCornerRadius="20dp"
+                app:chipMinHeight="40dp"
+                app:chipStartPadding="14dp"
+                app:chipEndPadding="14dp" />
 
         </LinearLayout>
     </HorizontalScrollView>

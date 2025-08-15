@@ -78,27 +78,19 @@ class LibraryFragment : Fragment() {
     private fun setupFilters() {
         // Configurar chips de filtros con manejo mejorado
         binding.chipAll.setOnClickListener {
-            if (!binding.chipAll.isChecked) {
-                selectChip(binding.chipAll, "all")
-            }
+            selectChip(binding.chipAll, "all")
         }
 
         binding.chipPlaylists.setOnClickListener {
-            if (!binding.chipPlaylists.isChecked) {
-                selectChip(binding.chipPlaylists, "playlists")
-            }
+            selectChip(binding.chipPlaylists, "playlists")
         }
 
         binding.chipAlbums.setOnClickListener {
-            if (!binding.chipAlbums.isChecked) {
-                selectChip(binding.chipAlbums, "albums")
-            }
+            selectChip(binding.chipAlbums, "albums")
         }
 
         binding.chipArtists.setOnClickListener {
-            if (!binding.chipArtists.isChecked) {
-                selectChip(binding.chipArtists, "artists")
-            }
+            selectChip(binding.chipArtists, "artists")
         }
     }
 
@@ -122,6 +114,7 @@ class LibraryFragment : Fragment() {
 
     private fun updateChipColors() {
         val primaryColor = androidx.core.content.ContextCompat.getColor(requireContext(), R.color.primary)
+        val onPrimaryColor = androidx.core.content.ContextCompat.getColor(requireContext(), R.color.on_primary)
         val onSurfaceColor = androidx.core.content.ContextCompat.getColor(requireContext(), R.color.on_surface)
         val outlineColor = androidx.core.content.ContextCompat.getColor(requireContext(), R.color.outline)
 
@@ -134,14 +127,14 @@ class LibraryFragment : Fragment() {
 
         chips.forEach { chip ->
             if (chip.isChecked) {
-                // Chip seleccionado - color principal (#FF2D55)
-                chip.chipBackgroundColor = android.content.res.ColorStateList.valueOf(android.graphics.Color.TRANSPARENT)
-                chip.setTextColor(primaryColor)
+                // Selected: filled primary background, white text, no stroke
+                chip.chipBackgroundColor = android.content.res.ColorStateList.valueOf(primaryColor)
+                chip.setTextColor(onPrimaryColor)
                 chip.chipStrokeColor = android.content.res.ColorStateList.valueOf(primaryColor)
-                chip.chipStrokeWidth = 2f
+                chip.chipStrokeWidth = 0f
                 chip.isChipIconVisible = false
             } else {
-                // Chip no seleccionado - colores por defecto
+                // Unselected: transparent background, on-surface text, outline stroke
                 chip.chipBackgroundColor = android.content.res.ColorStateList.valueOf(android.graphics.Color.TRANSPARENT)
                 chip.setTextColor(onSurfaceColor)
                 chip.chipStrokeColor = android.content.res.ColorStateList.valueOf(outlineColor)
