@@ -88,20 +88,8 @@ class SongOptionsBottomSheet : BottomSheetDialogFragment() {
                 )
                 bottomSheet?.background = null
 
-                // Configurar la ventana para transparencia sin interferir con navigation bar
-                bottomSheetDialog.window?.let { window ->
-                    window.setDimAmount(0.5f) // Mantener el dimming
-                    window.statusBarColor = android.graphics.Color.TRANSPARENT
-
-                    // Usar un color semi-transparente para la navigation bar
-                    window.navigationBarColor = android.graphics.Color.parseColor("#80000000")
-
-                    // Configuración conservadora para evitar problemas con navigation bar
-                    window.decorView.systemUiVisibility = (
-                        android.view.View.SYSTEM_UI_FLAG_LAYOUT_STABLE or
-                        android.view.View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
-                    )
-                }
+                // Mantener dimming, no tocar status/navigation bar para evitar parpadeos
+                bottomSheetDialog.window?.setDimAmount(0.5f)
             }
         }
 

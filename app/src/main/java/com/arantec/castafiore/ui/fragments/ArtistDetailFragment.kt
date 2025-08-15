@@ -113,6 +113,9 @@ class ArtistDetailFragment : Fragment() {
         container: ViewGroup?,
         savedInstanceState: Bundle?
     ): View {
+        // Ensure consistent status bar color using utility
+        StatusBarUtils.setStatusBarColor(this)
+
         _binding = FragmentArtistDetailBinding.inflate(inflater, container, false)
         return binding.root
     }
@@ -282,17 +285,17 @@ class ArtistDetailFragment : Fragment() {
 
     private fun setStaticBackground() {
         // Aplicar el color estático predeterminado al fondo y status bar
-        val staticColor = Color.parseColor("#121212")
+        val staticColor = android.graphics.Color.parseColor("#121212")
 
         binding.gradientBackground.setBackgroundColor(staticColor)
         binding.collapsingToolbar.setContentScrimColor(staticColor)
         binding.collapsingToolbar.setStatusBarScrimColor(staticColor)
 
-        // Aplicar el color estático a la status bar
-        StatusBarUtils.setStatusBarColor(this)
-
         // Usar iconos blancos para el toolbar (apropiado para fondo oscuro)
-        binding.toolbar.navigationIcon?.setTint(Color.WHITE)
+        binding.toolbar.navigationIcon?.setTint(android.graphics.Color.WHITE)
+
+        // Use centralized status bar color utility
+        StatusBarUtils.setStatusBarColor(this)
     }
 
     private fun darkenColor(color: Int, factor: Float): Int {
@@ -758,7 +761,7 @@ class ArtistDetailFragment : Fragment() {
             updatePlaybackState()
         }
 
-        // Aplicar color estático consistente
+        // Ensure consistent status bar color on resume
         StatusBarUtils.setStatusBarColor(this)
     }
 

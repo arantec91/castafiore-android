@@ -24,6 +24,7 @@ import com.arantec.castafiore.databinding.ActivityMainBinding
 import com.arantec.castafiore.service.MusicService
 import com.arantec.castafiore.ui.activities.PlayerActivity
 import com.arantec.castafiore.utils.ImageLoader
+import com.arantec.castafiore.utils.StatusBarUtils
 import com.bumptech.glide.Glide
 
 class MainActivity : AppCompatActivity() {
@@ -79,6 +80,9 @@ class MainActivity : AppCompatActivity() {
 
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
+
+        // Set consistent status bar color
+        StatusBarUtils.setStatusBarColor(this)
 
         setupNavigationComponent()
         setupMiniPlayer()

@@ -10,6 +10,7 @@ import com.arantec.castafiore.R
 import com.arantec.castafiore.data.network.NavidromeClient
 import com.arantec.castafiore.data.repository.MusicRepository
 import com.arantec.castafiore.databinding.ActivitySetupBinding
+import com.arantec.castafiore.utils.StatusBarUtils
 import kotlinx.coroutines.launch
 
 class SetupActivity : AppCompatActivity() {
@@ -21,6 +22,9 @@ class SetupActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         binding = ActivitySetupBinding.inflate(layoutInflater)
         setContentView(binding.root)
+
+        // Ensure consistent status bar color
+        StatusBarUtils.setStatusBarColor(this)
 
         musicRepository = MusicRepository.getInstance(this)
 

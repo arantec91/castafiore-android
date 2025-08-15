@@ -28,6 +28,9 @@ class SettingsFragment : Fragment() {
         container: ViewGroup?,
         savedInstanceState: Bundle?
     ): View {
+        // Ensure consistent status bar color using utility
+        StatusBarUtils.setStatusBarColor(this)
+
         _binding = FragmentSettingsBinding.inflate(inflater, container, false)
         return binding.root
     }
@@ -182,7 +185,8 @@ class SettingsFragment : Fragment() {
 
     override fun onResume() {
         super.onResume()
-        // Aplicar color estático consistente
+
+        // Ensure consistent status bar color on resume
         StatusBarUtils.setStatusBarColor(this)
 
         // Recargar información del servidor por si cambió

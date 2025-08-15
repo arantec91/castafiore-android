@@ -65,23 +65,8 @@ class AlbumOptionsBottomSheet : BottomSheetDialogFragment() {
                 // Eliminar el fondo por defecto del BottomSheet para evitar el gris
                 bottomSheet?.background = null
 
-                // Configurar la ventana para transparencia sin interferir con navigation bar
-                bottomSheetDialog.window?.let { window ->
-                    window.setDimAmount(0.5f) // Mantener el dimming
-                    window.statusBarColor = android.graphics.Color.TRANSPARENT
-
-                    // Usar un color semi-transparente para la navigation bar en lugar de transparente
-                    window.navigationBarColor = android.graphics.Color.parseColor("#80000000")
-
-                    // Remover las flags que causan el problema con navigation bar
-                    window.decorView.systemUiVisibility = (
-                        android.view.View.SYSTEM_UI_FLAG_LAYOUT_STABLE or
-                        android.view.View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
-                    )
-                }
-
-                // Hacer que el BottomSheet use nuestro background personalizado
-                bottomSheet?.clipToOutline = true
+                // Mantener dimming, no tocar status/navigation bar para evitar parpadeos
+                bottomSheetDialog.window?.setDimAmount(0.5f)
             }
         }
 

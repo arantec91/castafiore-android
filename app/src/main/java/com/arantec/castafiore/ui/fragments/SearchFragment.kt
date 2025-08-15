@@ -43,6 +43,7 @@ import com.arantec.castafiore.service.MusicService
 import com.arantec.castafiore.ui.dialogs.SongOptionsBottomSheet
 import com.arantec.castafiore.ui.dialogs.PlaylistSelectorBottomSheet
 import com.arantec.castafiore.data.download.SongDownloadManager
+import com.arantec.castafiore.utils.StatusBarUtils
 
 class SearchFragment : Fragment() {
 
@@ -478,6 +479,9 @@ class SearchFragment : Fragment() {
 
     override fun onResume() {
         super.onResume()
+        // Aplicar el color estático consistente de la app
+        StatusBarUtils.setStatusBarColor(this)
+
         // Restaurar el comportamiento de scroll normal cuando regresemos al fragmento
         if (_binding != null) {
             binding.rvSearchResults.isNestedScrollingEnabled = true

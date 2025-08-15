@@ -61,7 +61,7 @@ class PlayerActivity : AppCompatActivity() {
             isBound = true
             android.util.Log.d("PlayerActivity", "[DEBUG_LOG] onServiceConnected: shuffle state before updateUIFromService = $isShuffleEnabled")
             android.util.Log.d("PlayerActivity", "[DEBUG_LOG] onServiceConnected: repeat mode before updateUIFromService = $repeatMode")
-            
+
             // NO re-aplicar shuffle automáticamente al reconectar - la cola ya está en el estado correcto
             // Solo sincronizar el repeat mode con el servicio
             val serviceRepeatMode = when (repeatMode) {
@@ -71,7 +71,7 @@ class PlayerActivity : AppCompatActivity() {
             }
             musicService?.setRepeatMode(serviceRepeatMode)
             android.util.Log.d("PlayerActivity", "[DEBUG_LOG] onServiceConnected: Syncing repeat mode with service = $repeatMode")
-            
+
             setupMusicServiceListeners()
             updateUIFromService()
         }
@@ -91,7 +91,7 @@ class PlayerActivity : AppCompatActivity() {
         setupFullScreenMode()
 
         musicRepository = MusicRepository.getInstance(this)
-        
+
         // Restaurar el estado de shuffle y repeat desde SharedPreferences
         val prefs = getSharedPreferences("player_prefs", Context.MODE_PRIVATE)
         isShuffleEnabled = prefs.getBoolean("shuffle_mode", false)
@@ -101,7 +101,7 @@ class PlayerActivity : AppCompatActivity() {
         android.util.Log.d("PlayerActivity", "[DEBUG_LOG] onCreate: Restored repeat mode from SharedPreferences = $repeatMode")
         updateShuffleButton()
         updateRepeatButton()
-        
+
         setupClickListeners()
         bindMusicService()
     }
@@ -120,7 +120,7 @@ class PlayerActivity : AppCompatActivity() {
             }
         }
 
-        // Asegurar que el color de la status bar coincida con el fondo del player
+        // Set consistent status bar color via utility
         StatusBarUtils.setStatusBarColor(this)
     }
 
@@ -265,7 +265,7 @@ class PlayerActivity : AppCompatActivity() {
                     stopProgressUpdates()
                 }
             }
-            
+
             // Agregar listener para cambios de canción
             service.addSongChangeListener { song ->
                 currentSong = song
@@ -283,18 +283,18 @@ class PlayerActivity : AppCompatActivity() {
         musicService?.let { service ->
             currentSong = service.getCurrentSong()
             isPlaying = service.isPlaying()
-            
+
             currentSong?.let { song ->
                 updateSongInfo(song)
                 loadAlbumArt(song)
                 checkFavoriteStatus(song)
             }
-            
+
             updatePlayPauseButton()
             updateShuffleButton()
             updateRepeatButton()
             updateProgressBar()
-            
+
             // Solo iniciar actualizaciones si está reproduciéndose
             if (isPlaying) {
                 startProgressUpdates()
@@ -307,7 +307,7 @@ class PlayerActivity : AppCompatActivity() {
         binding.tvArtistName.text = song.artist
         binding.tvPlayingFrom.text = song.album ?: "Unknown Album"
         binding.tvTotalTime.text = formatTime(song.duration?.toLong() ?: 0)
-        
+
         // Actualizar el máximo del SeekBar
         val duration = song.duration ?: 0
         binding.seekBarProgress.max = 100 // Usamos porcentajes para mejor control
@@ -354,7 +354,7 @@ class PlayerActivity : AppCompatActivity() {
             palette?.let {
                 val dominantColor = it.getDominantColor(Color.parseColor("#121212"))
                 val vibrantColor = it.getVibrantColor(dominantColor)
-                
+
                 // Aplicar color estático por ahora (consistente con el resto de la app)
                 applyDefaultTheme()
             } ?: applyDefaultTheme()
@@ -363,8 +363,10 @@ class PlayerActivity : AppCompatActivity() {
 
     private fun applyDefaultTheme() {
         // Aplicar tema estático consistente
-        val staticColor = Color.parseColor("#121212")
+        val staticColor = android.graphics.Color.parseColor("#121212")
         binding.gradientBackground.setBackgroundColor(staticColor)
+
+        // Use centralized utility for status bar consistency
         StatusBarUtils.setStatusBarColor(this)
     }
 
@@ -392,12 +394,12 @@ class PlayerActivity : AppCompatActivity() {
         isShuffleEnabled = !isShuffleEnabled
         android.util.Log.d("PlayerActivity", "[DEBUG_LOG] toggleShuffle: After toggle = $isShuffleEnabled")
         updateShuffleButton()
-        
+
         // Guardar el estado en SharedPreferences
         val prefs = getSharedPreferences("player_prefs", Context.MODE_PRIVATE)
         prefs.edit().putBoolean("shuffle_mode", isShuffleEnabled).apply()
         android.util.Log.d("PlayerActivity", "[DEBUG_LOG] toggleShuffle: Saved to SharedPreferences = $isShuffleEnabled")
-        
+
         if (isShuffleEnabled) {
             musicService?.shuffleQueue()
         } else {
@@ -414,12 +416,12 @@ class PlayerActivity : AppCompatActivity() {
         }
         android.util.Log.d("PlayerActivity", "[DEBUG_LOG] toggleRepeat: After toggle = $repeatMode")
         updateRepeatButton()
-        
+
         // Guardar el estado en SharedPreferences
         val prefs = getSharedPreferences("player_prefs", Context.MODE_PRIVATE)
         prefs.edit().putInt("repeat_mode", repeatMode.ordinal).apply()
         android.util.Log.d("PlayerActivity", "[DEBUG_LOG] toggleRepeat: Saved to SharedPreferences = $repeatMode")
-        
+
         // Sincronizar el estado con el servicio
         val serviceRepeatMode = when (repeatMode) {
             RepeatMode.OFF -> MusicService.RepeatMode.OFF
@@ -441,13 +443,13 @@ class PlayerActivity : AppCompatActivity() {
                         // Si no es favorito, agregar a favoritos
                         musicRepository.starSong(song.id)
                     }
-                    
+
                     result.fold(
                         onSuccess = {
                             // Actualizar el estado local
                             isFavorite = !isFavorite
                             updateFavoriteButton()
-                            
+
                             val message = if (isFavorite) {
                                 "Agregado a favoritos"
                             } else {
@@ -497,7 +499,7 @@ class PlayerActivity : AppCompatActivity() {
                 type = "text/plain"
                 putExtra(Intent.EXTRA_TEXT, shareText)
             }
-            
+
             val chooser = Intent.createChooser(shareIntent, "Compartir canción")
             startActivity(chooser)
         }
@@ -524,7 +526,7 @@ class PlayerActivity : AppCompatActivity() {
             RepeatMode.ALL -> R.drawable.ic_repeat to getColor(R.color.primary)
             RepeatMode.ONE -> R.drawable.ic_repeat_one to getColor(R.color.primary)
         }
-        
+
         binding.btnRepeat.setImageResource(iconRes)
         binding.btnRepeat.imageTintList = android.content.res.ColorStateList.valueOf(tint)
     }
@@ -536,7 +538,7 @@ class PlayerActivity : AppCompatActivity() {
         } else {
             getColor(R.color.text_secondary)
         }
-        
+
         binding.btnFavorite.setImageResource(iconRes)
         binding.btnFavorite.imageTintList = android.content.res.ColorStateList.valueOf(tint)
     }
@@ -545,7 +547,7 @@ class PlayerActivity : AppCompatActivity() {
         musicService?.let { service ->
             val currentPosition = service.getCurrentPosition()
             val duration = currentSong?.duration?.toLong() ?: 1
-            
+
             if (duration > 0) {
                 val progress = ((currentPosition / 1000) * 100 / duration).toInt()
                 binding.seekBarProgress.progress = progress
@@ -709,16 +711,18 @@ class PlayerActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+
+        // Ensure consistent status bar color
         StatusBarUtils.setStatusBarColor(this)
-        
+
         // Reestablecer modo de pantalla completa
         setupFullScreenMode()
-        
+
         // Actualizar estado desde el servicio
         if (isBound && musicService != null) {
             updateUIFromService()
         }
-        
+
         // Reiniciar actualizaciones de progreso
         if (isPlaying) {
             startProgressUpdates()

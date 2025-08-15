@@ -80,6 +80,9 @@ class AlbumDetailFragment : Fragment() {
         container: ViewGroup?,
         savedInstanceState: Bundle?
     ): View {
+        // Ensure consistent status bar color using utility
+        StatusBarUtils.setStatusBarColor(this)
+
         _binding = FragmentAlbumDetailBinding.inflate(inflater, container, false)
         return binding.root
     }
@@ -88,6 +91,9 @@ class AlbumDetailFragment : Fragment() {
         super.onViewCreated(view, savedInstanceState)
 
         musicRepository = MusicRepository.getInstance(requireContext())
+
+        // Establecer inmediatamente el color de fondo y status bar para evitar parpadeos
+        setStaticBackground(null)
 
         // Obtener álbum de los argumentos
         currentAlbum = requireArguments().getParcelable<Album>("album")
@@ -451,11 +457,11 @@ class AlbumDetailFragment : Fragment() {
         binding.collapsingToolbar.setContentScrimColor(staticColor)
         binding.collapsingToolbar.setStatusBarScrimColor(staticColor)
 
-        // Aplicar el color estático a la status bar
-        StatusBarUtils.setStatusBarColor(this@AlbumDetailFragment)
-
         // Usar iconos blancos para el toolbar (apropiado para fondo oscuro)
         binding.toolbar.navigationIcon?.setTint(android.graphics.Color.WHITE)
+
+        // Use centralized status bar color utility
+        StatusBarUtils.setStatusBarColor(this)
     }
 
     private fun playAlbum() {
@@ -898,7 +904,7 @@ class AlbumDetailFragment : Fragment() {
     // Lifecycle methods
     override fun onResume() {
         super.onResume()
-        // Aplicar color estático consistente
+        // Ensure consistent status bar color on resume
         StatusBarUtils.setStatusBarColor(this)
     }
 

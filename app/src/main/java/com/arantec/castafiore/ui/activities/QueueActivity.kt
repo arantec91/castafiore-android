@@ -50,7 +50,7 @@ class QueueActivity : AppCompatActivity() {
         binding = ActivityQueueBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        // Configurar status bar
+        // Ensure consistent status bar color
         StatusBarUtils.setStatusBarColor(this)
 
         musicRepository = MusicRepository.getInstance(this)
@@ -217,6 +217,12 @@ class QueueActivity : AppCompatActivity() {
         if (!isBound) {
             bindMusicService()
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // Ensure consistent status bar color
+        StatusBarUtils.setStatusBarColor(this)
     }
 
     override fun onStop() {

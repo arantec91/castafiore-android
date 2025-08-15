@@ -5,7 +5,7 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@android:color/transparent"
+    android:background="@color/dark_background"
     android:fitsSystemWindows="true">
 
     <com.google.android.material.appbar.AppBarLayout
@@ -13,6 +13,7 @@
         android:layout_width="match_parent"
         android:layout_height="380dp"
         android:fitsSystemWindows="true"
+        android:background="@color/dark_background"
         app:elevation="4dp">
 
         <com.google.android.material.appbar.CollapsingToolbarLayout

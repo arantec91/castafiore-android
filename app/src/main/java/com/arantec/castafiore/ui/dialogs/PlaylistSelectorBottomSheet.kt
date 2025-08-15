@@ -71,14 +71,8 @@ class PlaylistSelectorBottomSheet : BottomSheetDialogFragment() {
                 )
                 bottomSheet?.background = null
 
-                // Hacer el fondo del dialog completamente transparente
-                bottomSheetDialog.window?.let { window ->
-                    window.setDimAmount(0.5f) // Mantener el dimming
-                    window.statusBarColor = android.graphics.Color.TRANSPARENT
-                    window.navigationBarColor = android.graphics.Color.TRANSPARENT
-                    // Establecer el fondo como transparente
-                    window.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT))
-                }
+                // Mantener dimming, no tocar status/navigation bar para evitar parpadeos
+                bottomSheetDialog.window?.setDimAmount(0.5f)
             }
         }
 

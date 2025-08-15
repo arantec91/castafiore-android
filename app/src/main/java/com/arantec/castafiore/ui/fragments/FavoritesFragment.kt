@@ -19,6 +19,7 @@ import com.arantec.castafiore.data.repository.MusicRepository
 import com.arantec.castafiore.databinding.FragmentFavoritesBinding
 import com.arantec.castafiore.service.MusicService
 import com.arantec.castafiore.ui.adapters.SongAdapter
+import com.arantec.castafiore.utils.StatusBarUtils
 import kotlinx.coroutines.launch
 
 class FavoritesFragment : Fragment() {
@@ -57,6 +58,9 @@ class FavoritesFragment : Fragment() {
     }
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
+        // Ensure consistent status bar color using utility
+        StatusBarUtils.setStatusBarColor(this)
+
         _binding = FragmentFavoritesBinding.inflate(inflater, container, false)
         return binding.root
     }
@@ -253,16 +257,17 @@ class FavoritesFragment : Fragment() {
                     android.widget.Toast.makeText(requireContext(), getString(R.string.song_not_downloaded), android.widget.Toast.LENGTH_SHORT).show()
                 }
             }
-        bottomSheet.show(parentFragmentManager, "SongOptionsBottomSheet")
+        bottomSheet.show(childFragmentManager, "SongOptionsBottomSheet")
     }
 
-    override fun onDestroy() {
-        super.onDestroy()
-        cleanupListeners()
-        if (isBound) {
-            requireContext().unbindService(serviceConnection)
-            isBound = false
-        }
+    override fun onResume() {
+        super.onResume()
+        // Ensure consistent status bar color on resume
+        StatusBarUtils.setStatusBarColor(this)
+    }
+
+    override fun onDestroyView() {
+        super.onDestroyView()
         _binding = null
     }
 }
