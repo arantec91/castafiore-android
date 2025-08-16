@@ -31,6 +31,7 @@ import android.content.pm.ServiceInfo
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import com.arantec.castafiore.ui.activities.PlayerActivity
+import com.google.android.exoplayer2.source.DefaultMediaSourceFactory
 
 class MusicService : Service() {
 
@@ -78,6 +79,9 @@ class MusicService : Service() {
 
         musicRepository = MusicRepository.getInstance(this)
 
+        // Initialize shared player cache and wire ExoPlayer to use it
+        PlayerCache.init(this)
+
         createNotificationChannel()
 
         // Inicializar MediaSession
@@ -90,7 +94,11 @@ class MusicService : Service() {
             isActive = true
         }
 
-        exoPlayer = ExoPlayer.Builder(this).build()
+        // Disable lazy preparation so upcoming items can be prepared
+        val mediaSourceFactory = DefaultMediaSourceFactory(PlayerCache.cacheDataSourceFactory)
+        exoPlayer = ExoPlayer.Builder(this)
+            .setMediaSourceFactory(mediaSourceFactory)
+            .build()
         exoPlayer?.addListener(object : com.google.android.exoplayer2.Player.Listener {
             override fun onPlaybackStateChanged(state: Int) {
                 if (state == com.google.android.exoplayer2.Player.STATE_ENDED) {
@@ -143,6 +151,8 @@ class MusicService : Service() {
                 if (repeatMode == RepeatMode.OFF && musicRepository.continueWithSimilarEnabled) {
                     prefetchSimilarForCurrentSong()
                 }
+                // Enqueue próximo track para preparación anticipada
+                enqueueNextMediaItem()
             }
         })
 
@@ -218,8 +228,14 @@ class MusicService : Service() {
         val serverUrl = musicRepository.serverUrl ?: return
         val (username, token, salt) = musicRepository.getAuthParams()
         val streamUrl = song.getStreamUrl(serverUrl, username, token, salt)
-        val mediaItem = MediaItem.fromUri(streamUrl)
+        val cacheKey = "song_${song.id}"
+        val mediaItem = MediaItem.Builder()
+            .setUri(streamUrl)
+            .setCustomCacheKey(cacheKey)
+            .build()
         exoPlayer?.setMediaItem(mediaItem)
+        // Also enqueue the next item so the player can prepare it in advance
+        enqueueNextMediaItem()
         exoPlayer?.prepare()
         exoPlayer?.play()
         // Reiniciar tracking de scrobble
@@ -229,6 +245,8 @@ class MusicService : Service() {
         updateMediaMetadata()
         showOrUpdateNotification()
         startProgressUpdates()
+        // Prefetch el siguiente tema para cambio rápido
+        // prefetchNextTrack()
     }
 
     fun resume() {
@@ -801,4 +819,26 @@ class MusicService : Service() {
     enum class SourceType { ALBUM, ARTIST, PLAYLIST, FAVORITES, SONGS, UNKNOWN }
 
     private var playbackSource: PlaybackSource? = null
+
+    // Helper: add only the immediate next song as a queued MediaItem
+    private fun enqueueNextMediaItem() {
+        if (repeatMode == RepeatMode.ONE) return
+        val nextSong = playlist.getOrNull(currentIndex + 1) ?: return
+        val serverUrl = musicRepository.serverUrl ?: return
+        val (username, token, salt) = musicRepository.getAuthParams()
+        val streamUrl = nextSong.getStreamUrl(serverUrl, username, token, salt)
+        val cacheKey = "song_${nextSong.id}"
+        val nextItem = MediaItem.Builder()
+            .setUri(streamUrl)
+            .setCustomCacheKey(cacheKey)
+            .build()
+        // Clear any items after current to avoid buildup, then add one next
+        val player = exoPlayer ?: return
+        val currentIdxInPlayer = player.currentMediaItemIndex
+        val total = player.mediaItemCount
+        if (total - 1 > currentIdxInPlayer) {
+            player.removeMediaItems(currentIdxInPlayer + 1, total)
+        }
+        player.addMediaItem(nextItem)
+    }
 }
