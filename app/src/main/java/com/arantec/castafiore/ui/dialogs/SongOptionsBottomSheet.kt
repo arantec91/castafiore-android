@@ -259,13 +259,6 @@ class SongOptionsBottomSheet : BottomSheetDialogFragment() {
                     onSuccess = {
                         isSongFavorited = !isSongFavorited
                         updateFavoriteButton()
-
-                        val message = if (isSongFavorited) {
-                            "Canción agregada a favoritos"
-                        } else {
-                            "Canción removida de favoritos"
-                        }
-                        Toast.makeText(requireContext(), message, Toast.LENGTH_SHORT).show()
                     },
                     onFailure = { error ->
                         Toast.makeText(

@@ -495,13 +495,6 @@ class PlayerActivity : AppCompatActivity() {
                             // Actualizar el estado local
                             isFavorite = !isFavorite
                             updateFavoriteButton()
-
-                            val message = if (isFavorite) {
-                                "Agregado a favoritos"
-                            } else {
-                                "Eliminado de favoritos"
-                            }
-                            showMessage(message)
                         },
                         onFailure = { exception ->
                             showMessage("Error al actualizar favoritos: ${exception.message}")
