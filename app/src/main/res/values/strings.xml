@@ -110,4 +110,6 @@
     <string name="settings_option_info">Información</string>
     <string name="account_user_label">Nombre de usuario</string>
     <string name="songs">Canciones</string>
+    <string name="song_title_placeholder">Canción</string>
+    <string name="artist_name_placeholder">Artista</string>
 </resources>

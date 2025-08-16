@@ -2,7 +2,6 @@ package com.arantec.castafiore.ui.activities
 
 import android.Manifest
 import android.content.ComponentName
-import android.content.Context
 import android.content.Intent
 import android.content.ServiceConnection
 import android.content.pm.PackageManager
@@ -25,7 +24,6 @@ import com.arantec.castafiore.service.MusicService
 import com.arantec.castafiore.utils.ImageLoader
 import com.arantec.castafiore.utils.StatusBarUtils
 import com.arantec.castafiore.data.network.NavidromeClient
-import android.content.Context.BIND_AUTO_CREATE
 
 class MainActivity : AppCompatActivity() {
 
@@ -211,6 +209,11 @@ class MainActivity : AppCompatActivity() {
             musicService?.togglePlayPause()
         }
 
+        // New: Next button handler
+        binding.btnNext.setOnClickListener {
+            musicService?.next()
+        }
+
         binding.playerContainer.setOnClickListener {
             // Launch PlayerActivity for full-screen player experience
             try {
@@ -224,7 +227,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun bindMusicService() {
         val intent = Intent(this, MusicService::class.java)
-        bindService(intent, serviceConnection, BIND_AUTO_CREATE)
+        bindService(intent, serviceConnection, android.content.Context.BIND_AUTO_CREATE)
     }
 
     private fun requestNotificationPermission() {
@@ -265,7 +268,7 @@ class MainActivity : AppCompatActivity() {
                 }
 
                 ImageLoader.loadThumbnail(this, binding.ivAlbumArt, coverUrl)
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 // Si falla la autenticación, usar placeholder
                 binding.ivAlbumArt.setImageResource(R.drawable.ic_album_placeholder)
             }
