@@ -1,14 +1,13 @@
 package com.arantec.castafiore.ui.lyrics
 
 import android.os.Build
-import android.text.Layout
 import android.view.LayoutInflater
 import android.view.ViewGroup
 import androidx.recyclerview.widget.RecyclerView
-import com.arantec.castafiore.R
 import com.arantec.castafiore.data.lyrics.LyricsLine
 import com.arantec.castafiore.databinding.ItemLyricsLineBinding
 import kotlin.math.max
+import android.graphics.text.LineBreaker
 
 class LyricsAdapter : RecyclerView.Adapter<LyricsAdapter.VH>() {
 
@@ -17,6 +16,8 @@ class LyricsAdapter : RecyclerView.Adapter<LyricsAdapter.VH>() {
     private var currentIndex: Int = -1
 
     var onActiveIndexChanged: ((Int) -> Unit)? = null
+    // Callback cuando el usuario toca una línea
+    var onLineClick: ((index: Int, line: LyricsLine) -> Unit)? = null
 
     fun setLines(lines: List<LyricsLine>) {
         items.clear()
@@ -59,9 +60,9 @@ class LyricsAdapter : RecyclerView.Adapter<LyricsAdapter.VH>() {
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): VH {
         val binding = ItemLyricsLineBinding.inflate(LayoutInflater.from(parent.context), parent, false)
-        // Ensure no justification so text stays left-aligned
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            binding.tvLine.justificationMode = Layout.JUSTIFICATION_MODE_NONE
+        // Ensure no justification so text stays left-aligned (use constants available on API 29+)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            binding.tvLine.justificationMode = LineBreaker.JUSTIFICATION_MODE_NONE
         }
         return VH(binding)
     }
@@ -70,9 +71,9 @@ class LyricsAdapter : RecyclerView.Adapter<LyricsAdapter.VH>() {
 
     override fun onBindViewHolder(holder: VH, position: Int) {
         if (items.isEmpty()) {
-            holder.binding.tvLine.text = holder.binding.root.context.getString(R.string.no_lyrics)
             holder.binding.tvLine.setActive(false)
             holder.binding.tvLine.setProgressFraction(0f)
+            holder.binding.root.setOnClickListener(null)
             return
         }
         val line = items[position]
@@ -84,6 +85,13 @@ class LyricsAdapter : RecyclerView.Adapter<LyricsAdapter.VH>() {
             holder.binding.tvLine.setProgressFraction(1f)
         } else {
             holder.binding.tvLine.setProgressFraction(0f)
+        }
+        holder.binding.root.setOnClickListener {
+            val idx = holder.bindingAdapterPosition
+            if (idx != RecyclerView.NO_POSITION) {
+                val l = items.getOrNull(idx) ?: return@setOnClickListener
+                onLineClick?.invoke(idx, l)
+            }
         }
     }
 

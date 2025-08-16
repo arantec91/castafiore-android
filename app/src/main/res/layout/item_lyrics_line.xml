@@ -2,7 +2,10 @@
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:paddingVertical="10dp">
+    android:paddingVertical="10dp"
+    android:clickable="true"
+    android:focusable="true"
+    android:foreground="?attr/selectableItemBackground">
 
     <com.arantec.castafiore.ui.lyrics.ProgressLyricsTextView
         android:id="@+id/tvLine"

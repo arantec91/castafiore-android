@@ -113,6 +113,16 @@ class LyricsActivity : AppCompatActivity() {
             }
         }
 
+        // Seek to tapped lyric line time
+        adapter.onLineClick = { index, line ->
+            val pos = line.timeMs
+            musicService?.seekTo(pos)
+            // Update UI immediately instead of waiting for the next tick
+            adapter.updateProgress(pos)
+            // Ensure auto-scroll is enabled so the clicked line recenters
+            autoScrollEnabled = true
+        }
+
         // Bind service
         bindMusicService()
     }
@@ -174,7 +184,8 @@ class LyricsActivity : AppCompatActivity() {
             autoScrollEnabled = false
             return
         }
-        binding.tvStatus.apply { text = getString(R.string.searching_lyrics); visibility = android.view.View.VISIBLE }
+        // Hide status while loading; show only the spinner
+        binding.tvStatus.visibility = android.view.View.GONE
         binding.progress.visibility = android.view.View.VISIBLE
         loadJob?.cancel()
         loadJob = CoroutineScope(Dispatchers.Main).launch {
