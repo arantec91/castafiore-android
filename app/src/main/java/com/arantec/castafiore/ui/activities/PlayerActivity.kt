@@ -3,6 +3,7 @@ package com.arantec.castafiore.ui.activities
 import android.content.ComponentName
 import android.content.Intent
 import android.content.ServiceConnection
+import android.graphics.Bitmap
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
@@ -12,6 +13,8 @@ import android.view.View
 import android.view.WindowInsets
 import android.widget.SeekBar
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.edit
+import androidx.core.graphics.toColorInt
 import androidx.lifecycle.lifecycleScope
 import androidx.palette.graphics.Palette
 import com.arantec.castafiore.R
@@ -24,12 +27,14 @@ import com.arantec.castafiore.ui.dialogs.SongOptionsBottomSheet
 import com.arantec.castafiore.ui.dialogs.PlaylistSelectorBottomSheet
 import com.arantec.castafiore.utils.StatusBarUtils
 import com.bumptech.glide.Glide
-import com.bumptech.glide.request.target.CustomTarget
-import com.bumptech.glide.request.transition.Transition
-import android.graphics.Bitmap
+import com.bumptech.glide.load.engine.GlideException
+import com.bumptech.glide.load.resource.drawable.DrawableTransitionOptions
+import com.bumptech.glide.request.RequestListener
+import com.bumptech.glide.request.target.Target
+import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
-import androidx.core.content.edit
-import androidx.core.graphics.toColorInt
+import android.graphics.drawable.ColorDrawable
+import android.graphics.Color
 import java.util.Locale
 import kotlinx.coroutines.launch
 
@@ -333,22 +338,47 @@ class PlayerActivity : AppCompatActivity() {
             }
 
             if (coverUrl != null) {
-                Glide.with(this)
-                    .asBitmap()
+                val previous = binding.ivAlbumCover.drawable
+                var request = Glide.with(this)
                     .load(coverUrl)
-                    .placeholder(R.drawable.ic_album_placeholder)
                     .error(R.drawable.ic_album_placeholder)
-                    .into(object : CustomTarget<Bitmap>() {
-                        override fun onResourceReady(resource: Bitmap, transition: Transition<in Bitmap>?) {
-                            binding.ivAlbumCover.setImageBitmap(resource)
-                            extractColorsAndApplyTheme(resource)
+                    .transition(DrawableTransitionOptions.withCrossFade(300))
+                    .listener(object : RequestListener<Drawable> {
+                        override fun onLoadFailed(
+                            e: GlideException?,
+                            model: Any?,
+                            target: Target<Drawable>,
+                            isFirstResource: Boolean
+                        ): Boolean {
+                            applyDefaultTheme()
+                            return false
                         }
 
-                        override fun onLoadCleared(placeholder: Drawable?) {
-                            binding.ivAlbumCover.setImageDrawable(placeholder)
-                            applyDefaultTheme()
+                        override fun onResourceReady(
+                            resource: Drawable,
+                            model: Any,
+                            target: Target<Drawable>,
+                            dataSource: com.bumptech.glide.load.DataSource,
+                            isFirstResource: Boolean
+                        ): Boolean {
+                            val bitmap = (resource as? BitmapDrawable)?.bitmap
+                            if (bitmap != null) {
+                                extractColorsAndApplyTheme(bitmap)
+                            } else {
+                                applyDefaultTheme()
+                            }
+                            return false
                         }
                     })
+
+                // Use previous image as placeholder to avoid flashing the static placeholder
+                request = if (previous != null) {
+                    request.placeholder(previous)
+                } else {
+                    request.placeholder(ColorDrawable(Color.TRANSPARENT))
+                }
+
+                request.into(binding.ivAlbumCover)
             } else {
                 binding.ivAlbumCover.setImageResource(R.drawable.ic_album_placeholder)
                 applyDefaultTheme()
@@ -701,6 +731,7 @@ class PlayerActivity : AppCompatActivity() {
                     .load(coverUrl)
                     .placeholder(R.drawable.ic_album_placeholder)
                     .error(R.drawable.ic_album_placeholder)
+                    .transition(DrawableTransitionOptions.withCrossFade(200))
                     .into(ivCover)
             } else {
                 ivCover.setImageResource(R.drawable.ic_album_placeholder)
