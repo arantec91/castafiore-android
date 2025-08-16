@@ -40,7 +40,7 @@ class SongAdapter(
 
                 tvSongTitle.text = song.title
                 tvSongArtist.text = song.artist
-                tvDuration.text = formatDuration(song.duration)
+                // tvDuration removed from layout; no longer set
 
                 // Cambiar solo el color del título si es la canción actual
                 if (song.id == playingSongId) {
@@ -59,12 +59,6 @@ class SongAdapter(
                     onSongMoreClick(song)
                 }
             }
-        }
-
-        private fun formatDuration(seconds: Int): String {
-            val minutes = seconds / 60
-            val secs = seconds % 60
-            return String.format("%d:%02d", minutes, secs)
         }
     }
 

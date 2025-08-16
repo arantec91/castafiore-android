@@ -55,18 +55,6 @@
 
     </LinearLayout>
 
-    <!-- Duración -->
-    <TextView
-        android:id="@+id/tvDuration"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_gravity="center_vertical"
-        android:layout_marginStart="16dp"
-        android:layout_marginEnd="8dp"
-        android:textColor="@color/text_secondary"
-        android:textSize="14sp"
-        tools:text="3:45" />
-
     <!-- Botón más opciones -->
     <ImageButton
         android:id="@+id/btnSongMore"
@@ -74,7 +62,7 @@
         android:layout_height="32dp"
         android:layout_gravity="center_vertical"
         android:background="?attr/selectableItemBackgroundBorderless"
-        android:contentDescription="Más opciones"
+        android:contentDescription="@string/more_options"
         android:src="@drawable/ic_more_vert"
         app:tint="@color/text_secondary" />
 
