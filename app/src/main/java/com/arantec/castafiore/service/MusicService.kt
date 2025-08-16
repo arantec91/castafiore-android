@@ -142,8 +142,18 @@ class MusicService : Service() {
                 showOrUpdateNotification()
             }
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
-                // Actualizar el mini player al cambiar de canción
+                // Avanzar índice solo cuando la transición fue automática dentro del reproductor
+                if (reason == com.google.android.exoplayer2.Player.MEDIA_ITEM_TRANSITION_REASON_AUTO && repeatMode != RepeatMode.ONE) {
+                    if (currentIndex < playlist.size - 1) {
+                        currentIndex++
+                    }
+                }
+                // Actualizar canción actual y metadatos
                 currentSong = playlist.getOrNull(currentIndex)
+                // Reiniciar tracking de scrobble para la nueva canción
+                scrobbleSentForCurrent = false
+                trackStartTimeMillis = System.currentTimeMillis()
+                currentSong?.let { reportNowPlayingSafe(it) }
                 updateMediaMetadata()
                 notifySongChanged(currentSong)
                 showOrUpdateNotification()
