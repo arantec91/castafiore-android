@@ -291,9 +291,24 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="horizontal"
-                android:gravity="end"
+                android:gravity="center_vertical"
                 >
 
+                <!-- Letras -->
+                <ImageButton
+                    android:id="@+id/btnLyrics"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="Letras"
+                    android:src="@drawable/ic_music_note"
+                    app:tint="@color/text_secondary" />
+
+                <!-- Spacer to push queue to the opposite side -->
+                <View
+                    android:layout_width="0dp"
+                    android:layout_height="0dp"
+                    android:layout_weight="1" />
 
                 <!-- Cola de reproducción -->
                 <ImageButton

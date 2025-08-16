@@ -112,4 +112,11 @@
     <string name="songs">Canciones</string>
     <string name="song_title_placeholder">Canción</string>
     <string name="artist_name_placeholder">Artista</string>
+
+    <!-- Lyrics screen -->
+    <string name="lyrics_title_format">%1$s - Letras</string>
+    <string name="no_song">Sin canción</string>
+    <string name="searching_lyrics">Buscando letras…</string>
+    <string name="no_lyrics">Sin letras</string>
+    <string name="back">Volver</string>
 </resources>

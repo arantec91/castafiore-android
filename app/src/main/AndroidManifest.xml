@@ -58,6 +58,13 @@
             android:theme="@style/Theme.Castafiore"
             android:screenOrientation="portrait" />
 
+        <!-- Nueva actividad de letras -->
+        <activity
+            android:name=".ui.activities.LyricsActivity"
+            android:exported="false"
+            android:theme="@style/Theme.Castafiore"
+            android:screenOrientation="portrait" />
+
         <!-- Servicio de música -->
         <service
             android:name=".service.MusicService"

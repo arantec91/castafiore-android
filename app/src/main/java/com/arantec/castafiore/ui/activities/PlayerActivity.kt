@@ -575,6 +575,12 @@ class PlayerActivity : AppCompatActivity() {
 
         binding.btnRepeat.setImageResource(iconRes)
         binding.btnRepeat.imageTintList = android.content.res.ColorStateList.valueOf(tint)
+        // Nuevo botón de letras
+        binding.btnLyrics.setOnClickListener {
+            val intent = Intent(this, LyricsActivity::class.java)
+            startActivity(intent)
+        }
+
     }
 
     private fun updateFavoriteButton() {
