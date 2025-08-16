@@ -19,6 +19,8 @@ import com.arantec.castafiore.ui.adapters.QueueAdapter
 import com.arantec.castafiore.ui.helpers.QueueItemTouchHelperCallback
 import com.arantec.castafiore.utils.StatusBarUtils
 import com.bumptech.glide.Glide
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 
 class QueueActivity : AppCompatActivity() {
 
@@ -53,11 +55,47 @@ class QueueActivity : AppCompatActivity() {
         // Ensure consistent status bar color
         StatusBarUtils.setStatusBarColor(this)
 
+        // Apply window insets so content does not overlap the status bar/navigation bar
+        applyWindowInsets()
+
         musicRepository = MusicRepository.getInstance(this)
 
         setupViews()
         setupRecyclerView()
         bindMusicService()
+    }
+
+    private fun applyWindowInsets() {
+        // Capture baseline paddings to avoid cumulative additions on re-applies
+        val baseRootPaddingLeft = binding.root.paddingLeft
+        val baseRootPaddingTop = binding.root.paddingTop
+        val baseRootPaddingRight = binding.root.paddingRight
+        val baseRootPaddingBottom = binding.root.paddingBottom
+
+        val baseRecyclerPaddingLeft = binding.recyclerViewQueue.paddingLeft
+        val baseRecyclerPaddingTop = binding.recyclerViewQueue.paddingTop
+        val baseRecyclerPaddingRight = binding.recyclerViewQueue.paddingRight
+        val baseRecyclerPaddingBottom = binding.recyclerViewQueue.paddingBottom
+
+        ViewCompat.setOnApplyWindowInsetsListener(binding.root) { v, insets ->
+            val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+            // Apply top inset to the root so header clears the status bar
+            v.setPadding(
+                baseRootPaddingLeft,
+                baseRootPaddingTop + systemBars.top,
+                baseRootPaddingRight,
+                baseRootPaddingBottom
+            )
+            // Apply bottom inset to the list so it clears the nav bar, preserving initial 16dp
+            binding.recyclerViewQueue.setPadding(
+                baseRecyclerPaddingLeft,
+                baseRecyclerPaddingTop,
+                baseRecyclerPaddingRight,
+                baseRecyclerPaddingBottom + systemBars.bottom
+            )
+            insets
+        }
+        ViewCompat.requestApplyInsets(binding.root)
     }
 
     private fun setupViews() {
