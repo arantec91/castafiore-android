@@ -281,13 +281,13 @@ class MusicService : Service() {
             currentSong = playlist[currentIndex]
             notifySongChanged(currentSong)
             
-            // Usar startNewSong para preparar correctamente la nueva canción
+            // Al saltar a la siguiente, marcamos reproducción activa antes de preparar
+            isPlaying = true
+            // Preparar y reproducir la nueva canción
             startNewSong()
-            if (isPlaying) {
-                updatePlaybackState()
-                notifyPlaybackStateChanged(true)
-                showOrUpdateNotification()
-            }
+            updatePlaybackState()
+            notifyPlaybackStateChanged(true)
+            showOrUpdateNotification()
         }
     }
 
@@ -297,13 +297,13 @@ class MusicService : Service() {
             currentSong = playlist[currentIndex]
             notifySongChanged(currentSong)
             
-            // Usar startNewSong para preparar correctamente la nueva canción
+            // Al retroceder, marcamos reproducción activa antes de preparar
+            isPlaying = true
+            // Preparar y reproducir la nueva canción
             startNewSong()
-            if (isPlaying) {
-                updatePlaybackState()
-                notifyPlaybackStateChanged(true)
-                showOrUpdateNotification()
-            }
+            updatePlaybackState()
+            notifyPlaybackStateChanged(true)
+            showOrUpdateNotification()
         }
     }
 
