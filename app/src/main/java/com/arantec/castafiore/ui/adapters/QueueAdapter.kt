@@ -9,6 +9,7 @@ import com.arantec.castafiore.data.models.Song
 import com.arantec.castafiore.data.repository.MusicRepository
 import com.arantec.castafiore.databinding.ItemQueueSongBinding
 import com.bumptech.glide.Glide
+import com.bumptech.glide.load.resource.drawable.DrawableTransitionOptions
 import java.util.Collections
 
 interface ItemTouchHelperAdapter {
@@ -64,6 +65,7 @@ class QueueAdapter(
                         .load(coverUrl)
                         .placeholder(R.drawable.ic_album_placeholder)
                         .error(R.drawable.ic_album_placeholder)
+                        .transition(DrawableTransitionOptions.withCrossFade(200))
                         .into(binding.ivAlbumArt)
                 } else {
                     binding.ivAlbumArt.setImageResource(R.drawable.ic_album_placeholder)

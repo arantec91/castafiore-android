@@ -29,6 +29,7 @@ import androidx.palette.graphics.Palette
 import kotlinx.coroutines.launch
 import com.arantec.castafiore.utils.StatusBarUtils
 import com.arantec.castafiore.utils.ImageLoader
+import android.view.animation.AlphaAnimation
 
 class AlbumDetailFragment : Fragment() {
 
@@ -459,12 +460,16 @@ class AlbumDetailFragment : Fragment() {
                     coverUrl,
                     onSuccess = { bitmap ->
                         if (isAdded && _binding != null) {
+                            // Aplicar un fade-in suave al establecer la imagen
+                            binding.ivAlbumCoverLarge.alpha = 0f
                             binding.ivAlbumCoverLarge.setImageBitmap(bitmap)
+                            binding.ivAlbumCoverLarge.animate().alpha(1f).setDuration(250).start()
                             setStaticBackground(bitmap)
                         }
                     },
                     onError = {
                         if (isAdded && _binding != null) {
+                            binding.ivAlbumCoverLarge.alpha = 1f
                             binding.ivAlbumCoverLarge.setImageResource(R.drawable.ic_album_placeholder)
                             setStaticBackground(null)
                         }
@@ -472,12 +477,14 @@ class AlbumDetailFragment : Fragment() {
                 )
             } catch (e: Exception) {
                 if (isAdded && _binding != null) {
+                    binding.ivAlbumCoverLarge.alpha = 1f
                     binding.ivAlbumCoverLarge.setImageResource(R.drawable.ic_album_placeholder)
                     setStaticBackground(null)
                 }
             }
         } else {
             if (isAdded && _binding != null) {
+                binding.ivAlbumCoverLarge.alpha = 1f
                 binding.ivAlbumCoverLarge.setImageResource(R.drawable.ic_album_placeholder)
                 setStaticBackground(null)
             }
@@ -895,6 +902,7 @@ class AlbumDetailFragment : Fragment() {
                     .load(coverUrl)
                     .placeholder(R.drawable.ic_album_placeholder)
                     .error(R.drawable.ic_album_placeholder)
+                    .transition(com.bumptech.glide.load.resource.drawable.DrawableTransitionOptions.withCrossFade(200))
                     .into(ivInfoCover)
             } else {
                 ivInfoCover.setImageResource(R.drawable.ic_album_placeholder)

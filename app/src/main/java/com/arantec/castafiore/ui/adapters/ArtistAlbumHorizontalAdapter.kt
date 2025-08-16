@@ -8,6 +8,7 @@ import com.arantec.castafiore.data.models.Album
 import com.arantec.castafiore.data.repository.MusicRepository
 import com.arantec.castafiore.databinding.ItemArtistAlbumHorizontalBinding
 import com.arantec.castafiore.utils.ImageLoader
+import com.bumptech.glide.load.resource.drawable.DrawableTransitionOptions
 
 class ArtistAlbumHorizontalAdapter(
     private val onAlbumClick: (Album) -> Unit
@@ -58,11 +59,12 @@ class ArtistAlbumHorizontalAdapter(
                         300 // Tamaño optimizado para las imágenes horizontales
                     )
 
-                    // Usar Glide directamente ya que no existe loadImageWithGlide
+                    // Usar Glide con crossfade para una transición suave
                     com.bumptech.glide.Glide.with(context)
                         .load(coverUrl)
                         .placeholder(R.drawable.ic_album_placeholder)
                         .error(R.drawable.ic_album_placeholder)
+                        .transition(DrawableTransitionOptions.withCrossFade(200))
                         .into(binding.ivAlbumCover)
                 } else {
                     binding.ivAlbumCover.setImageResource(R.drawable.ic_album_placeholder)
