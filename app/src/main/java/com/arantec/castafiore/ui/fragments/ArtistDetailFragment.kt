@@ -33,6 +33,8 @@ import com.arantec.castafiore.utils.ImageLoader
 import androidx.core.graphics.toColorInt
 import com.bumptech.glide.Glide
 import java.util.Locale
+import kotlin.math.max
+import kotlin.math.min
 
 class ArtistDetailFragment : Fragment() {
 
@@ -63,6 +65,10 @@ class ArtistDetailFragment : Fragment() {
     private var playbackStateListener: ((Boolean) -> Unit)? = null
     private var songChangeListener: ((Song?) -> Unit)? = null
 
+    // Estado colapsable de canciones populares
+    private var isSongsExpanded: Boolean = false
+    private val INITIAL_SONGS_LIMIT = 6
+
 
     private val serviceConnection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
@@ -85,6 +91,9 @@ class ArtistDetailFragment : Fragment() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // Restaurar estado expandido si existe
+        isSongsExpanded = savedInstanceState?.getBoolean("songsExpanded") ?: false
 
         // Intentar obtener argumentos usando SafeArgs primero
         try {
@@ -158,6 +167,12 @@ class ArtistDetailFragment : Fragment() {
 
         binding.btnPlay.setOnClickListener {
             playArtistTopSongs()
+        }
+
+        // Toggle Ver más / Mostrar menos
+        binding.btnToggleSongs.setOnClickListener {
+            isSongsExpanded = !isSongsExpanded
+            updateSongsListUI()
         }
     }
 
@@ -240,11 +255,7 @@ class ArtistDetailFragment : Fragment() {
             onSuccess = { songs ->
                 topSongs = songs
                 withContext(Dispatchers.Main) {
-                    if (topSongs.isNotEmpty()) {
-                        songAdapter.updateSongs(topSongs)
-                    } else {
-                        showError("No se encontraron canciones populares del artista")
-                    }
+                    updateSongsListUI()
                 }
             },
             onFailure = { error ->
@@ -253,6 +264,69 @@ class ArtistDetailFragment : Fragment() {
                 }
             }
         )
+    }
+
+    private fun updateSongsListUI() {
+        if (!isAdded || _binding == null) return
+
+        val hasMoreThanLimit = topSongs.size > INITIAL_SONGS_LIMIT
+
+        // Configurar visibilidad y texto del botón
+        binding.btnToggleSongs.visibility = if (hasMoreThanLimit) View.VISIBLE else View.GONE
+        binding.btnToggleSongs.text = if (isSongsExpanded) getString(R.string.show_less) else getString(R.string.show_more)
+
+        // Actualizar lista a mostrar
+        val songsToShow = if (hasMoreThanLimit && !isSongsExpanded) {
+            topSongs.take(INITIAL_SONGS_LIMIT)
+        } else {
+            topSongs
+        }
+        songAdapter.updateSongs(songsToShow)
+
+        // Actualizar overlay de degradado
+        updateGradientOverlay(show = hasMoreThanLimit && !isSongsExpanded)
+    }
+
+    private fun updateGradientOverlay(show: Boolean) {
+        if (!isAdded || _binding == null) return
+
+        val overlay = binding.gradientMoreOverlay
+        if (!show) {
+            overlay.visibility = View.GONE
+            return
+        }
+
+        val rv = binding.rvPopularSongs
+        // Ejecutar tras el layout para medir el ítem 6 (índice 5)
+        rv.post {
+            val lm = rv.layoutManager as? LinearLayoutManager
+            val index = 5 // sexto elemento (0-based)
+            val child = lm?.findViewByPosition(index)
+
+            if (child != null && child.height > 0) {
+                val desiredHeight = max(child.height / 2, dpToPx(56))
+                val lp = overlay.layoutParams
+                if (lp.height != desiredHeight) {
+                    lp.height = desiredHeight
+                    overlay.layoutParams = lp
+                }
+                overlay.visibility = View.VISIBLE
+            } else {
+                // Fallback: usar altura por defecto si aún no está disponible la vista
+                val lp = overlay.layoutParams
+                val fallback = dpToPx(80)
+                if (lp.height != fallback) {
+                    lp.height = fallback
+                    overlay.layoutParams = lp
+                }
+                overlay.visibility = View.VISIBLE
+            }
+        }
+    }
+
+    private fun dpToPx(dp: Int): Int {
+        val metrics = resources.displayMetrics
+        return (dp * metrics.density).toInt()
     }
 
     private fun loadArtistImage() {
@@ -781,5 +855,10 @@ class ArtistDetailFragment : Fragment() {
     override fun onDestroyView() {
         super.onDestroyView()
         _binding = null
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        outState.putBoolean("songsExpanded", isSongsExpanded)
     }
 }

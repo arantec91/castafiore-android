@@ -208,15 +208,49 @@
                     android:layout_marginBottom="16dp"
                     android:paddingHorizontal="20dp" />
 
-                <androidx.recyclerview.widget.RecyclerView
-                    android:id="@+id/rvPopularSongs"
+                <!-- Contenedor para la lista y el overlay de degradado -->
+                <FrameLayout
                     android:layout_width="match_parent"
+                    android:layout_height="wrap_content">
+
+                    <androidx.recyclerview.widget.RecyclerView
+                        android:id="@+id/rvPopularSongs"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:nestedScrollingEnabled="false"
+                        android:clipToPadding="false"
+                        android:paddingStart="4dp"
+                        android:paddingEnd="4dp"
+                        tools:listitem="@layout/item_song" />
+
+                    <!-- Overlay de degradado para indicar más contenido -->
+                    <View
+                        android:id="@+id/gradientMoreOverlay"
+                        android:layout_width="match_parent"
+                        android:layout_height="80dp"
+                        android:layout_gravity="bottom"
+                        android:background="@drawable/gradient_list_fade"
+                        android:visibility="gone"
+                        android:clickable="false"
+                        android:focusable="false" />
+                </FrameLayout>
+
+                <!-- Botón Ver más / Mostrar menos (outlined) -->
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnToggleSongs"
+                    style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                    android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:nestedScrollingEnabled="false"
-                    android:clipToPadding="false"
-                    android:paddingStart="4dp"
-                    android:paddingEnd="4dp"
-                    tools:listitem="@layout/item_song" />
+                    android:layout_marginTop="0dp"
+                    android:layout_gravity="center_horizontal"
+                    android:text=""
+                    android:textAllCaps="false"
+                    android:textColor="#FF2D55"
+                    app:strokeColor="#FF2D55"
+                    app:strokeWidth="1dp"
+                    app:cornerRadius="20dp"
+                    app:backgroundTint="@android:color/transparent"
+                    android:visibility="gone" />
 
             </LinearLayout>
 
