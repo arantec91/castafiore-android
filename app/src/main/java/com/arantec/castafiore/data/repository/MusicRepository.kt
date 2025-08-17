@@ -1249,4 +1249,44 @@ class MusicRepository private constructor(private val context: Context) {
             Result.failure(e)
         }
     }
+
+    suspend fun getSimilarArtists(artistId: String): Result<List<Artist>> {
+        return cacheManager.getArtists(
+            key = CacheKeys.similarArtists(artistId),
+            type = CacheTypes.ARTIST_LIST_TYPE
+        ) {
+            try {
+                val (username, token, salt) = getAuthParams()
+                val response = NavidromeClient.getApiService().getArtistInfo2(
+                    username = username,
+                    token = token,
+                    salt = salt,
+                    version = "1.16.1",
+                    client = "Castafiore",
+                    id = artistId
+                )
+                if (response.isSuccessful) {
+                    val body = response.body()
+                    val status = body?.subsonicResponse?.status
+                    if (status == "ok") {
+                        val info = body.subsonicResponse.artistInfo2
+                        // Prefer nested structure, fall back to flat array if necessary
+                        val artists = when {
+                            info?.similarArtists?.artist?.isNotEmpty() == true -> info.similarArtists?.artist ?: emptyList()
+                            info?.similarArtist?.isNotEmpty() == true -> info.similarArtist ?: emptyList()
+                            else -> emptyList()
+                        }
+                        Result.success(artists)
+                    } else {
+                        val err = body?.subsonicResponse?.error
+                        Result.failure(Exception("API Error: ${err?.message ?: "Unknown"}"))
+                    }
+                } else {
+                    Result.failure(Exception("HTTP Error: ${response.code()} - ${response.message()}"))
+                }
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
+        }
+    }
 }

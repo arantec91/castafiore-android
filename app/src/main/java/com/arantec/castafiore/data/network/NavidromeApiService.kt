@@ -238,4 +238,15 @@ interface NavidromeApiService {
         @Query("username") userToGet: String,
         @Query("f") format: String = "json"
     ): Response<UserResponse>
+
+    @GET("rest/getArtistInfo2.view")
+    suspend fun getArtistInfo2(
+        @Query("u") username: String,
+        @Query("t") token: String,
+        @Query("s") salt: String,
+        @Query("v") version: String,
+        @Query("c") client: String,
+        @Query("id") id: String,
+        @Query("f") format: String = "json"
+    ): Response<ArtistInfo2Response>
 }

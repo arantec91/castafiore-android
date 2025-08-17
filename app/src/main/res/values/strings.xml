@@ -121,4 +121,7 @@
     <string name="searching_lyrics">Buscando letras…</string>
     <string name="no_lyrics">Sin letras</string>
     <string name="back">Volver</string>
+
+    <!-- Similar Artists -->
+    <string name="similar_artists_title">Artistas similares</string>
 </resources>

@@ -39,6 +39,11 @@ data class UserResponse(
     val subsonicResponse: UserResult
 )
 
+data class ArtistInfo2Response(
+    @SerializedName("subsonic-response")
+    val subsonicResponse: ArtistInfo2Result
+)
+
 // Base response structure
 data class SubsonicResponse(
     val status: String,
@@ -210,4 +215,30 @@ data class UserResult(
     val version: String,
     val user: JsonObject?,
     val error: ErrorResponse?
+)
+
+data class ArtistInfo2Result(
+    val status: String,
+    val version: String,
+    @SerializedName(value = "artistInfo2", alternate = ["artistInfo"])
+    val artistInfo2: ArtistInfo2?,
+    val error: ErrorResponse?
+)
+
+data class ArtistInfo2(
+    val musicBrainzId: String?,
+    val lastFmUrl: String?,
+    val smallImageUrl: String?,
+    val mediumImageUrl: String?,
+    val largeImageUrl: String?,
+    val biography: String?,
+    // Preferred nested structure: { "similarArtists": { "artist": [ ... ] } }
+    val similarArtists: SimilarArtists?,
+    // Some servers return a flat array: { "similarArtist": [ ... ] }
+    @SerializedName("similarArtist")
+    val similarArtist: List<Artist>? = null
+)
+
+data class SimilarArtists(
+    val artist: List<Artist>?
 )

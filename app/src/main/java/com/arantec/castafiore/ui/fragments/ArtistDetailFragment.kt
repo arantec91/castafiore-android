@@ -52,9 +52,11 @@ class ArtistDetailFragment : Fragment() {
     private var isFollowing = false
     private var albums: List<Album> = emptyList()
     private var topSongs: List<Song> = emptyList()
+    private var similarArtists: List<Artist> = emptyList()
 
     private lateinit var albumAdapter: ArtistAlbumHorizontalAdapter
     private lateinit var songAdapter: SongAdapter
+    private lateinit var similarAdapter: com.arantec.castafiore.ui.adapters.ArtistHorizontalAdapter
 
     // Agregado: Variables para el servicio de música
     private var musicService: MusicService? = null
@@ -158,6 +160,15 @@ class ArtistDetailFragment : Fragment() {
             layoutManager = LinearLayoutManager(context)
             isNestedScrollingEnabled = false
         }
+
+        // Setup similar artists RecyclerView
+        similarAdapter = com.arantec.castafiore.ui.adapters.ArtistHorizontalAdapter { artist ->
+            navigateToArtistDetail(artist)
+        }
+        binding.rvSimilarArtists.apply {
+            adapter = similarAdapter
+            layoutManager = LinearLayoutManager(context, LinearLayoutManager.HORIZONTAL, false)
+        }
     }
 
     private fun setupClickListeners() {
@@ -189,6 +200,9 @@ class ArtistDetailFragment : Fragment() {
 
                 // Cargar canciones populares del artista
                 loadArtistTopSongs()
+
+                // Cargar artistas similares (después de populares)
+                loadSimilarArtists()
 
                 // Verificar si se sigue al artista
                 checkFollowStatus()
@@ -261,6 +275,31 @@ class ArtistDetailFragment : Fragment() {
             onFailure = { error ->
                 withContext(Dispatchers.Main) {
                     showError("Error al cargar canciones populares: ${error.message}")
+                }
+            }
+        )
+    }
+
+    private suspend fun loadSimilarArtists() {
+        val id = artistId ?: return
+        val result = withContext(Dispatchers.IO) {
+            musicRepository.getSimilarArtists(id)
+        }
+        result.fold(
+            onSuccess = { list ->
+                similarArtists = list
+                withContext(Dispatchers.Main) {
+                    if (list.isNotEmpty()) {
+                        binding.similarArtistsSection.visibility = View.VISIBLE
+                        similarAdapter.submit(list)
+                    } else {
+                        binding.similarArtistsSection.visibility = View.GONE
+                    }
+                }
+            },
+            onFailure = {
+                withContext(Dispatchers.Main) {
+                    binding.similarArtistsSection.visibility = View.GONE
                 }
             }
         )
@@ -615,6 +654,18 @@ class ArtistDetailFragment : Fragment() {
         }
     }
 
+    private fun navigateToArtistDetail(artist: Artist) {
+        try {
+            val args = Bundle().apply {
+                putString("artistId", artist.id)
+                putString("artistName", artist.name)
+            }
+            findNavController().navigate(R.id.artistDetailFragment, args)
+        } catch (_: Exception) {
+            showError("Error al navegar al artista")
+        }
+    }
+
     // Métodos del servicio de música
     private fun setupMusicServiceListeners() {
         // Configurar listener para cambios de canción
@@ -626,7 +677,7 @@ class ArtistDetailFragment : Fragment() {
 
         // Configurar listener para cambios de estado de reproducción
         playbackStateListener = { isPlaying ->
-            // Solo mostrar "pausa" si el artista actual es el que se está reproduciendo
+            // Solo mostrar "pausa" si el artista currente es el que se está reproduciendo
             this.isPlaying = isPlaying && isCurrentArtistPlaying()
             updatePlayButton()
         }

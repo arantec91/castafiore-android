@@ -73,6 +73,9 @@ object CacheKeys {
     fun songsByGenre(genre: String) = "songs_by_genre_$genre"
     fun recentlyPlayed(userId: String) = "recently_played_$userId"
     fun mostPlayed(userId: String) = "most_played_$userId"
+
+    // Clave para artistas similares (versionada para evitar entradas antiguas vacías)
+    fun similarArtists(artistId: String) = "similar_artists_v2_$artistId"
 }
 
 /**
@@ -87,6 +90,7 @@ object CacheInvalidation {
         cacheManager.invalidateCache(CacheKeys.artistDetail(artistId))
         cacheManager.invalidateCache(CacheKeys.artistAlbums(artistId))
         cacheManager.invalidateCache(CacheKeys.artistFavorite(artistId))
+        cacheManager.invalidateCache(CacheKeys.similarArtists(artistId))
         // También invalidar listas generales que podrían incluir este artista
         cacheManager.invalidateCache(CacheKeys.ALL_ARTISTS)
         cacheManager.invalidateCache(CacheKeys.FAVORITE_ARTISTS)
