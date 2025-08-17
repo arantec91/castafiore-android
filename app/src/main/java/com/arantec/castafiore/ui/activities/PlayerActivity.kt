@@ -65,7 +65,7 @@ class PlayerActivity : AppCompatActivity() {
             val binder = service as MusicService.MusicBinder
             musicService = binder.getService()
             isBound = true
-            android.util.Log.d("PlayerActivity", "[DEBUG_LOG] onServiceConnected: shuffle state before updateUIFromService = $isShuffleEnabled")
+            android.util.Log.d("PlayerActivity", "[DEBUG_LOG] onServiceConnected: shuffle state before sync = $isShuffleEnabled")
             android.util.Log.d("PlayerActivity", "[DEBUG_LOG] onServiceConnected: repeat mode before updateUIFromService = $repeatMode")
 
             // NO re-aplicar shuffle automáticamente al reconectar - la cola ya está en el estado correcto
@@ -77,6 +77,11 @@ class PlayerActivity : AppCompatActivity() {
             }
             musicService?.setRepeatMode(serviceRepeatMode)
             android.util.Log.d("PlayerActivity", "[DEBUG_LOG] onServiceConnected: Syncing repeat mode with service = $repeatMode")
+
+            // Sync shuffle UI state from service
+            isShuffleEnabled = musicService?.getShuffleEnabled() ?: false
+            android.util.Log.d("PlayerActivity", "[DEBUG_LOG] onServiceConnected: Synced shuffle from service = $isShuffleEnabled")
+            updateShuffleButton()
 
             setupMusicServiceListeners()
             updateUIFromService()
@@ -292,10 +297,12 @@ class PlayerActivity : AppCompatActivity() {
     }
 
     private fun updateUIFromService() {
-        android.util.Log.d("PlayerActivity", "[DEBUG_LOG] updateUIFromService: shuffle state = $isShuffleEnabled")
+        android.util.Log.d("PlayerActivity", "[DEBUG_LOG] updateUIFromService: shuffle state (before) = $isShuffleEnabled")
         musicService?.let { service ->
             currentSong = service.getCurrentSong()
             isPlaying = service.isPlaying()
+            // Sync shuffle from service
+            isShuffleEnabled = service.getShuffleEnabled()
 
             currentSong?.let { song ->
                 updateSongInfo(song)
@@ -436,21 +443,22 @@ class PlayerActivity : AppCompatActivity() {
     }
 
     private fun toggleShuffle() {
-        android.util.Log.d("PlayerActivity", "[DEBUG_LOG] toggleShuffle: Before toggle = $isShuffleEnabled")
-        isShuffleEnabled = !isShuffleEnabled
-        android.util.Log.d("PlayerActivity", "[DEBUG_LOG] toggleShuffle: After toggle = $isShuffleEnabled")
-        updateShuffleButton()
-
-        // Guardar el estado en SharedPreferences
-        val prefs = getSharedPreferences("player_prefs", MODE_PRIVATE)
-        prefs.edit { putBoolean("shuffle_mode", isShuffleEnabled) }
-        android.util.Log.d("PlayerActivity", "[DEBUG_LOG] toggleShuffle: Saved to SharedPreferences = $isShuffleEnabled")
-
-        if (isShuffleEnabled) {
-            musicService?.shuffleQueue()
-        } else {
-            musicService?.unshuffleQueue()
+        val service = musicService ?: run {
+            // Fallback a estado local si no hay servicio aún
+            isShuffleEnabled = !isShuffleEnabled
+            updateShuffleButton()
+            // Guardar provisionalmente; el servicio sincronizará al conectarse
+            val prefs = getSharedPreferences("player_prefs", MODE_PRIVATE)
+            prefs.edit { putBoolean("shuffle_mode", isShuffleEnabled) }
+            android.util.Log.d("PlayerActivity", "[DEBUG_LOG] toggleShuffle (no service): Saved to SharedPreferences = $isShuffleEnabled")
+            return
         }
+        val newState = !(service.getShuffleEnabled())
+        android.util.Log.d("PlayerActivity", "[DEBUG_LOG] toggleShuffle: Request setShuffleEnabled = $newState")
+        service.setShuffleEnabled(newState)
+        // Sync local + UI to service state
+        isShuffleEnabled = service.getShuffleEnabled()
+        updateShuffleButton()
     }
 
     private fun toggleRepeat() {

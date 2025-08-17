@@ -28,6 +28,7 @@ import com.arantec.castafiore.utils.StatusBarUtils
 import kotlinx.coroutines.launch
 import com.bumptech.glide.Glide
 import java.util.Locale
+import kotlin.random.Random
 
 class PlaylistDetailFragment : Fragment() {
 
@@ -222,9 +223,12 @@ class PlaylistDetailFragment : Fragment() {
             if (isPlaylistQueuePlaying()) {
                 if (service.isPlaying()) service.pause() else service.play()
             } else if (playlistSongs.isNotEmpty()) {
+                val startIndex = if (service.getShuffleEnabled() && playlistSongs.size > 1) {
+                    Random.nextInt(playlistSongs.size)
+                } else 0
                 service.playQueue(
                     playlistSongs,
-                    0,
+                    startIndex,
                     MusicService.PlaybackSource(
                         MusicService.SourceType.PLAYLIST,
                         playlistId,

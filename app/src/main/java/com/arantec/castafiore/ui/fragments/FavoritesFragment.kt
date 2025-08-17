@@ -23,6 +23,7 @@ import com.arantec.castafiore.utils.StatusBarUtils
 import kotlinx.coroutines.launch
 import com.bumptech.glide.Glide
 import java.util.Locale
+import kotlin.random.Random
 
 class FavoritesFragment : Fragment() {
 
@@ -125,9 +126,12 @@ class FavoritesFragment : Fragment() {
             if (isFavoritesQueuePlaying()) {
                 if (service.isPlaying()) service.pause() else service.play()
             } else if (favoriteSongs.isNotEmpty()) {
+                val startIndex = if (service.getShuffleEnabled() && favoriteSongs.size > 1) {
+                    Random.nextInt(favoriteSongs.size)
+                } else 0
                 service.playQueue(
                     favoriteSongs,
-                    0,
+                    startIndex,
                     MusicService.PlaybackSource(
                         MusicService.SourceType.FAVORITES,
                         null,

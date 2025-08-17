@@ -30,6 +30,7 @@ import kotlinx.coroutines.launch
 import com.arantec.castafiore.utils.StatusBarUtils
 import com.arantec.castafiore.utils.ImageLoader
 import android.view.animation.AlphaAnimation
+import kotlin.random.Random
 
 class AlbumDetailFragment : Fragment() {
 
@@ -509,9 +510,13 @@ class AlbumDetailFragment : Fragment() {
 
     private fun playAlbum() {
         if (albumSongs.isNotEmpty()) {
-            musicService?.playQueue(
+            val service = musicService
+            val startIndex = if (service?.getShuffleEnabled() == true && albumSongs.size > 1) {
+                Random.nextInt(albumSongs.size)
+            } else 0
+            service?.playQueue(
                 albumSongs,
-                0,
+                startIndex,
                 com.arantec.castafiore.service.MusicService.PlaybackSource(
                     com.arantec.castafiore.service.MusicService.SourceType.ALBUM,
                     currentAlbum?.id,

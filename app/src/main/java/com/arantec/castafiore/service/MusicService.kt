@@ -49,6 +49,8 @@ class MusicService : Service() {
     private var originalQueue: MutableList<Song>? = null
     private var progressJob: Job? = null
     private var prefetchedSimilar: List<Song>? = null
+    // Track shuffle state centrally in the service
+    private var isShuffleEnabled: Boolean = false
 
     // Scrobble tracking
     private var scrobbleSentForCurrent = false
@@ -168,6 +170,10 @@ class MusicService : Service() {
 
         updatePlaybackState()
         updateMediaMetadata()
+
+        // Restore shuffle preference
+        val prefs = getSharedPreferences("player_prefs", Context.MODE_PRIVATE)
+        isShuffleEnabled = prefs.getBoolean("shuffle_mode", false)
     }
 
     override fun onBind(intent: Intent): IBinder {
@@ -348,10 +354,25 @@ class MusicService : Service() {
         currentSong = if (songs.isNotEmpty()) songs[startIndex] else null
         // Set playback source (default to SONGS if not provided)
         playbackSource = source ?: PlaybackSource(SourceType.SONGS, null, "Canciones")
-        notifySongChanged(currentSong)
-        notifyQueueChanged(playlist.toList())
 
-        // Usar startNewSong para asegurar que se prepare correctamente
+        // If shuffle is enabled, reorder queue so current is first and the rest are shuffled
+        if (isShuffleEnabled && songs.size > 1 && startIndex in songs.indices) {
+            originalQueue = songs.toMutableList()
+            val current = songs[startIndex]
+            val others = songs.filterIndexed { index, _ -> index != startIndex }.shuffled()
+            playlist.clear()
+            playlist.addAll(listOf(current) + others)
+            currentIndex = 0
+            currentSong = current
+            notifyQueueChanged(playlist.toList())
+        } else {
+            // No shuffle: keep original ordering and index
+            originalQueue = null
+            notifyQueueChanged(playlist.toList())
+        }
+        notifySongChanged(currentSong)
+
+        // Ensure ExoPlayer starts from the selected/current item and queues the next
         startNewSong()
         isPlaying = true
         updatePlaybackState()
@@ -366,6 +387,7 @@ class MusicService : Service() {
         currentSong = song
         // Set playback source (default to SONGS if not provided)
         playbackSource = source ?: PlaybackSource(SourceType.SONGS, null, "Canciones")
+        originalQueue = null
         notifySongChanged(currentSong)
         notifyQueueChanged(playlist.toList())
 
@@ -529,6 +551,7 @@ class MusicService : Service() {
     fun getQueue(): List<Song> = playlist.toList()
     fun getCurrentIndex(): Int = currentIndex
     fun getPlaybackSource(): PlaybackSource? = playbackSource
+    fun getShuffleEnabled(): Boolean = isShuffleEnabled
 
     // Métodos públicos para registrar listeners (compatibilidad con ArtistDetailFragment)
     fun setOnSongChangeListener(listener: ((Song?) -> Unit)?) {
@@ -604,6 +627,11 @@ class MusicService : Service() {
     fun addToQueue(song: Song) {
         playlist.add(song)
         notifyQueueChanged(playlist.toList())
+        // If shuffle is on, keep the new addition at the end of remaining order; no immediate reshuffle here.
+        if (isShuffleEnabled) {
+            // Recalcular siguiente ítem para mantener coherencia
+            enqueueNextMediaItem()
+        }
     }
 
     fun playNext(song: Song) {
@@ -611,6 +639,7 @@ class MusicService : Service() {
         if (insertPosition <= playlist.size) {
             playlist.add(insertPosition, song)
             notifyQueueChanged(playlist.toList())
+            enqueueNextMediaItem()
         } else {
             addToQueue(song)
         }
@@ -627,6 +656,8 @@ class MusicService : Service() {
         playlist.clear()
         playlist.addAll(played + remaining)
         notifyQueueChanged(playlist.toList())
+        // Asegurar que el próximo ítem en ExoPlayer siga la nueva cola
+        enqueueNextMediaItem()
     }
 
     fun unshuffleQueue() {
@@ -639,6 +670,8 @@ class MusicService : Service() {
         currentIndex = current?.let { song -> playlist.indexOfFirst { it.id == song.id } }.takeIf { it != null && it >= 0 } ?: 0
         currentSong = playlist.getOrNull(currentIndex)
         notifyQueueChanged(playlist.toList())
+        // Re-sincronizar próximo ítem en ExoPlayer
+        enqueueNextMediaItem()
     }
 
     fun setRepeatMode(mode: RepeatMode) {
@@ -655,6 +688,20 @@ class MusicService : Service() {
     }
 
     fun getRepeatMode(): RepeatMode = repeatMode
+
+    fun setShuffleEnabled(enabled: Boolean) {
+        if (isShuffleEnabled == enabled) return
+        isShuffleEnabled = enabled
+        val prefs = getSharedPreferences("player_prefs", Context.MODE_PRIVATE)
+        prefs.edit().putBoolean("shuffle_mode", isShuffleEnabled).apply()
+        if (enabled) {
+            shuffleQueue()
+        } else {
+            unshuffleQueue()
+        }
+        // Asegurar que el próximo MediaItem concuerde con la nueva configuración
+        enqueueNextMediaItem()
+    }
 
     fun playFromQueue(index: Int) {
         if (index in 0 until playlist.size) {
@@ -688,6 +735,7 @@ class MusicService : Service() {
                 }
             }
             notifyQueueChanged(playlist.toList())
+            enqueueNextMediaItem()
         }
     }
 
@@ -705,6 +753,7 @@ class MusicService : Service() {
             }
 
             notifyQueueChanged(playlist.toList())
+            enqueueNextMediaItem()
         }
     }
 

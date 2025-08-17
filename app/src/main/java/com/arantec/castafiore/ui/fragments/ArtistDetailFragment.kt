@@ -35,6 +35,7 @@ import com.bumptech.glide.Glide
 import java.util.Locale
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.random.Random
 
 class ArtistDetailFragment : Fragment() {
 
@@ -491,9 +492,13 @@ class ArtistDetailFragment : Fragment() {
                 }
             } else {
                 // Reproducir todas las canciones populares del artista
-                musicService?.playQueue(
+                val service = musicService
+                val startIndex = if (service?.getShuffleEnabled() == true && topSongs.size > 1) {
+                    Random.nextInt(topSongs.size)
+                } else 0
+                service?.playQueue(
                     topSongs,
-                    0,
+                    startIndex,
                     MusicService.PlaybackSource(
                         MusicService.SourceType.ARTIST,
                         artistId,
