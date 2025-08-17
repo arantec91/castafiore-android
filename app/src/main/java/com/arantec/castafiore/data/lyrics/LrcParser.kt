@@ -4,7 +4,8 @@ package com.arantec.castafiore.data.lyrics
  * Simple LRC parser that supports multiple timestamps per line.
  */
 object LrcParser {
-    private val timeTagRegex = Regex("\\[(\\d{1,2}):(\\d{1,2})(?:[.:](\\d{1,3}))?]", RegexOption.IGNORE_CASE)
+    // Support: [mm:ss], [mm:ss.SSS], [mm:ss:SS] (centiseconds), [hh:mm:ss], [hh:mm:ss.SSS], fraction with '.' or ','
+    private val timeTagRegex = Regex("\\[(?:(\\d{1,2}):)?(\\d{1,2}):(\\d{1,2})(?:[.,](\\d{1,3}))?]", RegexOption.IGNORE_CASE)
 
     fun parse(raw: String): List<LyricsLine> {
         val lines = mutableListOf<Pair<Long, String>>()
@@ -17,15 +18,17 @@ object LrcParser {
             val text = line.replace(timeTagRegex, "").trim()
             if (text.isEmpty()) return@forEach
             matches.forEach { m ->
-                val min = m.groupValues[1].toLongOrNull() ?: 0L
-                val sec = m.groupValues[2].toLongOrNull() ?: 0L
-                val fracStr = m.groupValues.getOrNull(3)
+                val hours = m.groupValues.getOrNull(1)?.toLongOrNull() ?: 0L
+                val min = m.groupValues.getOrNull(2)?.toLongOrNull() ?: 0L
+                val sec = m.groupValues.getOrNull(3)?.toLongOrNull() ?: 0L
+                val fracStr = m.groupValues.getOrNull(4)
                 val ms = when {
                     fracStr.isNullOrBlank() -> 0L
-                    fracStr.length == 3 -> fracStr.toLongOrNull() ?: 0L
-                    else -> (fracStr.toLongOrNull() ?: 0L) * 10L // e.g. 12 -> 120ms, 12 centiseconds
+                    fracStr.length >= 3 -> fracStr.take(3).toLongOrNull() ?: 0L
+                    fracStr.length == 2 -> (fracStr.toLongOrNull() ?: 0L) * 10L // centiseconds
+                    else -> (fracStr.toLongOrNull() ?: 0L) * 100L // deciseconds
                 }
-                val timeMs = (min * 60_000L) + (sec * 1_000L) + ms
+                val timeMs = (hours * 3_600_000L) + (min * 60_000L) + (sec * 1_000L) + ms
                 lines.add(timeMs to text)
             }
         }
@@ -48,4 +51,3 @@ data class LyricsLine(
     val text: String,
     val durationMs: Long
 )
-

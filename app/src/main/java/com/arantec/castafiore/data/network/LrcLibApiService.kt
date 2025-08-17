@@ -48,8 +48,7 @@ data class LrcLibItem(
     val trackName: String?,
     val artistName: String?,
     val albumName: String?,
-    val duration: Int?,
+    val duration: Double?,
     val syncedLyrics: String?,
     val plainLyrics: String?
 )
-
