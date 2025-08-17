@@ -7,7 +7,6 @@ import android.content.ServiceConnection
 import android.os.Bundle
 import android.os.IBinder
 import android.view.LayoutInflater
-import android.view.MenuItem
 import android.view.View
 import android.view.ViewGroup
 import android.widget.EditText
@@ -95,27 +94,25 @@ class PlaylistDetailFragment : Fragment() {
         setupToolbar()
         setupRecyclerView()
         setupFab()
+        setupMoreButton()
         // Defer binding to onStart so only visible fragment attaches listeners
         // bindMusicService()
         loadPlaylist()
     }
 
+    private fun setupMoreButton() {
+        binding.btnMore.setOnClickListener {
+            com.arantec.castafiore.ui.dialogs.PlaylistOptionsBottomSheet()
+                .setOnEditNameClickListener { showRenameDialog() }
+                .setOnDeleteListClickListener { confirmDeletePlaylist() }
+                // Do not set download listener yet as requested
+                .show(childFragmentManager, "PlaylistOptionsBottomSheet")
+        }
+    }
+
     private fun setupToolbar() {
         binding.toolbar.setNavigationOnClickListener { findNavController().popBackStack() }
-        binding.toolbar.inflateMenu(R.menu.menu_playlist_detail)
-        binding.toolbar.setOnMenuItemClickListener { item: MenuItem ->
-            when (item.itemId) {
-                R.id.action_edit_playlist -> {
-                    showRenameDialog()
-                    true
-                }
-                R.id.action_delete_playlist -> {
-                    confirmDeletePlaylist()
-                    true
-                }
-                else -> false
-            }
-        }
+        // Removed toolbar menu to eliminate "more options" and "delete playlist" icons
         binding.tvTitle.text = playlistName ?: getString(R.string.app_name)
         binding.gradientBackground.setBackgroundColor(0xFF121212.toInt())
     }
@@ -136,7 +133,80 @@ class PlaylistDetailFragment : Fragment() {
                 }
             },
             onSongMoreClick = { song ->
-                showSongOptionsWithRemove(song)
+                // Abrir directamente el bottom sheet de opciones de canción, incluyendo "Eliminar de la playlist"
+                val bottomSheet = com.arantec.castafiore.ui.dialogs.SongOptionsBottomSheet
+                    .newInstance(song, false)
+                    .setOnAddToQueueClickListener { selectedSong ->
+                        val service = musicService
+                        if (service != null) {
+                            service.addToQueue(selectedSong)
+                            Toast.makeText(requireContext(), getString(R.string.added_to_queue, selectedSong.title), Toast.LENGTH_SHORT).show()
+                        } else {
+                            Toast.makeText(requireContext(), getString(R.string.music_service_unavailable), Toast.LENGTH_SHORT).show()
+                            bindMusicService()
+                        }
+                    }
+                    .setOnPlayNextClickListener { selectedSong ->
+                        val service = musicService
+                        if (service != null) {
+                            service.playNext(selectedSong)
+                            Toast.makeText(requireContext(), getString(R.string.will_play_next, selectedSong.title), Toast.LENGTH_SHORT).show()
+                        } else {
+                            Toast.makeText(requireContext(), getString(R.string.music_service_unavailable), Toast.LENGTH_SHORT).show()
+                            bindMusicService()
+                        }
+                    }
+                    .setOnAddToPlaylistClickListener { selectedSong ->
+                        com.arantec.castafiore.ui.dialogs.PlaylistSelectorBottomSheet
+                            .newInstance(selectedSong)
+                            .show(childFragmentManager, "PlaylistSelectorBottomSheet")
+                    }
+                    .setOnViewAlbumClickListener { selectedSong ->
+                        val albumId = selectedSong.albumId
+                        if (!albumId.isNullOrEmpty()) {
+                            viewLifecycleOwner.lifecycleScope.launch {
+                                musicRepository.getAlbumDetail(albumId).fold(
+                                    onSuccess = { album ->
+                                        val args = Bundle().apply { putParcelable("album", album) }
+                                        try {
+                                            findNavController().navigate(R.id.albumDetailFragment, args)
+                                        } catch (_: Exception) {
+                                            Toast.makeText(requireContext(), "No se pudo abrir el álbum", Toast.LENGTH_SHORT).show()
+                                        }
+                                    },
+                                    onFailure = {
+                                        Toast.makeText(requireContext(), "No se pudo abrir el álbum", Toast.LENGTH_SHORT).show()
+                                    }
+                                )
+                            }
+                        } else {
+                            Toast.makeText(requireContext(), "Álbum no disponible", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                    .setOnViewArtistClickListener { selectedSong ->
+                        val artistId = selectedSong.artistId
+                        if (!artistId.isNullOrEmpty()) {
+                            val args = Bundle().apply {
+                                putString("artistId", artistId)
+                                putString("artistName", selectedSong.artist)
+                            }
+                            try {
+                                findNavController().navigate(R.id.artistDetailFragment, args)
+                            } catch (_: Exception) {
+                                Toast.makeText(requireContext(), "No se pudo abrir el artista", Toast.LENGTH_SHORT).show()
+                            }
+                        } else {
+                            Toast.makeText(requireContext(), "Artista no disponible", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                    .setOnSongInfoClickListener { selectedSong ->
+                        showSongInfo(selectedSong)
+                    }
+                    .setOnRemoveFromPlaylistClickListener { selectedSong ->
+                        // Eliminar la canción de la playlist directamente
+                        confirmRemoveSong(selectedSong)
+                    }
+                bottomSheet.show(childFragmentManager, "SongOptionsBottomSheet")
             }
         )
         binding.rvSongs.apply {
@@ -301,19 +371,6 @@ class PlaylistDetailFragment : Fragment() {
         }
     }
 
-    private fun showSongOptionsWithRemove(song: Song) {
-        // Show a small chooser: default options or remove from playlist
-        val options = arrayOf(getString(R.string.more_options), getString(R.string.remove_from_playlist))
-        AlertDialog.Builder(requireContext())
-            .setItems(options) { dialog, which ->
-                when (which) {
-                    0 -> showSongOptions(song)
-                    1 -> confirmRemoveSong(song)
-                }
-            }
-            .show()
-    }
-
     private fun confirmRemoveSong(song: Song) {
         val id = playlistId ?: return
         val index = playlistSongs.indexOfFirst { it.id == song.id }
@@ -339,111 +396,6 @@ class PlaylistDetailFragment : Fragment() {
                 }
             )
         }
-    }
-
-    private fun showSongOptions(song: Song) {
-        val bottomSheet = com.arantec.castafiore.ui.dialogs.SongOptionsBottomSheet
-            .newInstance(song, false)
-            .setOnDownloadClickListener { selectedSong ->
-                val downloadManager = com.arantec.castafiore.data.download.SongDownloadManager.getInstance(requireContext())
-                when {
-                    downloadManager.isSongDownloaded(selectedSong.id) -> {
-                        Toast.makeText(requireContext(), getString(R.string.song_already_downloaded), Toast.LENGTH_SHORT).show()
-                    }
-                    downloadManager.isSongDownloading(selectedSong.id) -> {
-                        downloadManager.cancelDownload(selectedSong.id)
-                        Toast.makeText(requireContext(), getString(R.string.download_canceled, selectedSong.title), Toast.LENGTH_SHORT).show()
-                    }
-                    else -> {
-                        downloadManager.downloadSong(selectedSong)
-                        Toast.makeText(requireContext(), getString(R.string.download_started, selectedSong.title), Toast.LENGTH_SHORT).show()
-                    }
-                }
-            }
-            .setOnDeleteDownloadClickListener { selectedSong ->
-                val downloadManager = com.arantec.castafiore.data.download.SongDownloadManager.getInstance(requireContext())
-                if (downloadManager.isSongDownloaded(selectedSong.id)) {
-                    val builder = AlertDialog.Builder(requireContext())
-                    builder.setTitle(R.string.delete_download)
-                    builder.setMessage(getString(R.string.delete_download_confirm, selectedSong.title))
-                    builder.setPositiveButton(R.string.delete) { _: android.content.DialogInterface, _: Int ->
-                        val success = downloadManager.deleteSong(selectedSong.id)
-                        val msg = if (success) R.string.download_deleted else R.string.download_delete_error
-                        Toast.makeText(requireContext(), getString(msg), Toast.LENGTH_SHORT).show()
-                    }
-                    builder.setNegativeButton(R.string.cancel, null)
-                    builder.show()
-                } else {
-                    Toast.makeText(requireContext(), getString(R.string.song_not_downloaded), Toast.LENGTH_SHORT).show()
-                }
-            }
-            .setOnAddToQueueClickListener { selectedSong ->
-                val service = musicService
-                if (service != null) {
-                    service.addToQueue(selectedSong)
-                    Toast.makeText(requireContext(), getString(R.string.added_to_queue, selectedSong.title), Toast.LENGTH_SHORT).show()
-                } else {
-                    Toast.makeText(requireContext(), getString(R.string.music_service_unavailable), Toast.LENGTH_SHORT).show()
-                    bindMusicService()
-                }
-            }
-            .setOnPlayNextClickListener { selectedSong ->
-                val service = musicService
-                if (service != null) {
-                    service.playNext(selectedSong)
-                    Toast.makeText(requireContext(), getString(R.string.will_play_next, selectedSong.title), Toast.LENGTH_SHORT).show()
-                } else {
-                    Toast.makeText(requireContext(), getString(R.string.music_service_unavailable), Toast.LENGTH_SHORT).show()
-                    bindMusicService()
-                }
-            }
-            .setOnAddToPlaylistClickListener { selectedSong ->
-                com.arantec.castafiore.ui.dialogs.PlaylistSelectorBottomSheet
-                    .newInstance(selectedSong)
-                    .show(childFragmentManager, "PlaylistSelectorBottomSheet")
-            }
-            .setOnViewAlbumClickListener { selectedSong ->
-                val albumId = selectedSong.albumId
-                if (!albumId.isNullOrEmpty()) {
-                    viewLifecycleOwner.lifecycleScope.launch {
-                        musicRepository.getAlbumDetail(albumId).fold(
-                            onSuccess = { album ->
-                                val args = Bundle().apply { putParcelable("album", album) }
-                                try {
-                                    findNavController().navigate(R.id.albumDetailFragment, args)
-                                } catch (_: Exception) {
-                                    Toast.makeText(requireContext(), "No se pudo abrir el álbum", Toast.LENGTH_SHORT).show()
-                                }
-                            },
-                            onFailure = {
-                                Toast.makeText(requireContext(), "No se pudo abrir el álbum", Toast.LENGTH_SHORT).show()
-                            }
-                        )
-                    }
-                } else {
-                    Toast.makeText(requireContext(), "Álbum no disponible", Toast.LENGTH_SHORT).show()
-                }
-            }
-            .setOnViewArtistClickListener { selectedSong ->
-                val artistId = selectedSong.artistId
-                if (!artistId.isNullOrEmpty()) {
-                    val args = Bundle().apply {
-                        putString("artistId", artistId)
-                        putString("artistName", selectedSong.artist)
-                    }
-                    try {
-                        findNavController().navigate(R.id.artistDetailFragment, args)
-                    } catch (_: Exception) {
-                        Toast.makeText(requireContext(), "No se pudo abrir el artista", Toast.LENGTH_SHORT).show()
-                    }
-                } else {
-                    Toast.makeText(requireContext(), "Artista no disponible", Toast.LENGTH_SHORT).show()
-                }
-            }
-            .setOnSongInfoClickListener { selectedSong ->
-                showSongInfo(selectedSong)
-            }
-        bottomSheet.show(childFragmentManager, "SongOptionsBottomSheet")
     }
 
     private fun showSongInfo(song: Song) {

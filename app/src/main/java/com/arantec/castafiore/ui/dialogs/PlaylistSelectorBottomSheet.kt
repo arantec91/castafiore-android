@@ -206,6 +206,31 @@ class PlaylistSelectorBottomSheet : BottomSheetDialogFragment() {
         song?.let { currentSong ->
             lifecycleScope.launch {
                 try {
+                    // Primero, evitar duplicados: verificar si la canción ya está en la playlist
+                    val existingSongsResult = musicRepository.getPlaylistSongs(playlist.id)
+                    existingSongsResult.fold(
+                        onSuccess = { songs ->
+                            val alreadyInPlaylist = songs.any { it.id == currentSong.id }
+                            if (alreadyInPlaylist) {
+                                Toast.makeText(
+                                    requireContext(),
+                                    "\"${currentSong.title}\" ya está en \"${playlist.name}\"",
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                                return@launch
+                            }
+                        },
+                        onFailure = { error ->
+                            Toast.makeText(
+                                requireContext(),
+                                "No se pudo verificar duplicados: ${error.message}",
+                                Toast.LENGTH_SHORT
+                            ).show()
+                            return@launch
+                        }
+                    )
+
+                    // Si no está, agregarla
                     val result = musicRepository.addSongToPlaylist(playlist.id, currentSong.id)
                     result.fold(
                         onSuccess = {

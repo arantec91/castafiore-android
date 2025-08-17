@@ -175,6 +175,36 @@
 
         </LinearLayout>
 
+        <!-- Eliminar de la playlist -->
+        <LinearLayout
+            android:id="@+id/optionRemoveFromPlaylist"
+            android:layout_width="match_parent"
+            android:layout_height="56dp"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingHorizontal="20dp"
+            android:background="?attr/selectableItemBackground"
+            android:clickable="true"
+            android:focusable="true">
+
+            <ImageView
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:layout_marginEnd="16dp"
+                android:src="@drawable/ic_delete"
+                app:tint="#FFFFFF"
+                android:contentDescription="@string/remove_from_playlist" />
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/remove_from_playlist"
+                android:textColor="#FFFFFF"
+                android:textSize="16sp" />
+
+        </LinearLayout>
+
         <!-- Ver álbum -->
         <LinearLayout
             android:id="@+id/optionViewAlbum"

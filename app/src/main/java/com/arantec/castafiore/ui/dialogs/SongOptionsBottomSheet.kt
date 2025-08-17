@@ -37,6 +37,7 @@ class SongOptionsBottomSheet : BottomSheetDialogFragment() {
     private var onViewArtistClick: ((Song) -> Unit)? = null
     private var onShareClick: ((Song) -> Unit)? = null
     private var onSongInfoClick: ((Song) -> Unit)? = null
+    private var onRemoveFromPlaylistClick: ((Song) -> Unit)? = null // Nuevo callback: eliminar de playlist
 
     companion object {
         private const val ARG_SONG = "song"
@@ -117,6 +118,16 @@ class SongOptionsBottomSheet : BottomSheetDialogFragment() {
             if (hidePlayNext) {
                 binding.optionPlayNext.visibility = View.GONE
             }
+
+            // Mostrar/ocultar "Eliminar de la playlist" según disponibilidad de callback
+            val inPlaylistContext = onRemoveFromPlaylistClick != null
+            binding.optionRemoveFromPlaylist.visibility = if (inPlaylistContext) View.VISIBLE else View.GONE
+            // Si ya está en la lista (contexto playlist), ocultar "Agregar a playlist" para evitar confusión
+            if (inPlaylistContext) {
+                binding.optionAddToPlaylist.visibility = View.GONE
+            } else {
+                binding.optionAddToPlaylist.visibility = View.VISIBLE
+            }
         }
     }
 
@@ -177,6 +188,12 @@ class SongOptionsBottomSheet : BottomSheetDialogFragment() {
             // Agregar a playlist
             binding.optionAddToPlaylist.setOnClickListener {
                 onAddToPlaylistClick?.invoke(currentSong)
+                dismiss()
+            }
+
+            // Eliminar de la playlist
+            binding.optionRemoveFromPlaylist.setOnClickListener {
+                onRemoveFromPlaylistClick?.invoke(currentSong)
                 dismiss()
             }
 
@@ -307,6 +324,12 @@ class SongOptionsBottomSheet : BottomSheetDialogFragment() {
 
     fun setOnSongInfoClickListener(listener: (Song) -> Unit): SongOptionsBottomSheet {
         onSongInfoClick = listener
+        return this
+    }
+
+    // Nuevo setter: eliminar de playlist
+    fun setOnRemoveFromPlaylistClickListener(listener: (Song) -> Unit): SongOptionsBottomSheet {
+        onRemoveFromPlaylistClick = listener
         return this
     }
 

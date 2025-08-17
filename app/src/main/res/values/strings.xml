@@ -124,4 +124,8 @@
 
     <!-- Similar Artists -->
     <string name="similar_artists_title">Artistas similares</string>
+
+    <!-- Playlist options bottom sheet -->
+    <string name="edit_name">Editar nombre</string>
+    <string name="delete_list">Eliminar Lista</string>
 </resources>
