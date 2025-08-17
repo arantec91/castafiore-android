@@ -88,8 +88,8 @@ class FavoritesFragment : Fragment() {
         binding.toolbar.setNavigationOnClickListener {
             findNavController().popBackStack()
         }
-        // Fondo estático oscuro para mantener coherencia con AlbumDetail
-        binding.gradientBackground.setBackgroundColor(0xFF121212.toInt())
+        // Removed solid color override to allow XML gradient to show
+        // binding.gradientBackground.setBackgroundColor(0xFF121212.toInt())
     }
 
     private fun setupRecyclerView() {
