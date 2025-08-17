@@ -12,6 +12,8 @@
         android:id="@+id/ivAlbumCover"
         android:layout_width="140dp"
         android:layout_height="140dp"
+        android:background="@drawable/rounded_corners_8dp"
+        android:clipToOutline="true"
         android:scaleType="centerCrop"
         android:src="@drawable/ic_album_placeholder" />
 

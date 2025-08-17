@@ -12,7 +12,7 @@
     <com.google.android.material.appbar.AppBarLayout
         android:id="@+id/appBarLayout"
         android:layout_width="match_parent"
-        android:layout_height="450dp"
+        android:layout_height="386dp"
         android:fitsSystemWindows="true"
         android:background="@color/dark_background"
         app:elevation="4dp">
@@ -53,9 +53,11 @@
                     android:layout_marginTop="60dp"
                     android:scaleType="centerCrop"
                     android:elevation="8dp"
-                    android:background="@android:color/transparent"
+                    android:background="@drawable/rounded_corners_12dp"
+                    android:clipToOutline="true"
+                    android:outlineProvider="background"
                     android:contentDescription="@string/album_icon"
-                    tools:src="@drawable/ic_music_note" />
+                    tools:src="@drawable/ic_album_placeholder"/>
 
             </RelativeLayout>
 
@@ -92,7 +94,7 @@
                 android:orientation="vertical"
                 android:paddingStart="20dp"
                 android:paddingEnd="20dp"
-                android:paddingTop="24dp"
+                android:paddingTop="16dp"
                 android:paddingBottom="16dp">
 
                 <TextView
