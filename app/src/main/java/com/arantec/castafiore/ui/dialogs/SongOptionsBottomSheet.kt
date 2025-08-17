@@ -4,8 +4,6 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.widget.ImageView
-import android.widget.TextView
 import android.widget.Toast
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Dispatchers
@@ -14,7 +12,6 @@ import kotlinx.coroutines.withContext
 import com.arantec.castafiore.R
 import com.arantec.castafiore.data.models.Song
 import com.arantec.castafiore.data.repository.MusicRepository
-import com.arantec.castafiore.data.download.SongDownloadManager
 import com.arantec.castafiore.databinding.BottomSheetSongOptionsBinding
 import com.bumptech.glide.Glide
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment
@@ -33,8 +30,6 @@ class SongOptionsBottomSheet : BottomSheetDialogFragment() {
     private var hidePlayNext = false
 
     // Callbacks para las acciones
-    private var onDownloadClick: ((Song) -> Unit)? = null
-    private var onDeleteDownloadClick: ((Song) -> Unit)? = null
     private var onAddToQueueClick: ((Song) -> Unit)? = null
     private var onPlayNextClick: ((Song) -> Unit)? = null
     private var onAddToPlaylistClick: ((Song) -> Unit)? = null
@@ -115,9 +110,6 @@ class SongOptionsBottomSheet : BottomSheetDialogFragment() {
             // Configurar botón de favorito
             updateFavoriteButton()
 
-            // Configurar opciones de descarga según el estado actual
-            updateDownloadOptions(currentSong)
-
             // Ocultar opciones según las variables de control
             if (hideAddToQueue) {
                 binding.optionAddToQueue.visibility = View.GONE
@@ -162,47 +154,12 @@ class SongOptionsBottomSheet : BottomSheetDialogFragment() {
         }
     }
 
-    private fun updateDownloadOptions(song: Song) {
-        val downloadManager = SongDownloadManager.getInstance(requireContext())
-
-        when {
-            downloadManager.isSongDownloaded(song.id) -> {
-                // La canción está descargada - mostrar "Eliminar descarga"
-                binding.optionDownload.visibility = View.GONE
-                binding.optionDeleteDownload.visibility = View.VISIBLE
-            }
-            downloadManager.isSongDownloading(song.id) -> {
-                // La canción se está descargando - ocultar ambas opciones o mostrar solo descargar
-                // para simplificar, mantenemos la opción de descargar visible para cancelar
-                binding.optionDownload.visibility = View.VISIBLE
-                binding.optionDeleteDownload.visibility = View.GONE
-            }
-            else -> {
-                // La canción no está descargada - mostrar "Descargar"
-                binding.optionDownload.visibility = View.VISIBLE
-                binding.optionDeleteDownload.visibility = View.GONE
-            }
-        }
-    }
-
     private fun setupClickListeners() {
         song?.let { currentSong ->
 
             // Botón de favorito en el header
             binding.btnSongFavorite.setOnClickListener {
                 toggleSongFavorite(currentSong)
-            }
-
-            // Descargar
-            binding.optionDownload.setOnClickListener {
-                onDownloadClick?.invoke(currentSong)
-                dismiss()
-            }
-
-            // Eliminar descarga
-            binding.optionDeleteDownload.setOnClickListener {
-                onDeleteDownloadClick?.invoke(currentSong)
-                dismiss()
             }
 
             // Agregar a cola
@@ -306,13 +263,15 @@ class SongOptionsBottomSheet : BottomSheetDialogFragment() {
     }
 
     // Métodos para configurar los callbacks
-    fun setOnDownloadClickListener(listener: (Song) -> Unit): SongOptionsBottomSheet {
-        onDownloadClick = listener
+    @Deprecated("Las opciones de descarga han sido eliminadas de la UI; este método no hace nada.")
+    fun setOnDownloadClickListener(@Suppress("UNUSED_PARAMETER") listener: (Song) -> Unit): SongOptionsBottomSheet {
+        // No-op
         return this
     }
 
-    fun setOnDeleteDownloadClickListener(listener: (Song) -> Unit): SongOptionsBottomSheet {
-        onDeleteDownloadClick = listener
+    @Deprecated("Las opciones de descarga han sido eliminadas de la UI; este método no hace nada.")
+    fun setOnDeleteDownloadClickListener(@Suppress("UNUSED_PARAMETER") listener: (Song) -> Unit): SongOptionsBottomSheet {
+        // No-op
         return this
     }
 
