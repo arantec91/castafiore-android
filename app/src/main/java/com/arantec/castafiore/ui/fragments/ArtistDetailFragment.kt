@@ -5,6 +5,8 @@ import android.content.Context
 import android.content.Intent
 import android.content.ServiceConnection
 import android.graphics.Color
+import android.graphics.Bitmap
+import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
 import android.os.IBinder
 import android.view.LayoutInflater
@@ -31,7 +33,11 @@ import com.arantec.castafiore.ui.dialogs.SongOptionsBottomSheet
 import com.arantec.castafiore.utils.StatusBarUtils
 import com.arantec.castafiore.utils.ImageLoader
 import androidx.core.graphics.toColorInt
+import androidx.palette.graphics.Palette
 import com.bumptech.glide.Glide
+import com.bumptech.glide.request.target.CustomTarget
+import com.bumptech.glide.request.transition.Transition
+import android.graphics.drawable.Drawable
 import java.util.Locale
 import kotlin.math.max
 import kotlin.math.min
@@ -410,10 +416,74 @@ class ArtistDetailFragment : Fragment() {
 
         ImageLoader.loadArtistImageForFragment(this, binding.ivArtistImage, artistCoverUrl)
 
-        // Aplicar color estático al fondo y status bar
-        setStaticBackground()
+        // Además, cargar como Bitmap para extraer Palette y aplicar degradado dinámico
+        if (!artistCoverUrl.isNullOrEmpty()) {
+            Glide.with(this)
+                .asBitmap()
+                .load(artistCoverUrl)
+                .into(object : CustomTarget<Bitmap>() {
+                    override fun onResourceReady(resource: Bitmap, transition: Transition<in Bitmap>?) {
+                        if (!isAdded || _binding == null) return
+                        applyDynamicAppBarGradientFromBitmap(resource)
+                    }
+
+                    override fun onLoadCleared(placeholder: Drawable?) { /* no-op */ }
+                    override fun onLoadFailed(errorDrawable: Drawable?) { setStaticBackground() }
+                })
+        } else {
+            // Aplicar color estático si no hay imagen
+            setStaticBackground()
+        }
     }
 
+    private fun applyDynamicAppBarGradientFromBitmap(bitmap: Bitmap) {
+        Palette.from(bitmap).generate { palette ->
+            if (!isAdded || _binding == null) return@generate
+
+            val darkMuted = palette?.darkMutedSwatch?.rgb
+                ?: palette?.mutedSwatch?.rgb
+                ?: palette?.darkVibrantSwatch?.rgb
+                ?: "#2A2A2A".toColorInt()
+
+            applyAppBarGradient(darkMuted)
+        }
+    }
+
+    private fun applyAppBarGradient(topColor: Int) {
+        val baseColor = "#121212".toColorInt()
+
+        val appBarGradient = GradientDrawable(
+            GradientDrawable.Orientation.BOTTOM_TOP,
+            intArrayOf(baseColor, topColor)
+        ).apply {
+            shape = GradientDrawable.RECTANGLE
+            gradientType = GradientDrawable.LINEAR_GRADIENT
+            setDither(true)
+        }
+
+        binding.appBarLayout.background = appBarGradient
+
+        // También aplicar detrás de la imagen para mayor cohesión visual
+        val bgGradient = GradientDrawable(
+            GradientDrawable.Orientation.BOTTOM_TOP,
+            intArrayOf(baseColor, topColor)
+        ).apply {
+            shape = GradientDrawable.RECTANGLE
+            gradientType = GradientDrawable.LINEAR_GRADIENT
+            setDither(true)
+        }
+        binding.gradientBackground.background = bgGradient
+
+        // Mantener scrims oscuros para legibilidad
+        binding.collapsingToolbar.setContentScrimColor(baseColor)
+        binding.collapsingToolbar.setStatusBarScrimColor(baseColor)
+
+        // Asegurar iconos visibles
+        binding.toolbar.navigationIcon?.setTint(Color.WHITE)
+
+        // Sincronizar color de status bar
+        StatusBarUtils.setStatusBarColor(this)
+    }
 
     private fun setStaticBackground() {
         // Aplicar el color estático predeterminado al fondo y status bar

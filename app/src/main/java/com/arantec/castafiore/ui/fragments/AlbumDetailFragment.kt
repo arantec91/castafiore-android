@@ -31,6 +31,8 @@ import com.arantec.castafiore.utils.StatusBarUtils
 import com.arantec.castafiore.utils.ImageLoader
 import android.view.animation.AlphaAnimation
 import kotlin.random.Random
+import android.graphics.drawable.GradientDrawable
+import androidx.core.graphics.toColorInt
 
 class AlbumDetailFragment : Fragment() {
 
@@ -494,7 +496,8 @@ class AlbumDetailFragment : Fragment() {
                             binding.ivAlbumCoverLarge.alpha = 0f
                             binding.ivAlbumCoverLarge.setImageBitmap(bitmap)
                             binding.ivAlbumCoverLarge.animate().alpha(1f).setDuration(250).start()
-                            setStaticBackground(bitmap)
+                            // Aplicar degradado dinámico basado en la Palette del cover
+                            applyDynamicAppBarGradientFromBitmap(bitmap)
                         }
                     },
                     onError = {
@@ -519,6 +522,53 @@ class AlbumDetailFragment : Fragment() {
                 setStaticBackground(null)
             }
         }
+    }
+
+    private fun applyDynamicAppBarGradientFromBitmap(bitmap: android.graphics.Bitmap) {
+        Palette.from(bitmap).generate { palette ->
+            if (!isAdded || _binding == null) return@generate
+
+            val darkMuted = palette?.darkMutedSwatch?.rgb
+                ?: palette?.mutedSwatch?.rgb
+                ?: palette?.darkVibrantSwatch?.rgb
+                ?: "#2A2A2A".toColorInt()
+
+            applyAppBarGradient(darkMuted)
+        }
+    }
+
+    private fun applyAppBarGradient(topColor: Int) {
+        val baseColor = "#121212".toColorInt()
+
+        val appBarGradient = GradientDrawable(
+            GradientDrawable.Orientation.BOTTOM_TOP,
+            intArrayOf(baseColor, topColor)
+        ).apply {
+            shape = GradientDrawable.RECTANGLE
+            gradientType = GradientDrawable.LINEAR_GRADIENT
+            setDither(true)
+        }
+        binding.appBarLayout.background = appBarGradient
+
+        val bgGradient = GradientDrawable(
+            GradientDrawable.Orientation.BOTTOM_TOP,
+            intArrayOf(baseColor, topColor)
+        ).apply {
+            shape = GradientDrawable.RECTANGLE
+            gradientType = GradientDrawable.LINEAR_GRADIENT
+            setDither(true)
+        }
+        binding.gradientBackground.background = bgGradient
+
+        // Mantener scrims oscuros para legibilidad
+        binding.collapsingToolbar.setContentScrimColor(baseColor)
+        binding.collapsingToolbar.setStatusBarScrimColor(baseColor)
+
+        // Asegurar iconos visibles
+        binding.toolbar.navigationIcon?.setTint(android.graphics.Color.WHITE)
+
+        // Sincronizar color de status bar
+        StatusBarUtils.setStatusBarColor(this)
     }
 
     private fun setStaticBackground(bitmap: android.graphics.Bitmap? = null) {
