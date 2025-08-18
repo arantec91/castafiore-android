@@ -128,4 +128,12 @@
     <!-- Playlist options bottom sheet -->
     <string name="edit_name">Editar nombre</string>
     <string name="delete_list">Eliminar Lista</string>
+
+    <!-- Audio Quality Settings -->
+    <string name="settings_audio_quality_title">Calidad de audio</string>
+    <string name="settings_audio_quality_desc">Alta: original del servidor. Básica: transcodifica a 128 kbps MP3 para ahorrar datos. Se aplica a nuevas reproducciones.</string>
+    <string name="quality_high_title">Alta calidad</string>
+    <string name="quality_high_desc">Reproduce el archivo original del servidor (por ejemplo, 320 kbps si está disponible).</string>
+    <string name="quality_basic_title">Calidad básica</string>
+    <string name="quality_basic_desc">Transcodifica a MP3 de 128 kbps para ahorrar datos y ancho de banda.</string>
 </resources>

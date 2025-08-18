@@ -73,6 +73,13 @@ class MusicRepository private constructor(private val context: Context) {
             prefs.edit().putBoolean("continue_with_similar", value).apply()
         }
 
+    // Preferencia de calidad de audio: true = Alta calidad (original), false = Básica (128 kbps)
+    var highQualityEnabled: Boolean
+        get() = prefs.getBoolean("high_quality_enabled", true)
+        set(value) {
+            prefs.edit().putBoolean("high_quality_enabled", value).apply()
+        }
+
     fun isConfigured(): Boolean {
         return !serverUrl.isNullOrEmpty() && !username.isNullOrEmpty() && !password.isNullOrEmpty()
     }

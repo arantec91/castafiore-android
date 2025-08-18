@@ -243,8 +243,13 @@ class MusicService : Service() {
         val song = currentSong ?: return
         val serverUrl = musicRepository.serverUrl ?: return
         val (username, token, salt) = musicRepository.getAuthParams()
-        val streamUrl = song.getStreamUrl(serverUrl, username, token, salt)
-        val cacheKey = "song_${song.id}"
+        // Apply quality preference: high quality = original; basic = 128 kbps mp3
+        val highQuality = musicRepository.highQualityEnabled
+        val maxBitRate = if (highQuality) null else 128
+        val format = if (highQuality) null else "mp3"
+        val streamUrl = song.getStreamUrl(serverUrl, username, token, salt, maxBitRate, format)
+        val qualityTag = if (highQuality) "orig" else "128"
+        val cacheKey = "song_${song.id}_$qualityTag"
         val mediaItem = MediaItem.Builder()
             .setUri(streamUrl)
             .setCustomCacheKey(cacheKey)
@@ -885,8 +890,12 @@ class MusicService : Service() {
         val nextSong = playlist.getOrNull(currentIndex + 1) ?: return
         val serverUrl = musicRepository.serverUrl ?: return
         val (username, token, salt) = musicRepository.getAuthParams()
-        val streamUrl = nextSong.getStreamUrl(serverUrl, username, token, salt)
-        val cacheKey = "song_${nextSong.id}"
+        val highQuality = musicRepository.highQualityEnabled
+        val maxBitRate = if (highQuality) null else 128
+        val format = if (highQuality) null else "mp3"
+        val streamUrl = nextSong.getStreamUrl(serverUrl, username, token, salt, maxBitRate, format)
+        val qualityTag = if (highQuality) "orig" else "128"
+        val cacheKey = "song_${nextSong.id}_$qualityTag"
         val nextItem = MediaItem.Builder()
             .setUri(streamUrl)
             .setCustomCacheKey(cacheKey)

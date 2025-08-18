@@ -22,8 +22,28 @@ data class Song(
     @SerializedName("bitRate") val bitRate: Int? = null,
     @SerializedName("size") val size: Long? = null
 ) : Parcelable {
-    fun getStreamUrl(serverUrl: String, username: String, token: String, salt: String): String {
-        return "$serverUrl/rest/stream?id=$id&u=$username&t=$token&s=$salt&v=1.16.1&c=Castafiore"
+    fun getStreamUrl(
+        serverUrl: String,
+        username: String,
+        token: String,
+        salt: String,
+        maxBitRate: Int? = null,
+        format: String? = null
+    ): String {
+        val base = StringBuilder()
+            .append(serverUrl)
+            .append("/rest/stream?id=")
+            .append(id)
+            .append("&u=")
+            .append(username)
+            .append("&t=")
+            .append(token)
+            .append("&s=")
+            .append(salt)
+            .append("&v=1.16.1&c=Castafiore")
+        if (maxBitRate != null) base.append("&maxBitRate=").append(maxBitRate)
+        if (format != null) base.append("&format=").append(format)
+        return base.toString()
     }
 
     fun getCoverArtUrl(serverUrl: String, username: String, token: String, salt: String): String? {

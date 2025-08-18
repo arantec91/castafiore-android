@@ -34,12 +34,35 @@ class PlaybackFragment : Fragment() {
 
         binding.toolbar.setNavigationOnClickListener { findNavController().popBackStack() }
 
-        // Initialize switch state from repository
+        // Continue-with-similar switch
         binding.switchContinueSimilar.isChecked = musicRepository.continueWithSimilarEnabled
-
         binding.switchContinueSimilar.setOnCheckedChangeListener { _, isChecked ->
             musicRepository.continueWithSimilarEnabled = isChecked
         }
+
+        // Audio quality radios: default to High if not set
+        val highDefault = musicRepository.highQualityEnabled
+        binding.radioHighQuality.isChecked = highDefault
+        binding.radioBasicQuality.isChecked = !highDefault
+
+        fun selectHigh() {
+            binding.radioHighQuality.isChecked = true
+            binding.radioBasicQuality.isChecked = false
+            musicRepository.highQualityEnabled = true
+        }
+        fun selectBasic() {
+            binding.radioHighQuality.isChecked = false
+            binding.radioBasicQuality.isChecked = true
+            musicRepository.highQualityEnabled = false
+        }
+
+        // Radio button changes
+        binding.radioHighQuality.setOnClickListener { selectHigh() }
+        binding.radioBasicQuality.setOnClickListener { selectBasic() }
+
+        // Make entire rows clickable
+        binding.optionHighQuality.setOnClickListener { selectHigh() }
+        binding.optionBasicQuality.setOnClickListener { selectBasic() }
     }
 
     override fun onResume() {
@@ -52,4 +75,3 @@ class PlaybackFragment : Fragment() {
         _binding = null
     }
 }
-
