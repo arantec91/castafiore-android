@@ -32,6 +32,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import com.arantec.castafiore.ui.activities.PlayerActivity
 import com.google.android.exoplayer2.source.DefaultMediaSourceFactory
+import com.google.android.exoplayer2.audio.AudioAttributes
 
 class MusicService : Service() {
 
@@ -101,6 +102,14 @@ class MusicService : Service() {
         exoPlayer = ExoPlayer.Builder(this)
             .setMediaSourceFactory(mediaSourceFactory)
             .build()
+        // Set audio attributes to ensure a stable music session for equalizer
+        exoPlayer?.setAudioAttributes(
+            AudioAttributes.Builder()
+                .setUsage(com.google.android.exoplayer2.C.USAGE_MEDIA)
+                .setContentType(com.google.android.exoplayer2.C.AUDIO_CONTENT_TYPE_MUSIC)
+                .build(),
+            /* handleAudioFocus= */ true
+        )
         exoPlayer?.addListener(object : com.google.android.exoplayer2.Player.Listener {
             override fun onPlaybackStateChanged(state: Int) {
                 if (state == com.google.android.exoplayer2.Player.STATE_ENDED) {

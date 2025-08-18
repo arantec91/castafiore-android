@@ -35,18 +35,18 @@
     <!-- Logout button -->
     <com.google.android.material.button.MaterialButton
         android:id="@+id/btnLogout"
-        android:layout_width="0dp"
+        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_margin="16dp"
         android:text="@string/settings_logout"
         android:textStyle="bold"
         android:textSize="18sp"
-        android:textColor="@color/error"
-        app:cornerRadius="10dp"
-        style="@style/Widget.Material3.Button.OutlinedButton"
+        android:textColor="@color/text_primary"
+        app:cornerRadius="24dp"
+        style="@style/Widget.Material3.Button.ElevatedButton"
         app:strokeColor="@color/error"
         app:strokeWidth="1dp"
-        android:backgroundTint="@color/background_secondary"
+        android:backgroundTint="@color/primary"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent" />
