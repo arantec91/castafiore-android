@@ -1296,4 +1296,14 @@ class MusicRepository private constructor(private val context: Context) {
             }
         }
     }
+
+    // Método helper síncrono para leer estado favorito de álbum desde cache (si existe)
+    fun peekAlbumStarred(albumId: String): Boolean? {
+        return cacheManager.peek(CacheKeys.albumFavorite(albumId), 10 * 60 * 1000L, CacheTypes.BOOLEAN_TYPE)
+    }
+
+    // Método helper síncrono para leer estado favorito de artista desde cache (si existe)
+    fun peekArtistStarred(artistId: String): Boolean? {
+        return cacheManager.peek(CacheKeys.artistFavorite(artistId), 10 * 60 * 1000L, CacheTypes.BOOLEAN_TYPE)
+    }
 }

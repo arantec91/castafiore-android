@@ -310,4 +310,16 @@ class CacheManager private constructor(private val context: Context) {
         val searchEntries: Int,
         val diskEntries: Int
     )
+
+    /**
+     * Peek sincronamente en el cache (memoria o disco) sin llamar al proveedor.
+     * Respeta TTL. Devuelve null si no hay dato válido.
+     */
+    fun <T> peek(key: String, ttl: Long, type: Type): T? {
+        // Primero memoria
+        val mem = getFromMemory<T>(key)
+        if (mem != null) return mem
+        // Luego disco con validación de TTL
+        return getFromDisk<T>(key, ttl, type)
+    }
 }

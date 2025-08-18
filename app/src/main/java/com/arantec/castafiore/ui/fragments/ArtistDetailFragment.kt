@@ -132,7 +132,33 @@ class ArtistDetailFragment : Fragment() {
         setupToolbar()
         setupRecyclerViews()
         setupClickListeners()
+
+        // Inicializa el estado del botón de seguir/favoritos sin parpadeos
+        initializeFollowUI()
+
         loadArtistData()
+    }
+
+    private fun initializeFollowUI() {
+        // Si no tenemos un ID aún, ocultar temporalmente
+        val id = artistId
+        if (id.isNullOrEmpty()) {
+            binding.btnFollow.visibility = View.INVISIBLE
+            binding.btnFollow.isEnabled = false
+            return
+        }
+        // Intentar leer el estado desde cache (memoria/disco)
+        val cached = musicRepository.peekArtistStarred(id)
+        if (cached != null) {
+            isFollowing = cached
+            binding.btnFollow.visibility = View.VISIBLE
+            binding.btnFollow.isEnabled = true
+            updateFollowButton()
+        } else {
+            // Estado desconocido: ocultar hasta confirmar por red
+            binding.btnFollow.visibility = View.INVISIBLE
+            binding.btnFollow.isEnabled = false
+        }
     }
 
     private fun setupToolbar() {
@@ -420,15 +446,22 @@ class ArtistDetailFragment : Fragment() {
                 result.fold(
                     onSuccess = { starred ->
                         isFollowing = starred
+                        // Asegurar visibilidad/uso tras la verificación
+                        binding.btnFollow.visibility = View.VISIBLE
+                        binding.btnFollow.isEnabled = true
                         updateFollowButton()
                     },
                     onFailure = {
                         isFollowing = false
+                        binding.btnFollow.visibility = View.VISIBLE
+                        binding.btnFollow.isEnabled = true
                         updateFollowButton()
                     }
                 )
             } catch (_: Exception) {
                 isFollowing = false
+                binding.btnFollow.visibility = View.VISIBLE
+                binding.btnFollow.isEnabled = true
                 updateFollowButton()
             }
         }
@@ -445,6 +478,8 @@ class ArtistDetailFragment : Fragment() {
     }
 
     private fun toggleFollowArtist() {
+        // Deshabilitar mientras se procesa para evitar taps repetidos y parpadeo
+        binding.btnFollow.isEnabled = false
         lifecycleScope.launch {
             try {
                 val result = withContext(Dispatchers.IO) {
@@ -459,13 +494,15 @@ class ArtistDetailFragment : Fragment() {
                     onSuccess = {
                         isFollowing = !isFollowing
                         updateFollowButton()
-                        showMessage(if (isFollowing) "Siguiendo a ${artist?.name}" else "Dejaste de seguir a ${artist?.name}")
+                        binding.btnFollow.isEnabled = true
                     },
                     onFailure = {
+                        binding.btnFollow.isEnabled = true
                         showError("Error al actualizar el estado de seguimiento")
                     }
                 )
             } catch (_: Exception) {
+                binding.btnFollow.isEnabled = true
                 showError("Error al actualizar el estado de seguimiento")
             }
         }

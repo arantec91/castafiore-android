@@ -115,6 +115,9 @@ class AlbumDetailFragment : Fragment() {
         // Solo mostrar información básica inmediatamente
         showBasicAlbumInfo()
 
+        // Inicializar estado de favorito inmediatamente desde cache si existe
+        initializeFavoriteUI()
+
         // Configurar UI básica
         setupBasicUI()
         setupRecyclerView()
@@ -127,6 +130,32 @@ class AlbumDetailFragment : Fragment() {
                 loadAlbumDetails()
                 checkFavoriteStatus()
             }
+        }
+    }
+
+    private fun initializeFavoriteUI() {
+        val album = currentAlbum ?: return
+        // 1) Intentar leer valor cacheado (memoria/disco) de favoritos
+        val cached = musicRepository.peekAlbumStarred(album.id)
+        if (cached != null) {
+            isFavorited = cached
+            // Mostrar botón con estado correcto inmediatamente
+            binding.btnFavorite.visibility = View.VISIBLE
+            binding.btnFavorite.isEnabled = true
+            updateFavoriteButton()
+            return
+        }
+        // 2) Fallback: si viene un flag opcional en los argumentos (no obligatorio)
+        val argStarred = arguments?.getBoolean("initialStarred", false) ?: false
+        if (argStarred) {
+            isFavorited = true
+            binding.btnFavorite.visibility = View.VISIBLE
+            binding.btnFavorite.isEnabled = true
+            updateFavoriteButton()
+        } else {
+            // Estado desconocido: ocultar el botón temporalmente para evitar parpadeo
+            binding.btnFavorite.visibility = View.INVISIBLE
+            binding.btnFavorite.isEnabled = false
         }
     }
 
@@ -765,6 +794,8 @@ class AlbumDetailFragment : Fragment() {
     // Métodos para manejar favoritos
     private fun toggleFavorite() {
         currentAlbum?.let { album ->
+            // Deshabilitar mientras se procesa para evitar taps repetidos
+            binding.btnFavorite.isEnabled = false
             lifecycleScope.launch {
                 try {
                     val result = if (isFavorited) {
@@ -777,16 +808,10 @@ class AlbumDetailFragment : Fragment() {
                         onSuccess = {
                             isFavorited = !isFavorited
                             updateFavoriteButton()
-
-                            // Mostrar mensaje de confirmación
-                            val message = if (isFavorited) {
-                                "Álbum agregado a favoritos"
-                            } else {
-                                "Álbum removido de favoritos"
-                            }
-                            android.widget.Toast.makeText(requireContext(), message, android.widget.Toast.LENGTH_SHORT).show()
+                            binding.btnFavorite.isEnabled = true
                         },
                         onFailure = { error ->
+                            binding.btnFavorite.isEnabled = true
                             android.widget.Toast.makeText(
                                 requireContext(),
                                 "Error al actualizar favoritos: ${error.message}",
@@ -795,6 +820,7 @@ class AlbumDetailFragment : Fragment() {
                         }
                     )
                 } catch (e: Exception) {
+                    binding.btnFavorite.isEnabled = true
                     android.widget.Toast.makeText(
                         requireContext(),
                         "Error: ${e.message}",
@@ -824,16 +850,23 @@ class AlbumDetailFragment : Fragment() {
                     musicRepository.isAlbumStarred(album.id).fold(
                         onSuccess = { isStarred ->
                             isFavorited = isStarred
+                            // Asegurar que el botón sea visible al terminar la verificación
+                            binding.btnFavorite.visibility = View.VISIBLE
+                            binding.btnFavorite.isEnabled = true
                             updateFavoriteButton()
                         },
                         onFailure = {
                             // Si falla la verificación, asumir que no está marcado como favorito
                             isFavorited = false
+                            binding.btnFavorite.visibility = View.VISIBLE
+                            binding.btnFavorite.isEnabled = true
                             updateFavoriteButton()
                         }
                     )
                 } catch (e: Exception) {
                     isFavorited = false
+                    binding.btnFavorite.visibility = View.VISIBLE
+                    binding.btnFavorite.isEnabled = true
                     updateFavoriteButton()
                 }
             }
