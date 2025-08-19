@@ -6,6 +6,7 @@ import android.content.Intent
 import android.content.ServiceConnection
 import android.os.Bundle
 import android.os.IBinder
+import android.os.Build
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -29,6 +30,13 @@ import kotlinx.coroutines.launch
 import com.bumptech.glide.Glide
 import java.util.Locale
 import kotlin.random.Random
+import androidx.core.graphics.toColorInt
+import androidx.palette.graphics.Palette
+import android.graphics.Bitmap
+import android.graphics.drawable.GradientDrawable
+import com.bumptech.glide.request.target.CustomTarget
+import com.bumptech.glide.request.transition.Transition
+import android.graphics.drawable.Drawable
 
 class PlaylistDetailFragment : Fragment() {
 
@@ -115,7 +123,8 @@ class PlaylistDetailFragment : Fragment() {
         binding.toolbar.setNavigationOnClickListener { findNavController().popBackStack() }
         // Removed toolbar menu to eliminate "more options" and "delete playlist" icons
         binding.tvTitle.text = playlistName ?: getString(R.string.app_name)
-        binding.gradientBackground.setBackgroundColor(0xFF121212.toInt())
+        // Aplicar gradiente estático inicial, se actualizará cuando se cargue la imagen
+        setStaticBackground()
     }
 
     private fun setupRecyclerView() {
@@ -266,7 +275,7 @@ class PlaylistDetailFragment : Fragment() {
             musicRepository.getPlaylistInfo(id).onSuccess { info ->
                 playlistInfo = info
                 binding.tvTitle.text = info.name
-                // Cover art
+                // Cover art - Cargar tanto para mostrar como para extraer Palette
                 val (username, token, salt) = musicRepository.getAuthParams()
                 val coverUrl = info.getCoverArtUrl(
                     musicRepository.serverUrl ?: "",
@@ -275,7 +284,31 @@ class PlaylistDetailFragment : Fragment() {
                     salt,
                     300
                 )
+
+                // Cargar imagen para mostrar
                 ImageLoader.loadAlbumCover(requireContext(), binding.ivHeaderCover, coverUrl)
+
+                // Cargar como Bitmap para extraer Palette y aplicar gradiente dinámico
+                if (!coverUrl.isNullOrEmpty()) {
+                    Glide.with(this@PlaylistDetailFragment)
+                        .asBitmap()
+                        .load(coverUrl)
+                        .into(object : CustomTarget<Bitmap>() {
+                            override fun onResourceReady(resource: Bitmap, transition: Transition<in Bitmap>?) {
+                                if (!isAdded || _binding == null) return
+                                applyDynamicAppBarGradientFromBitmap(resource)
+                            }
+
+                            override fun onLoadCleared(placeholder: Drawable?) { /* no-op */ }
+                            override fun onLoadFailed(errorDrawable: Drawable?) {
+                                // Mantener gradiente estático si la imagen falla
+                                setStaticBackground()
+                            }
+                        })
+                } else {
+                    // No hay imagen, usar gradiente estático
+                    setStaticBackground()
+                }
             }
 
             // Canciones
@@ -518,6 +551,85 @@ class PlaylistDetailFragment : Fragment() {
             }
             .setNegativeButton(R.string.cancel, null)
             .show()
+    }
+
+    private fun applyDynamicAppBarGradientFromBitmap(bitmap: Bitmap) {
+        Palette.from(bitmap).generate { palette ->
+            if (!isAdded || _binding == null) return@generate
+
+            val darkMuted = palette?.darkVibrantSwatch?.rgb
+                ?: palette?.vibrantSwatch?.rgb
+                ?: palette?.darkMutedSwatch?.rgb
+                ?: "#2A2A2A".toColorInt()
+
+            applyAppBarGradient(darkMuted)
+        }
+    }
+
+    private fun applyAppBarGradient(topColor: Int) {
+        val baseColor = "#121212".toColorInt()
+
+        val appBarGradient = buildSmoothGradient(baseColor, topColor)
+        binding.appBarLayout.background = appBarGradient
+
+        val bgGradient = buildSmoothGradient(baseColor, topColor)
+        binding.gradientBackground.background = bgGradient
+
+        binding.collapsingToolbar.setContentScrimColor(baseColor)
+        binding.collapsingToolbar.setStatusBarScrimColor(topColor) // Usar el color dinámico
+        binding.toolbar.navigationIcon?.setTint(android.graphics.Color.WHITE)
+        StatusBarUtils.setStatusBarColor(this, topColor) // Pasar el color dinámico
+    }
+
+    private fun buildSmoothGradient(baseColor: Int, topColor: Int): GradientDrawable {
+        // Crear múltiples colores intermedios con transición más temprana
+        val color1 = blendColors(baseColor, topColor, 0.92f)  // 92% base, 8% top
+        val color2 = blendColors(baseColor, topColor, 0.82f)  // 82% base, 18% top
+        val color3 = blendColors(baseColor, topColor, 0.68f)  // 68% base, 32% top
+        val color4 = blendColors(baseColor, topColor, 0.52f)  // 52% base, 48% top
+        val color5 = blendColors(baseColor, topColor, 0.35f)  // 35% base, 65% top
+        val color6 = blendColors(baseColor, topColor, 0.18f)  // 18% base, 82% top
+        val color7 = blendColors(baseColor, topColor, 0.05f)  // 5% base, 95% top
+
+        // Array de colores con transición suave desde 10%
+        val colors = intArrayOf(baseColor, baseColor, color1, color2, color3, color4, color5, color6, color7, topColor)
+
+        return GradientDrawable(GradientDrawable.Orientation.BOTTOM_TOP, colors).apply {
+            shape = GradientDrawable.RECTANGLE
+            gradientType = GradientDrawable.LINEAR_GRADIENT
+            setDither(true)
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                // Zona sólida solo del 10%, transición suave distribuida en el 90% restante
+                setColors(colors, floatArrayOf(0f, 0.1f, 0.22f, 0.35f, 0.5f, 0.65f, 0.78f, 0.88f, 0.95f, 1f))
+            }
+        }
+    }
+
+    // Función auxiliar para mezclar colores
+    private fun blendColors(color1: Int, color2: Int, ratio: Float): Int {
+        val inverseRatio = 1f - ratio
+        val r = (android.graphics.Color.red(color1) * ratio + android.graphics.Color.red(color2) * inverseRatio).toInt()
+        val g = (android.graphics.Color.green(color1) * ratio + android.graphics.Color.green(color2) * inverseRatio).toInt()
+        val b = (android.graphics.Color.blue(color1) * ratio + android.graphics.Color.blue(color2) * inverseRatio).toInt()
+        val a = (android.graphics.Color.alpha(color1) * ratio + android.graphics.Color.alpha(color2) * inverseRatio).toInt()
+        return android.graphics.Color.argb(a, r, g, b)
+    }
+
+    private fun setStaticBackground() {
+        if (!isAdded || _binding == null) return
+
+        // Aplicar color estático independientemente del bitmap
+        val staticColor = 0xFF121212.toInt()
+        binding.gradientBackground.setBackgroundColor(staticColor)
+        binding.collapsingToolbar.setContentScrimColor(staticColor)
+        binding.collapsingToolbar.setStatusBarScrimColor(staticColor)
+
+        // Usar iconos blancos para el toolbar (apropiado para fondo oscuro)
+        binding.toolbar.navigationIcon?.setTint(android.graphics.Color.WHITE)
+
+        // Use centralized status bar color utility
+        StatusBarUtils.setStatusBarColor(this)
     }
 
     override fun onResume() {

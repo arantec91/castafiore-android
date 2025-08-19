@@ -440,49 +440,64 @@ class ArtistDetailFragment : Fragment() {
         Palette.from(bitmap).generate { palette ->
             if (!isAdded || _binding == null) return@generate
 
-            val darkMuted = palette?.darkMutedSwatch?.rgb
-                ?: palette?.mutedSwatch?.rgb
-                ?: palette?.darkVibrantSwatch?.rgb
+            val darkMuted = palette?.darkVibrantSwatch?.rgb
+                ?: palette?.vibrantSwatch?.rgb
+                ?: palette?.darkMutedSwatch?.rgb
                 ?: "#2A2A2A".toColorInt()
 
             applyAppBarGradient(darkMuted)
         }
     }
 
+    // Kotlin
     private fun applyAppBarGradient(topColor: Int) {
         val baseColor = "#121212".toColorInt()
 
-        val appBarGradient = GradientDrawable(
-            GradientDrawable.Orientation.BOTTOM_TOP,
-            intArrayOf(baseColor, topColor)
-        ).apply {
-            shape = GradientDrawable.RECTANGLE
-            gradientType = GradientDrawable.LINEAR_GRADIENT
-            setDither(true)
-        }
-
+        val appBarGradient = buildSmoothGradient(baseColor, topColor)
         binding.appBarLayout.background = appBarGradient
 
-        // También aplicar detrás de la imagen para mayor cohesión visual
-        val bgGradient = GradientDrawable(
-            GradientDrawable.Orientation.BOTTOM_TOP,
-            intArrayOf(baseColor, topColor)
-        ).apply {
+        val bgGradient = buildSmoothGradient(baseColor, topColor)
+        binding.gradientBackground.background = bgGradient
+
+        binding.collapsingToolbar.setContentScrimColor(baseColor)
+        binding.collapsingToolbar.setStatusBarScrimColor(topColor) // Usar el color dinámico
+        binding.toolbar.navigationIcon?.setTint(android.graphics.Color.WHITE)
+        StatusBarUtils.setStatusBarColor(this, topColor) // Pasar el color dinámico
+    }
+
+    private fun buildSmoothGradient(baseColor: Int, topColor: Int): GradientDrawable {
+        // Crear múltiples colores intermedios con transición más temprana
+        val color1 = blendColors(baseColor, topColor, 0.92f)  // 92% base, 8% top
+        val color2 = blendColors(baseColor, topColor, 0.82f)  // 82% base, 18% top
+        val color3 = blendColors(baseColor, topColor, 0.68f)  // 68% base, 32% top
+        val color4 = blendColors(baseColor, topColor, 0.52f)  // 52% base, 48% top
+        val color5 = blendColors(baseColor, topColor, 0.35f)  // 35% base, 65% top
+        val color6 = blendColors(baseColor, topColor, 0.18f)  // 18% base, 82% top
+        val color7 = blendColors(baseColor, topColor, 0.05f)  // 5% base, 95% top
+
+        // Array de colores con transición suave desde 10%
+        val colors = intArrayOf(baseColor, baseColor, color1, color2, color3, color4, color5, color6, color7, topColor)
+
+        return GradientDrawable(GradientDrawable.Orientation.BOTTOM_TOP, colors).apply {
             shape = GradientDrawable.RECTANGLE
             gradientType = GradientDrawable.LINEAR_GRADIENT
             setDither(true)
+
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                // Zona sólida solo del 10%, transición suave distribuida en el 90% restante
+                setColors(colors, floatArrayOf(0f, 0.1f, 0.22f, 0.35f, 0.5f, 0.65f, 0.78f, 0.88f, 0.95f, 1f))
+            }
         }
-        binding.gradientBackground.background = bgGradient
+    }
 
-        // Mantener scrims oscuros para legibilidad
-        binding.collapsingToolbar.setContentScrimColor(baseColor)
-        binding.collapsingToolbar.setStatusBarScrimColor(baseColor)
-
-        // Asegurar iconos visibles
-        binding.toolbar.navigationIcon?.setTint(Color.WHITE)
-
-        // Sincronizar color de status bar
-        StatusBarUtils.setStatusBarColor(this)
+    // Función auxiliar para mezclar colores
+    private fun blendColors(color1: Int, color2: Int, ratio: Float): Int {
+        val inverseRatio = 1f - ratio
+        val r = (android.graphics.Color.red(color1) * ratio + android.graphics.Color.red(color2) * inverseRatio).toInt()
+        val g = (android.graphics.Color.green(color1) * ratio + android.graphics.Color.green(color2) * inverseRatio).toInt()
+        val b = (android.graphics.Color.blue(color1) * ratio + android.graphics.Color.blue(color2) * inverseRatio).toInt()
+        val a = (android.graphics.Color.alpha(color1) * ratio + android.graphics.Color.alpha(color2) * inverseRatio).toInt()
+        return android.graphics.Color.argb(a, r, g, b)
     }
 
     private fun setStaticBackground() {
@@ -740,7 +755,7 @@ class ArtistDetailFragment : Fragment() {
                         val action = ArtistDetailFragmentDirections.actionArtistDetailToAlbumDetail(album)
                         findNavController().navigate(action)
                     } catch (_: Exception) {
-                        android.widget.Toast.makeText(requireContext(), "Error al navegar al álbum", android.widget.Toast.LENGTH_SHORT).show()
+                        android.widget.Toast.makeText(requireContext(), "Error al navegar al ��lbum", android.widget.Toast.LENGTH_SHORT).show()
                     }
                 } ?: run {
                     android.widget.Toast.makeText(requireContext(), "Información del álbum no disponible", android.widget.Toast.LENGTH_SHORT).show()
