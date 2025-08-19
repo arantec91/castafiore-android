@@ -34,6 +34,9 @@ class LibraryAdapter(
                 tvTitle.text = item.title
                 tvSubtitle.text = item.subtitle
 
+                // Reset reusable state that may linger from recycled views
+                ivCover.background = null
+
                 // Configurar icono/imagen según el tipo
                 when (item.type) {
                     LibraryItemType.LIKED_SONGS -> {
@@ -43,6 +46,8 @@ class LibraryAdapter(
                     LibraryItemType.PLAYLIST -> {
                         if (item.imageUrl != null) {
                             ImageLoader.loadThumbnail(itemView.context, ivCover, item.imageUrl)
+                            // Ensure no stale background when using real cover
+                            ivCover.background = null
                         } else {
                             ivCover.setImageResource(R.drawable.ic_playlist)
                             ivCover.setBackgroundResource(R.drawable.playlist_background)
@@ -50,7 +55,10 @@ class LibraryAdapter(
                     }
                     LibraryItemType.ARTIST -> {
                         if (item.imageUrl != null) {
-                            ImageLoader.loadThumbnail(itemView.context, ivCover, item.imageUrl)
+                            // Make artist images circular
+                            ImageLoader.loadArtistImage(itemView.context, ivCover, item.imageUrl)
+                            // No extra background needed; circular crop handles shape
+                            ivCover.background = null
                         } else {
                             ivCover.setImageResource(R.drawable.ic_person)
                             ivCover.setBackgroundResource(R.drawable.circle_background)
@@ -59,8 +67,10 @@ class LibraryAdapter(
                     LibraryItemType.ALBUM -> {
                         if (item.imageUrl != null) {
                             ImageLoader.loadThumbnail(itemView.context, ivCover, item.imageUrl)
+                            ivCover.background = null
                         } else {
                             ivCover.setImageResource(R.drawable.ic_album_placeholder)
+                            ivCover.background = null
                         }
                     }
                 }
