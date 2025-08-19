@@ -53,72 +53,118 @@ class QueueActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // CRITICAL: Force disable Android 14's automatic edge-to-edge behavior
+        if (android.os.Build.VERSION.SDK_INT >= 34) {
+            // Must be done before setContentView
+            window.addFlags(android.view.WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS)
+            window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS)
+            window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_TRANSLUCENT_NAVIGATION)
+
+            val darkColor = ContextCompat.getColor(this, R.color.background_primary)
+            window.statusBarColor = darkColor
+            window.navigationBarColor = darkColor
+
+            // Force disable edge-to-edge - critical for API 36
+            WindowCompat.setDecorFitsSystemWindows(window, true)
+        }
+
         binding = ActivityQueueBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        // Ensure consistent status and navigation bar colors
+        // Apply additional fixes after view creation
         StatusBarUtils.setStatusBarColor(this)
-        enforceSolidNavigationBar()
 
-        // Apply window insets so content does not overlap the status bar/navigation bar
+        if (android.os.Build.VERSION.SDK_INT >= 34) {
+            // Post-creation enforcement
+            binding.root.post {
+                finalNavigationBarEnforcement()
+            }
+        }
+
         applyWindowInsets()
-
         musicRepository = MusicRepository.getInstance(this)
-
         setupViews()
         setupRecyclerView()
         bindMusicService()
     }
 
-    private fun enforceSolidNavigationBar() {
-        // Disable edge-to-edge for this activity
-        WindowCompat.setDecorFitsSystemWindows(window, true)
-        // Set a solid dark navigation bar color and ensure light nav bar icons are disabled
-        window.navigationBarColor = ContextCompat.getColor(this, R.color.dark_background)
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
-            window.isNavigationBarContrastEnforced = false
-        }
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
-            window.insetsController?.setSystemBarsAppearance(
-                0,
-                android.view.WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS
-            )
-        } else if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-            val flags = window.decorView.systemUiVisibility and android.view.View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR.inv()
-            window.decorView.systemUiVisibility = flags
+    private fun finalNavigationBarEnforcement() {
+        try {
+            val darkColor = ContextCompat.getColor(this, R.color.background_primary)
+
+            // Triple enforcement for stubborn API 36
+            window.navigationBarColor = darkColor
+            window.statusBarColor = darkColor
+
+            // Force window insets controller to behave
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+                window.insetsController?.let { controller ->
+                    // Clear light appearance flags to force dark bars
+                    controller.setSystemBarsAppearance(
+                        0,
+                        android.view.WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS or
+                                android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS
+                    )
+
+                    // Force stable behavior
+                    controller.systemBarsBehavior = android.view.WindowInsetsController.BEHAVIOR_DEFAULT
+                }
+            }
+
+            // Force decorView background
+            window.decorView.setBackgroundColor(darkColor)
+
+        } catch (e: Exception) {
+            android.util.Log.e("QueueActivity", "Error in finalNavigationBarEnforcement", e)
         }
     }
 
     private fun applyWindowInsets() {
-        // Capture baseline paddings to avoid cumulative additions on re-applies
-        val baseRootPaddingLeft = binding.root.paddingLeft
-        val baseRootPaddingTop = binding.root.paddingTop
-        val baseRootPaddingRight = binding.root.paddingRight
-        val baseRootPaddingBottom = binding.root.paddingBottom
+        // For API 36, use a different approach to handle window insets
+        if (android.os.Build.VERSION.SDK_INT >= 34) {
+            // Simplified insets handling for Android 14+
+            ViewCompat.setOnApplyWindowInsetsListener(binding.root) { v, insets ->
+                val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
 
-        val baseRecyclerPaddingLeft = binding.recyclerViewQueue.paddingLeft
-        val baseRecyclerPaddingTop = binding.recyclerViewQueue.paddingTop
-        val baseRecyclerPaddingRight = binding.recyclerViewQueue.paddingRight
-        val baseRecyclerPaddingBottom = binding.recyclerViewQueue.paddingBottom
+                // Apply top inset to the root to clear status bar
+                v.setPadding(0, systemBars.top, 0, 0)
 
-        ViewCompat.setOnApplyWindowInsetsListener(binding.root) { v, insets ->
-            val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
-            // Apply top inset to the root so header clears the status bar
-            v.setPadding(
-                baseRootPaddingLeft,
-                baseRootPaddingTop + systemBars.top,
-                baseRootPaddingRight,
-                baseRootPaddingBottom
-            )
-            // Apply bottom inset to the list so it clears the nav bar, preserving initial 16dp
-            binding.recyclerViewQueue.setPadding(
-                baseRecyclerPaddingLeft,
-                baseRecyclerPaddingTop,
-                baseRecyclerPaddingRight,
-                baseRecyclerPaddingBottom + systemBars.bottom
-            )
-            insets
+                // Apply bottom inset directly to the RecyclerView
+                binding.recyclerViewQueue.setPadding(0, 0, 0, systemBars.bottom)
+
+                WindowInsetsCompat.CONSUMED
+            }
+        } else {
+            // Original logic for older versions
+            val baseRootPaddingLeft = binding.root.paddingLeft
+            val baseRootPaddingTop = binding.root.paddingTop
+            val baseRootPaddingRight = binding.root.paddingRight
+            val baseRootPaddingBottom = binding.root.paddingBottom
+
+            val baseRecyclerPaddingLeft = binding.recyclerViewQueue.paddingLeft
+            val baseRecyclerPaddingTop = binding.recyclerViewQueue.paddingTop
+            val baseRecyclerPaddingRight = binding.recyclerViewQueue.paddingRight
+            val baseRecyclerPaddingBottom = binding.recyclerViewQueue.paddingBottom
+
+            ViewCompat.setOnApplyWindowInsetsListener(binding.root) { v, insets ->
+                val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+                v.setPadding(
+                    baseRootPaddingLeft,
+                    baseRootPaddingTop + systemBars.top,
+                    baseRootPaddingRight,
+                    baseRootPaddingBottom
+                )
+                binding.recyclerViewQueue.setPadding(
+                    baseRecyclerPaddingLeft,
+                    baseRecyclerPaddingTop,
+                    baseRecyclerPaddingRight,
+                    baseRecyclerPaddingBottom + systemBars.bottom
+                )
+                insets
+            }
         }
+
         ViewCompat.requestApplyInsets(binding.root)
     }
 
@@ -415,6 +461,14 @@ class QueueActivity : AppCompatActivity() {
         return String.format(java.util.Locale.getDefault(), "%d:%02d", minutes, secs)
     }
 
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus && android.os.Build.VERSION.SDK_INT >= 34) {
+            // Re-enforce navigation bar settings when window gains focus for API 36
+            finalNavigationBarEnforcement()
+        }
+    }
+
     override fun onStart() {
         super.onStart()
         if (!isBound) {
@@ -426,7 +480,9 @@ class QueueActivity : AppCompatActivity() {
         super.onResume()
         // Ensure consistent status and navigation bar colors
         StatusBarUtils.setStatusBarColor(this)
-        enforceSolidNavigationBar()
+        if (android.os.Build.VERSION.SDK_INT >= 34) {
+            finalNavigationBarEnforcement()
+        }
     }
 
     override fun onStop() {

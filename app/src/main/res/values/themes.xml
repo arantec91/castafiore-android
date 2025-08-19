@@ -46,4 +46,27 @@
         <!-- Bottom navigation color -->
         <item name="bottomNavigationStyle">@style/BottomNavigationView.Primary</item>
     </style>
+
+    <!-- Tema específico para QueueActivity que fuerza barras opacas en API 36 -->
+    <style name="Theme.Castafiore.Queue" parent="Theme.Castafiore">
+        <!-- Forzar barras del sistema completamente opacas -->
+        <item name="android:statusBarColor">@color/background_primary</item>
+        <item name="android:navigationBarColor">@color/background_primary</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar">false</item>
+
+        <!-- Deshabilitar edge-to-edge completamente -->
+        <item name="android:windowLayoutInDisplayCutoutMode" tools:targetApi="p">never</item>
+        <item name="android:windowTranslucentStatus">false</item>
+        <item name="android:windowTranslucentNavigation">false</item>
+        <item name="android:windowDrawsSystemBarBackgrounds">true</item>
+
+        <!-- Configuración adicional para API 36 -->
+        <item name="android:windowIsFloating">false</item>
+        <item name="android:windowFullscreen">false</item>
+        <item name="android:windowContentOverlay">@null</item>
+
+        <!-- Configuración específica para Android 14+ -->
+        <item name="android:windowOptOutEdgeToEdgeEnforcement" tools:targetApi="34">true</item>
+    </style>
 </resources>

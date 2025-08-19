@@ -6,6 +6,7 @@
     android:layout_height="match_parent"
     android:background="@color/background_primary"
     android:orientation="vertical"
+    android:fitsSystemWindows="false"
     tools:context=".ui.activities.QueueActivity">
 
     <!-- Header con botón de cerrar y título -->
@@ -159,7 +160,6 @@
             android:layout_width="match_parent"
             android:layout_height="0dp"
             android:layout_weight="1"
-            android:clipToPadding="false"
             android:paddingBottom="16dp"
             tools:listitem="@layout/item_queue_song" />
 
