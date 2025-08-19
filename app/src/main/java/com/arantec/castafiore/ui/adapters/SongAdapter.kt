@@ -6,6 +6,9 @@ import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.RecyclerView
 import com.arantec.castafiore.data.models.Song
 import com.arantec.castafiore.databinding.ItemSongBinding
+import com.arantec.castafiore.data.repository.MusicRepository
+import com.arantec.castafiore.utils.ImageLoader
+import com.arantec.castafiore.R
 
 class SongAdapter(
     private val onSongClick: (Song, Int) -> Unit,
@@ -38,9 +41,34 @@ class SongAdapter(
                 // Ocultar el número de track
                 tvTrackNumber.visibility = android.view.View.GONE
 
+                // Cargar portada de la canción (thumbnail)
+                try {
+                    // Placeholder inmediato mientras se resuelve la URL
+                    ivSongCover.setImageResource(R.drawable.ic_music_note)
+
+                    val repo = MusicRepository.getInstance(root.context)
+                    val server = repo.serverUrl
+                    val coverId = song.coverArt
+                    if (!server.isNullOrEmpty() && !coverId.isNullOrEmpty()) {
+                        val (username, token, salt) = repo.getAuthParams()
+                        val coverUrl = ImageLoader.buildCoverArtUrl(
+                            server,
+                            coverId,
+                            username,
+                            token,
+                            salt,
+                            200 // tamaño optimizado para lista
+                        )
+                        ImageLoader.loadThumbnail(root.context, ivSongCover, coverUrl)
+                    } else {
+                        ivSongCover.setImageResource(R.drawable.ic_music_note)
+                    }
+                } catch (_: Exception) {
+                    ivSongCover.setImageResource(R.drawable.ic_music_note)
+                }
+
                 tvSongTitle.text = song.title
                 tvSongArtist.text = song.artist
-                // tvDuration removed from layout; no longer set
 
                 // Cambiar solo el color del título si es la canción actual
                 if (song.id == playingSongId) {
