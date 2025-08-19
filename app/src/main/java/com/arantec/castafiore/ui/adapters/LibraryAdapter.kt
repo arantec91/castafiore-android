@@ -34,7 +34,7 @@ class LibraryAdapter(
                 tvTitle.text = item.title
                 tvSubtitle.text = item.subtitle
 
-                // Reset reusable state that may linger from recycled views
+                 // Reset reusable state that may linger from recycled views
                 ivCover.background = null
 
                 // Configurar icono/imagen según el tipo
