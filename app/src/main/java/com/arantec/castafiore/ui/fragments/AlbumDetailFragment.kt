@@ -251,7 +251,8 @@ class AlbumDetailFragment : Fragment() {
             },
             onSongMoreClick = { song ->
                 showSongOptions(song)
-            }
+            },
+            showCover = false
         )
 
         binding.rvSongs.apply {

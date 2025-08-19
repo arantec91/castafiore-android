@@ -12,7 +12,8 @@ import com.arantec.castafiore.R
 
 class SongAdapter(
     private val onSongClick: (Song, Int) -> Unit,
-    private val onSongMoreClick: (Song) -> Unit
+    private val onSongMoreClick: (Song) -> Unit,
+    private val showCover: Boolean = true
 ) : RecyclerView.Adapter<SongAdapter.SongViewHolder>() {
 
     private var songs = mutableListOf<Song>()
@@ -41,30 +42,36 @@ class SongAdapter(
                 // Ocultar el número de track
                 tvTrackNumber.visibility = android.view.View.GONE
 
-                // Cargar portada de la canción (thumbnail)
-                try {
-                    // Placeholder inmediato mientras se resuelve la URL
-                    ivSongCover.setImageResource(R.drawable.ic_music_note)
+                // Mostrar/ocultar portada según configuración
+                if (!showCover) {
+                    ivSongCover.visibility = android.view.View.GONE
+                } else {
+                    ivSongCover.visibility = android.view.View.VISIBLE
+                    // Cargar portada de la canción (thumbnail)
+                    try {
+                        // Placeholder inmediato mientras se resuelve la URL
+                        ivSongCover.setImageResource(R.drawable.ic_music_note)
 
-                    val repo = MusicRepository.getInstance(root.context)
-                    val server = repo.serverUrl
-                    val coverId = song.coverArt
-                    if (!server.isNullOrEmpty() && !coverId.isNullOrEmpty()) {
-                        val (username, token, salt) = repo.getAuthParams()
-                        val coverUrl = ImageLoader.buildCoverArtUrl(
-                            server,
-                            coverId,
-                            username,
-                            token,
-                            salt,
-                            200 // tamaño optimizado para lista
-                        )
-                        ImageLoader.loadThumbnail(root.context, ivSongCover, coverUrl)
-                    } else {
+                        val repo = MusicRepository.getInstance(root.context)
+                        val server = repo.serverUrl
+                        val coverId = song.coverArt
+                        if (!server.isNullOrEmpty() && !coverId.isNullOrEmpty()) {
+                            val (username, token, salt) = repo.getAuthParams()
+                            val coverUrl = ImageLoader.buildCoverArtUrl(
+                                server,
+                                coverId,
+                                username,
+                                token,
+                                salt,
+                                200 // tamaño optimizado para lista
+                            )
+                            ImageLoader.loadThumbnail(root.context, ivSongCover, coverUrl)
+                        } else {
+                            ivSongCover.setImageResource(R.drawable.ic_music_note)
+                        }
+                    } catch (_: Exception) {
                         ivSongCover.setImageResource(R.drawable.ic_music_note)
                     }
-                } catch (_: Exception) {
-                    ivSongCover.setImageResource(R.drawable.ic_music_note)
                 }
 
                 tvSongTitle.text = song.title
