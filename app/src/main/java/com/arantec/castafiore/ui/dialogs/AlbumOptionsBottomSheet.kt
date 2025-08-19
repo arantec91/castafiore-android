@@ -18,11 +18,10 @@ class AlbumOptionsBottomSheet : BottomSheetDialogFragment() {
     private val binding get() = _binding!!
 
     private var album: Album? = null
-    private var isFavorited = false // Agregar estado de favoritos
+    private var isFavorited = false
     private var onDownloadClickListener: ((Album) -> Unit)? = null
-    private var onAddToFavoritesClickListener: ((Album) -> Unit)? = null
     private var onAddToQueueClickListener: ((Album) -> Unit)? = null
-    private var onShareClickListener: ((Album) -> Unit)? = null
+    private var onAddToFavoritesClickListener: ((Album) -> Unit)? = null
     private var onAlbumInfoClickListener: ((Album) -> Unit)? = null
 
     companion object {
@@ -72,7 +71,7 @@ class AlbumOptionsBottomSheet : BottomSheetDialogFragment() {
 
         setupViews()
         setupClickListeners()
-        checkFavoriteStatus() // Verificar estado inicial de favoritos
+        checkFavoriteStatus()
     }
 
     private fun setupViews() {
@@ -83,66 +82,39 @@ class AlbumOptionsBottomSheet : BottomSheetDialogFragment() {
             // Cargar la imagen del álbum
             loadAlbumCover(albumData)
 
-            // Actualizar UI de favoritos
+            // Actualizar UI de favoritos (solo botón de cabecera)
             updateFavoriteButton()
-        }
-    }
-
-    private fun checkFavoriteStatus() {
-        album?.let { albumData ->
-            lifecycleScope.launch {
-                try {
-                    val musicRepository = com.arantec.castafiore.data.repository.MusicRepository.getInstance(requireContext())
-                    val result = withContext(Dispatchers.IO) {
-                        musicRepository.isAlbumStarred(albumData.id)
-                    }
-
-                    result.fold(
-                        onSuccess = { isStarred ->
-                            isFavorited = isStarred
-                            updateFavoriteButton()
-                        },
-                        onFailure = { _ ->
-                            // Si falla la verificación, asumir que no es favorito
-                            isFavorited = false
-                            updateFavoriteButton()
-                        }
-                    )
-                } catch (e: Exception) {
-                    isFavorited = false
-                    updateFavoriteButton()
-                }
-            }
         }
     }
 
     private fun updateFavoriteButton() {
         if (!isAdded || _binding == null) return
 
-        // Actualizar el botón de favorito en el header
         if (isFavorited) {
             binding.btnAlbumFavorite.setImageResource(com.arantec.castafiore.R.drawable.ic_favorite)
-            binding.btnAlbumFavorite.setColorFilter(android.graphics.Color.parseColor("#FF2D55")) // Color principal
+            binding.btnAlbumFavorite.setColorFilter(android.graphics.Color.parseColor("#FF2D55"))
         } else {
             binding.btnAlbumFavorite.setImageResource(com.arantec.castafiore.R.drawable.ic_favorite_border)
-            binding.btnAlbumFavorite.setColorFilter(android.graphics.Color.parseColor("#B3FFFFFF")) // Color texto secundario
+            binding.btnAlbumFavorite.setColorFilter(android.graphics.Color.parseColor("#B3FFFFFF"))
         }
+    }
 
-        // Acceder a los elementos hijos del LinearLayout llAddToFavorites
-        val favoriteContainer = binding.llAddToFavorites
-        val favoriteImageView = favoriteContainer.getChildAt(0) as? android.widget.ImageView
-        val favoriteTextView = favoriteContainer.getChildAt(1) as? android.widget.TextView
+    private fun checkFavoriteStatus() {
+        album?.let { albumData ->
+            viewLifecycleOwner.lifecycleScope.launch {
+                try {
+                    val musicRepository = com.arantec.castafiore.data.repository.MusicRepository.getInstance(requireContext())
+                    val isStarred = withContext(Dispatchers.IO) {
+                        musicRepository.isAlbumStarred(albumData.id)
+                    }.getOrElse { false }
 
-        if (isFavorited) {
-            // Álbum es favorito - mostrar "Quitar de favoritos"
-            favoriteTextView?.text = "Quitar de favoritos"
-            favoriteImageView?.setImageResource(com.arantec.castafiore.R.drawable.ic_favorite)
-            favoriteImageView?.setColorFilter(android.graphics.Color.parseColor("#FF2D55")) // Color principal
-        } else {
-            // Álbum no es favorito - mostrar "Agregar a favoritos"
-            favoriteTextView?.text = "Agregar a favoritos"
-            favoriteImageView?.setImageResource(com.arantec.castafiore.R.drawable.ic_favorite_border)
-            favoriteImageView?.setColorFilter(android.graphics.Color.parseColor("#FFFFFF")) // Color texto primario
+                    isFavorited = isStarred
+                    updateFavoriteButton()
+                } catch (e: Exception) {
+                    isFavorited = false
+                    updateFavoriteButton()
+                }
+            }
         }
     }
 
@@ -180,11 +152,8 @@ class AlbumOptionsBottomSheet : BottomSheetDialogFragment() {
         // Botón de favorito en el header
         binding.btnAlbumFavorite.setOnClickListener {
             album?.let { albumData ->
-                // Cambiar el estado inmediatamente para una mejor UX
                 isFavorited = !isFavorited
                 updateFavoriteButton()
-
-                // Llamar al listener externo
                 onAddToFavoritesClickListener?.invoke(albumData)
             }
         }
@@ -194,25 +163,8 @@ class AlbumOptionsBottomSheet : BottomSheetDialogFragment() {
             dismiss()
         }
 
-        binding.llAddToFavorites.setOnClickListener {
-            album?.let { albumData ->
-                // Cambiar el estado inmediatamente para una mejor UX
-                isFavorited = !isFavorited
-                updateFavoriteButton()
-
-                // Llamar al listener externo
-                onAddToFavoritesClickListener?.invoke(albumData)
-            }
-            dismiss()
-        }
-
         binding.llAddToQueue.setOnClickListener {
             album?.let { onAddToQueueClickListener?.invoke(it) }
-            dismiss()
-        }
-
-        binding.llShare.setOnClickListener {
-            album?.let { onShareClickListener?.invoke(it) }
             dismiss()
         }
 
@@ -238,8 +190,9 @@ class AlbumOptionsBottomSheet : BottomSheetDialogFragment() {
         return this
     }
 
-    fun setOnShareClickListener(listener: (Album) -> Unit): AlbumOptionsBottomSheet {
-        onShareClickListener = listener
+    @Deprecated("Share option removed from AlbumOptionsBottomSheet UI")
+    fun setOnShareClickListener(@Suppress("UNUSED_PARAMETER") listener: (Album) -> Unit): AlbumOptionsBottomSheet {
+        // No-op to preserve compatibility
         return this
     }
 
