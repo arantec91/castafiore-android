@@ -453,12 +453,12 @@ class ArtistDetailFragment : Fragment() {
     private fun applyAppBarGradient(topColor: Int) {
         val baseColor = "#121212".toColorInt()
 
-        val appBarGradient = buildSmoothGradient(baseColor, topColor)
-        binding.appBarLayout.background = appBarGradient
-
+        // Mantener el degradado solo en el fondo estático
         val bgGradient = buildSmoothGradient(baseColor, topColor)
         binding.gradientBackground.background = bgGradient
 
+        // Para el AppBar y los scrims, usar color sólido estable
+        binding.appBarLayout.background = android.graphics.drawable.ColorDrawable(baseColor)
         binding.collapsingToolbar.setContentScrimColor(baseColor)
         // Usar color base estable en lugar de dinámico para evitar parpadeos
         binding.collapsingToolbar.setStatusBarScrimColor(baseColor)

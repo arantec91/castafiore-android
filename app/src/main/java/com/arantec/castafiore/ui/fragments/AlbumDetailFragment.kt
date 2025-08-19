@@ -58,6 +58,9 @@ class AlbumDetailFragment : Fragment() {
     // Acción de reproducción pendiente mientras se enlaza el servicio
     private var pendingAction: (() -> Unit)? = null
 
+    // Listener de AppBar para limpiar en onDestroyView
+    private var appBarOffsetListener: com.google.android.material.appbar.AppBarLayout.OnOffsetChangedListener? = null
+
     // Color original de la status bar ahora manejado por StatusBarUtils
 
     private val serviceConnection = object : ServiceConnection {
@@ -181,18 +184,18 @@ class AlbumDetailFragment : Fragment() {
         }
 
         // Configurar el AppBarLayout
-        binding.appBarLayout.addOnOffsetChangedListener(
-            object : com.google.android.material.appbar.AppBarLayout.OnOffsetChangedListener {
-                override fun onOffsetChanged(appBarLayout: com.google.android.material.appbar.AppBarLayout, verticalOffset: Int) {
-                    // Solo aplicar cambios si el fragment está activo y la vista existe
-                    if (!isAdded || _binding == null) return
+        appBarOffsetListener = object : com.google.android.material.appbar.AppBarLayout.OnOffsetChangedListener {
+            override fun onOffsetChanged(appBarLayout: com.google.android.material.appbar.AppBarLayout, verticalOffset: Int) {
+                // Solo aplicar cambios si el fragment está activo y la vista existe
+                if (!isAdded || _binding == null) return
 
-                    dominantNavIconColor?.let { color ->
-                        binding.toolbar.navigationIcon?.setTint(color)
-                    }
+                dominantNavIconColor?.let { color ->
+                    // Evitar trabajo pesado en cada frame; solo aplicar tinte si existe icono
+                    binding.toolbar.navigationIcon?.setTint(color)
                 }
             }
-        )
+        }
+        binding.appBarLayout.addOnOffsetChangedListener(appBarOffsetListener!!)
     }
 
     private fun setupUI() {
@@ -545,17 +548,15 @@ class AlbumDetailFragment : Fragment() {
     private fun applyAppBarGradient(topColor: Int) {
         val baseColor = "#121212".toColorInt()
 
-        val appBarGradient = buildSmoothGradient(baseColor, topColor)
-        binding.appBarLayout.background = appBarGradient
-
+        // Construir un degradado suave para el fondo estático detrás del contenido
         val bgGradient = buildSmoothGradient(baseColor, topColor)
         binding.gradientBackground.background = bgGradient
 
+        // Para el AppBar y el scrim, usar colores sólidos estables para evitar glitches/crashes al colapsar
+        binding.appBarLayout.background = ColorDrawable(baseColor)
         binding.collapsingToolbar.setContentScrimColor(baseColor)
-        // Usar color base estable en lugar de dinámico para evitar parpadeos
         binding.collapsingToolbar.setStatusBarScrimColor(baseColor)
         binding.toolbar.navigationIcon?.setTint(android.graphics.Color.WHITE)
-        // Usar color fijo estable en lugar de dinámico para evitar parpadeos/crashes
         StatusBarUtils.setStatusBarColor(this)
     }
 
@@ -1092,6 +1093,13 @@ class AlbumDetailFragment : Fragment() {
     }
 
     override fun onDestroyView() {
+        // Remover listener del AppBar para evitar callbacks tras destruir la vista
+        appBarOffsetListener?.let { listener ->
+            try {
+                binding.appBarLayout.removeOnOffsetChangedListener(listener)
+            } catch (_: Exception) { /* no-op */ }
+        }
+        appBarOffsetListener = null
         super.onDestroyView()
         _binding = null
     }
