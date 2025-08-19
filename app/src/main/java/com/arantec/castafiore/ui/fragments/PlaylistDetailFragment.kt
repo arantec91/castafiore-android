@@ -576,9 +576,11 @@ class PlaylistDetailFragment : Fragment() {
         binding.gradientBackground.background = bgGradient
 
         binding.collapsingToolbar.setContentScrimColor(baseColor)
-        binding.collapsingToolbar.setStatusBarScrimColor(topColor) // Usar el color dinámico
+        // Usar color base estable en lugar de dinámico para evitar parpadeos
+        binding.collapsingToolbar.setStatusBarScrimColor(baseColor)
         binding.toolbar.navigationIcon?.setTint(android.graphics.Color.WHITE)
-        StatusBarUtils.setStatusBarColor(this, topColor) // Pasar el color dinámico
+        // Usar color fijo estable en lugar de dinámico para evitar parpadeos/crashes
+        StatusBarUtils.setStatusBarColor(this)
     }
 
     private fun buildSmoothGradient(baseColor: Int, topColor: Int): GradientDrawable {

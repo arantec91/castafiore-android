@@ -180,10 +180,13 @@ class AlbumDetailFragment : Fragment() {
             findNavController().popBackStack()
         }
 
-        // Configurar el AppBarLayout con optimización
+        // Configurar el AppBarLayout
         binding.appBarLayout.addOnOffsetChangedListener(
             object : com.google.android.material.appbar.AppBarLayout.OnOffsetChangedListener {
                 override fun onOffsetChanged(appBarLayout: com.google.android.material.appbar.AppBarLayout, verticalOffset: Int) {
+                    // Solo aplicar cambios si el fragment está activo y la vista existe
+                    if (!isAdded || _binding == null) return
+
                     dominantNavIconColor?.let { color ->
                         binding.toolbar.navigationIcon?.setTint(color)
                     }
@@ -350,7 +353,7 @@ class AlbumDetailFragment : Fragment() {
                     if (isCurrentAlbumPlaying()) {
                         // Si este álbum es el que se está reproduciendo actualmente
                         if (service.isPlaying()) {
-                            // Si está reproduciéndose, pausar
+                            // Si está reproduci����ndose, pausar
                             service.pause()
                         } else {
                             // Si está pausado, reanudar (no reiniciar la cola)
@@ -549,9 +552,11 @@ class AlbumDetailFragment : Fragment() {
         binding.gradientBackground.background = bgGradient
 
         binding.collapsingToolbar.setContentScrimColor(baseColor)
-        binding.collapsingToolbar.setStatusBarScrimColor(topColor) // Usar el color dinámico
+        // Usar color base estable en lugar de dinámico para evitar parpadeos
+        binding.collapsingToolbar.setStatusBarScrimColor(baseColor)
         binding.toolbar.navigationIcon?.setTint(android.graphics.Color.WHITE)
-        StatusBarUtils.setStatusBarColor(this, topColor) // Pasar el color dinámico
+        // Usar color fijo estable en lugar de dinámico para evitar parpadeos/crashes
+        StatusBarUtils.setStatusBarColor(this)
     }
 
     private fun buildSmoothGradient(baseColor: Int, topColor: Int): GradientDrawable {
