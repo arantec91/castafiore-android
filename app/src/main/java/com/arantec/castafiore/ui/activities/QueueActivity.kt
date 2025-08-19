@@ -21,6 +21,10 @@ import com.arantec.castafiore.utils.StatusBarUtils
 import com.bumptech.glide.Glide
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
+import com.arantec.castafiore.ui.dialogs.SongOptionsBottomSheet
+import com.arantec.castafiore.ui.dialogs.PlaylistSelectorBottomSheet
+import androidx.core.view.WindowCompat
+import androidx.core.content.ContextCompat
 
 class QueueActivity : AppCompatActivity() {
 
@@ -52,8 +56,9 @@ class QueueActivity : AppCompatActivity() {
         binding = ActivityQueueBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        // Ensure consistent status bar color
+        // Ensure consistent status and navigation bar colors
         StatusBarUtils.setStatusBarColor(this)
+        enforceSolidNavigationBar()
 
         // Apply window insets so content does not overlap the status bar/navigation bar
         applyWindowInsets()
@@ -63,6 +68,25 @@ class QueueActivity : AppCompatActivity() {
         setupViews()
         setupRecyclerView()
         bindMusicService()
+    }
+
+    private fun enforceSolidNavigationBar() {
+        // Disable edge-to-edge for this activity
+        WindowCompat.setDecorFitsSystemWindows(window, true)
+        // Set a solid dark navigation bar color and ensure light nav bar icons are disabled
+        window.navigationBarColor = ContextCompat.getColor(this, R.color.dark_background)
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+            window.isNavigationBarContrastEnforced = false
+        }
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+            window.insetsController?.setSystemBarsAppearance(
+                0,
+                android.view.WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS
+            )
+        } else if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+            val flags = window.decorView.systemUiVisibility and android.view.View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR.inv()
+            window.decorView.systemUiVisibility = flags
+        }
     }
 
     private fun applyWindowInsets() {
@@ -131,6 +155,9 @@ class QueueActivity : AppCompatActivity() {
             onStartDrag = { viewHolder ->
                 // Iniciar arrastre
                 itemTouchHelper?.startDrag(viewHolder)
+            },
+            onSongLongPress = { song, _ ->
+                showSongOptions(song)
             }
         )
 
@@ -250,6 +277,144 @@ class QueueActivity : AppCompatActivity() {
         binding.layoutEmptyQueue.visibility = if (isEmpty) View.VISIBLE else View.GONE
     }
 
+    // --- Song options from long press ---
+    private fun showSongOptions(song: Song) {
+        val bottomSheet = SongOptionsBottomSheet.newInstance(song, false)
+            // Ya está en la cola; ocultar acciones redundantes
+            .hideAddToQueueOption()
+            .hidePlayNextOption()
+            .setOnAddToPlaylistClickListener { s ->
+                val selector = PlaylistSelectorBottomSheet.newInstance(s)
+                selector.show(supportFragmentManager, "PlaylistSelectorBottomSheet")
+            }
+            .setOnViewAlbumClickListener { s ->
+                navigateToAlbum(s)
+            }
+            .setOnViewArtistClickListener { s ->
+                navigateToArtist(s)
+            }
+            .setOnShareClickListener { s ->
+                shareSong(s)
+            }
+            .setOnSongInfoClickListener { s ->
+                showSongInfoDialog(s)
+            }
+
+        bottomSheet.show(supportFragmentManager, "SongOptionsBottomSheet")
+    }
+
+    private fun shareSong(song: Song) {
+        val shareText = "Escuchando: ${song.title} - ${song.artist}"
+        val shareIntent = Intent().apply {
+            action = Intent.ACTION_SEND
+            type = "text/plain"
+            putExtra(Intent.EXTRA_TEXT, shareText)
+        }
+        val chooser = Intent.createChooser(shareIntent, "Compartir canción")
+        startActivity(chooser)
+    }
+
+    private fun navigateToAlbum(song: Song) {
+        val albumId = song.albumId
+        val albumName = song.album
+        if (albumId != null) {
+            val intent = Intent(this, MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+                putExtra("navigate_to", "album_detail")
+                putExtra("album_id", albumId)
+                putExtra("album_name", albumName)
+                putExtra("artist_name", song.artist)
+                putExtra("artist_id", song.artistId)
+            }
+            startActivity(intent)
+            finish()
+        } else {
+            android.widget.Toast.makeText(this, "Información del álbum no disponible", android.widget.Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun navigateToArtist(song: Song) {
+        val artistId = song.artistId
+        val artistName = song.artist
+        if (artistId != null) {
+            val intent = Intent(this, MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+                putExtra("navigate_to", "artist_detail")
+                putExtra("artist_id", artistId)
+                putExtra("artist_name", artistName)
+            }
+            startActivity(intent)
+            finish()
+        } else {
+            android.widget.Toast.makeText(this, "Información del artista no disponible", android.widget.Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun showSongInfoDialog(song: Song) {
+        val dialogBuilder = androidx.appcompat.app.AlertDialog.Builder(this)
+        val dialogView = layoutInflater.inflate(R.layout.dialog_song_info, null)
+
+        val tvTitle = dialogView.findViewById<android.widget.TextView>(R.id.tv_info_title)
+        val tvArtist = dialogView.findViewById<android.widget.TextView>(R.id.tv_info_artist)
+        val tvAlbum = dialogView.findViewById<android.widget.TextView>(R.id.tv_info_album)
+        val tvDuration = dialogView.findViewById<android.widget.TextView>(R.id.tv_info_duration)
+        val tvGenre = dialogView.findViewById<android.widget.TextView>(R.id.tv_info_genre)
+        val tvYear = dialogView.findViewById<android.widget.TextView>(R.id.tv_info_year)
+        val tvBitrate = dialogView.findViewById<android.widget.TextView>(R.id.tv_info_bitrate)
+        val tvFormat = dialogView.findViewById<android.widget.TextView>(R.id.tv_info_format)
+        val tvFileSize = dialogView.findViewById<android.widget.TextView>(R.id.tv_info_file_size)
+        val ivCover = dialogView.findViewById<android.widget.ImageView>(R.id.iv_info_cover)
+
+        tvTitle.text = song.title
+        tvArtist.text = song.artist
+        tvAlbum.text = song.album
+        tvDuration.text = formatTime(song.duration.toLong())
+        tvGenre.text = song.genre ?: "Género desconocido"
+        tvYear.text = song.year?.toString() ?: "Año desconocido"
+        tvBitrate.text = if (song.bitRate != null) "${song.bitRate} kbps" else "Bitrate desconocido"
+        tvFormat.text = song.suffix?.uppercase() ?: "Formato desconocido"
+        tvFileSize.text = if (song.size != null) {
+            val sizeInMB = song.size / (1024.0 * 1024.0)
+            String.format(java.util.Locale.getDefault(), "%.1f MB", sizeInMB)
+        } else {
+            "Tamaño desconocido"
+        }
+
+        try {
+            val (username, token, salt) = musicRepository.getAuthParams()
+            val coverUrl = if (song.albumId != null) {
+                "${musicRepository.serverUrl}/rest/getCoverArt.view?id=${song.albumId}&u=$username&t=$token&s=$salt&v=1.16.1&c=Castafiore&size=300"
+            } else {
+                null
+            }
+
+            if (coverUrl != null) {
+                Glide.with(this)
+                    .load(coverUrl)
+                    .placeholder(R.drawable.ic_album_placeholder)
+                    .error(R.drawable.ic_album_placeholder)
+                    .transition(com.bumptech.glide.load.resource.drawable.DrawableTransitionOptions.withCrossFade(200))
+                    .into(ivCover)
+            } else {
+                ivCover.setImageResource(R.drawable.ic_album_placeholder)
+            }
+        } catch (_: Exception) {
+            ivCover.setImageResource(R.drawable.ic_album_placeholder)
+        }
+
+        dialogBuilder.setView(dialogView)
+            .setTitle("Información de la canción")
+            .setPositiveButton("Cerrar") { dialog, _ -> dialog.dismiss() }
+            .create()
+            .show()
+    }
+
+    private fun formatTime(seconds: Long): String {
+        val minutes = seconds / 60
+        val secs = seconds % 60
+        return String.format(java.util.Locale.getDefault(), "%d:%02d", minutes, secs)
+    }
+
     override fun onStart() {
         super.onStart()
         if (!isBound) {
@@ -259,8 +424,9 @@ class QueueActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-        // Ensure consistent status bar color
+        // Ensure consistent status and navigation bar colors
         StatusBarUtils.setStatusBarColor(this)
+        enforceSolidNavigationBar()
     }
 
     override fun onStop() {

@@ -22,7 +22,8 @@ class QueueAdapter(
     private val onSongClick: (Song, Int) -> Unit,
     private val onRemoveSong: (Song, Int) -> Unit,
     private val onMoveSong: (Int, Int) -> Unit, // Nuevo callback para movimientos
-    private val onStartDrag: (RecyclerView.ViewHolder) -> Unit
+    private val onStartDrag: (RecyclerView.ViewHolder) -> Unit,
+    private val onSongLongPress: (Song, Int) -> Unit
 ) : RecyclerView.Adapter<QueueAdapter.QueueViewHolder>(), ItemTouchHelperAdapter {
 
     private var songs = mutableListOf<Song>()
@@ -40,6 +41,12 @@ class QueueAdapter(
             // Click en la canción
             binding.root.setOnClickListener {
                 onSongClick(song, position)
+            }
+
+            // Long click para opciones de canción
+            binding.root.setOnLongClickListener {
+                onSongLongPress(song, position)
+                true
             }
 
             // Configurar drag handle
