@@ -42,6 +42,8 @@ class MusicRepository private constructor(private val context: Context) {
             if (oldValue != value) {
                 CacheInvalidation.invalidateAllCache(cacheManager)
                 cachedAuth = null
+                // Limpiar token/salt persistidos para evitar URLs antiguas
+                prefs.edit().remove("auth_token").remove("auth_salt").apply()
             }
         }
 
@@ -54,6 +56,8 @@ class MusicRepository private constructor(private val context: Context) {
             if (oldValue != value) {
                 CacheInvalidation.invalidateAllCache(cacheManager)
                 cachedAuth = null
+                // Limpiar token/salt persistidos
+                prefs.edit().remove("auth_token").remove("auth_salt").apply()
             }
         }
 
@@ -64,6 +68,8 @@ class MusicRepository private constructor(private val context: Context) {
             prefs.edit().putString("password", value).apply()
             if (old != value) {
                 cachedAuth = null
+                // Limpiar token/salt persistidos
+                prefs.edit().remove("auth_token").remove("auth_salt").apply()
             }
         }
 
@@ -85,12 +91,26 @@ class MusicRepository private constructor(private val context: Context) {
     }
 
     fun getAuthParams(): Triple<String, String, String> {
-        // Devuelve auth cacheado para mantener el mismo token/salt
+        // Devuelve auth cacheado para mantener el mismo token/salt incluso entre reinicios
         cachedAuth?.let { return it }
         val user = username ?: throw IllegalStateException("Username not configured")
         val pass = password ?: throw IllegalStateException("Password not configured")
+        // Intentar recuperar token/salt persistidos para mantener URLs estables y permitir cache offline de imágenes
+        val storedToken = prefs.getString("auth_token", null)
+        val storedSalt = prefs.getString("auth_salt", null)
+        if (!storedToken.isNullOrEmpty() && !storedSalt.isNullOrEmpty()) {
+            val triple = Triple(user, storedToken, storedSalt)
+            cachedAuth = triple
+            return triple
+        }
+        // Si no hay persistido, generar y guardar
         val triple = NavidromeClient.generateAuthParams(user, pass)
         cachedAuth = triple
+        // Persistir token y salt para reutilizarlos entre sesiones
+        prefs.edit()
+            .putString("auth_token", triple.second)
+            .putString("auth_salt", triple.third)
+            .apply()
         return triple
     }
 
@@ -1305,5 +1325,14 @@ class MusicRepository private constructor(private val context: Context) {
     // Método helper síncrono para leer estado favorito de artista desde cache (si existe)
     fun peekArtistStarred(artistId: String): Boolean? {
         return cacheManager.peek(CacheKeys.artistFavorite(artistId), 10 * 60 * 1000L, CacheTypes.BOOLEAN_TYPE)
+    }
+
+    // --- Offline recent plays ---
+    fun getRecentPlays(limit: Int = 100): List<Song> {
+        return try {
+            com.arantec.castafiore.data.cache.RecentPlaysStore.getInstance(context).getAll(limit)
+        } catch (e: Exception) {
+            emptyList()
+        }
     }
 }

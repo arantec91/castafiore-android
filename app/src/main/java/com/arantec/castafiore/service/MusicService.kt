@@ -161,6 +161,14 @@ class MusicService : Service() {
                 }
                 // Actualizar canción actual y metadatos
                 currentSong = playlist.getOrNull(currentIndex)
+                // Registrar en recientes (offline history) solo en transición automática
+                if (reason == com.google.android.exoplayer2.Player.MEDIA_ITEM_TRANSITION_REASON_AUTO) {
+                    currentSong?.let {
+                        try {
+                            com.arantec.castafiore.data.cache.RecentPlaysStore.getInstance(this@MusicService).add(it)
+                        } catch (_: Exception) { }
+                    }
+                }
                 // Reiniciar tracking de scrobble para la nueva canción
                 scrobbleSentForCurrent = false
                 trackStartTimeMillis = System.currentTimeMillis()
@@ -272,6 +280,10 @@ class MusicService : Service() {
         scrobbleSentForCurrent = false
         trackStartTimeMillis = System.currentTimeMillis()
         reportNowPlayingSafe(song)
+        // Registrar también cuando la reproducción inicia manualmente
+        try {
+            com.arantec.castafiore.data.cache.RecentPlaysStore.getInstance(this).add(song)
+        } catch (_: Exception) { }
         updateMediaMetadata()
         showOrUpdateNotification()
         startProgressUpdates()

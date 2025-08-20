@@ -72,7 +72,7 @@ class CacheManager private constructor(private val context: Context) {
                 return Result.success(memoryResult)
             }
 
-            // 2. Intentar obtener desde cache en disco
+            // 2. Intentar obtener desde cache en disco (respetando TTL)
             val diskResult = getFromDisk<T>(key, ttl, type)
             if (diskResult != null) {
                 // Guardar en memoria para futuras consultas
@@ -82,13 +82,30 @@ class CacheManager private constructor(private val context: Context) {
 
             // 3. Cache miss - obtener datos frescos del proveedor
             val result = provider()
+
+            // En caso de éxito, persistir en cache
             result.onSuccess { data ->
-                // Guardar en ambos caches
                 putInMemory(key, data, ttl)
                 putOnDisk(key, data)
             }
+
+            // En caso de error, intentar devolver entrada obsoleta (stale) desde disco
+            if (result.isFailure) {
+                val stale = getFromDiskStale<T>(key, type)
+                if (stale != null) {
+                    @Suppress("UNCHECKED_CAST")
+                    return Result.success(stale as T)
+                }
+            }
+
             result
         } catch (e: Exception) {
+            // En excepción, intentar también fallback a entrada obsoleta
+            val stale = getFromDiskStale<T>(key, type)
+            if (stale != null) {
+                @Suppress("UNCHECKED_CAST")
+                return Result.success(stale as T)
+            }
             Result.failure(e)
         }
     }
@@ -159,6 +176,23 @@ class CacheManager private constructor(private val context: Context) {
                         .apply()
                     null
                 }
+            } else {
+                null
+            }
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    /**
+     * Versión que ignora TTL para recuperar datos viejos (stale) cuando no hay red.
+     * No limpia ni modifica timestamps.
+     */
+    private fun <T> getFromDiskStale(key: String, type: Type): T? {
+        return try {
+            val jsonData = diskCache.getString(key, null)
+            if (jsonData != null) {
+                gson.fromJson<T>(jsonData, type)
             } else {
                 null
             }

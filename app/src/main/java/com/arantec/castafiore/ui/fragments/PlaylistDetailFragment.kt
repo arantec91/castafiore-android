@@ -114,8 +114,36 @@ class PlaylistDetailFragment : Fragment() {
             com.arantec.castafiore.ui.dialogs.PlaylistOptionsBottomSheet()
                 .setOnEditNameClickListener { showRenameDialog() }
                 .setOnDeleteListClickListener { confirmDeletePlaylist() }
-                // Do not set download listener yet as requested
+                .setOnDownloadClickListener { downloadPlaylist() }
                 .show(childFragmentManager, "PlaylistOptionsBottomSheet")
+        }
+    }
+
+    private fun downloadPlaylist() {
+        if (playlistSongs.isEmpty()) {
+            Toast.makeText(requireContext(), "No hay canciones para descargar", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val downloadManager = com.arantec.castafiore.data.download.SongDownloadManager.getInstance(requireContext())
+        val alreadyDownloaded = playlistSongs.count { downloadManager.isSongDownloaded(it.id) }
+        val currentlyDownloading = playlistSongs.count { downloadManager.isSongDownloading(it.id) }
+        val toDownload = playlistSongs.filter { !downloadManager.isSongDownloaded(it.id) && !downloadManager.isSongDownloading(it.id) }
+        when {
+            alreadyDownloaded == playlistSongs.size -> {
+                Toast.makeText(requireContext(), "La playlist ya está completamente descargada", Toast.LENGTH_SHORT).show()
+            }
+            toDownload.isEmpty() && currentlyDownloading > 0 -> {
+                Toast.makeText(requireContext(), "La playlist se está descargando ($currentlyDownloading canciones pendientes)", Toast.LENGTH_SHORT).show()
+            }
+            else -> {
+                toDownload.forEach { song -> downloadManager.downloadSong(song) }
+                val message = if (alreadyDownloaded > 0) {
+                    "Descargando ${toDownload.size} canciones restantes de la playlist"
+                } else {
+                    "Descargando playlist completa (${toDownload.size} canciones)"
+                }
+                Toast.makeText(requireContext(), message, Toast.LENGTH_LONG).show()
+            }
         }
     }
 
