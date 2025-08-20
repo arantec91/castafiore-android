@@ -110,6 +110,7 @@
     <string name="settings_option_account">Cuenta</string>
     <string name="settings_option_playback">Reproducción</string>
     <string name="settings_option_info">Información</string>
+    <string name="settings_option_storage">Almacenamiento</string>
     <string name="account_user_label">Nombre de usuario</string>
     <string name="songs">Canciones</string>
     <string name="song_title_placeholder">Canción</string>
@@ -136,4 +137,18 @@
     <string name="quality_high_desc">Reproduce el archivo original del servidor (por ejemplo, 320 kbps si está disponible).</string>
     <string name="quality_basic_title">Calidad básica</string>
     <string name="quality_basic_desc">Transcodifica a MP3 de 128 kbps para ahorrar datos y ancho de banda.</string>
+
+    <!-- Storage settings -->
+    <string name="storage_delete_downloads_title">Eliminar todas las descargas</string>
+    <string name="storage_delete_downloads_desc">Elimina todo el contenido que hayas descargado para liberar espacio</string>
+    <string name="storage_delete_button">Eliminar</string>
+    <string name="storage_clear_cache_title">Borrar caché</string>
+    <string name="storage_clear_cache_desc">Elimina imágenes y archivos temporales (no se eliminan tus descargas)</string>
+    <string name="storage_clear_button">Borrar</string>
+    <string name="storage_delete_confirm_title">Eliminar descargas</string>
+    <string name="storage_delete_confirm_message">¿Seguro que quieres eliminar todas las descargas? Esta acción no se puede deshacer.</string>
+    <string name="storage_delete_success">Descargas eliminadas</string>
+    <string name="storage_delete_error">No se pudieron eliminar todas las descargas</string>
+    <string name="storage_clear_cache_success">Caché borrada</string>
+    <string name="storage_clear_cache_error">Error al borrar caché</string>
 </resources>

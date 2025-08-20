@@ -216,6 +216,9 @@ class LibraryFragment : Fragment() {
                 buildAllItemsList()
                 filterContent()
 
+                // Actualizar visibilidad del chip de Descargados
+                updateDownloadsChipVisibility()
+
             } catch (e: Exception) {
                 showError("Error al cargar la biblioteca: ${e.message}")
             } finally {
@@ -405,6 +408,8 @@ class LibraryFragment : Fragment() {
             showLoading(true)
             try {
                 computeDownloadsIfNeeded(force = true)
+                // Inform adapter which items are downloaded
+                libraryAdapter.updateDownloadedIds(downloads.map { it.id }.toSet())
                 val filteredItems = downloads.toList()
                 if (filteredItems.isEmpty()) {
                     showEmptyState()
@@ -518,6 +523,34 @@ class LibraryFragment : Fragment() {
         downloadsComputed = true
     }
 
+    // Helper: show/hide Downloads chip based on whether there are downloaded items
+    private fun updateDownloadsChipVisibility() {
+        lifecycleScope.launch {
+            try {
+                computeDownloadsIfNeeded(force = true)
+                val hasDownloads = downloads.isNotEmpty()
+                // Update adapter downloaded IDs for all filters
+                libraryAdapter.updateDownloadedIds(downloads.map { it.id }.toSet())
+                binding.chipDownloads.visibility = if (hasDownloads) View.VISIBLE else View.GONE
+
+                // If current filter is downloads but none available, fallback to 'all'
+                if (!hasDownloads && currentFilter == "downloads") {
+                    currentFilter = "all"
+                    applyCheckedChipFromFilter()
+                    filterContent()
+                }
+            } catch (_: Exception) {
+                // On error, hide downloads chip to avoid broken navigation
+                binding.chipDownloads.visibility = View.GONE
+                if (currentFilter == "downloads") {
+                    currentFilter = "all"
+                    applyCheckedChipFromFilter()
+                    filterContent()
+                }
+            }
+        }
+    }
+
     private fun handleItemClick(item: LibraryItem) {
         // Congelar el RecyclerView y scroll antes de navegar para evitar efectos visuales
         binding.rvLibraryItems.isNestedScrollingEnabled = false
@@ -601,6 +634,8 @@ class LibraryFragment : Fragment() {
             binding.scrollFilters.isNestedScrollingEnabled = true
             // Reaplicar colores de chips en caso de que el estado visual haya sido alterado
             applyCheckedChipFromFilter()
+            // Re-evaluar descargas por si cambiaron fuera de este fragmento
+            updateDownloadsChipVisibility()
         }
     }
 

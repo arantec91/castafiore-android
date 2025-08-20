@@ -16,6 +16,9 @@ class LibraryAdapter(
 
     private var items = mutableListOf<LibraryItem>()
 
+    // IDs de items descargados para pintar icono en el subtitle
+    private var downloadedIds: Set<String> = emptySet()
+
     fun updateItems(newItems: List<LibraryItem>) {
         val diffCallback = LibraryDiffCallback(items, newItems)
         val diffResult = DiffUtil.calculateDiff(diffCallback)
@@ -23,6 +26,11 @@ class LibraryAdapter(
         items.clear()
         items.addAll(newItems)
         diffResult.dispatchUpdatesTo(this)
+    }
+
+    fun updateDownloadedIds(ids: Set<String>) {
+        downloadedIds = ids
+        notifyDataSetChanged()
     }
 
     inner class LibraryViewHolder(
@@ -33,6 +41,9 @@ class LibraryAdapter(
             binding.apply {
                 tvTitle.text = item.title
                 tvSubtitle.text = item.subtitle
+
+                // Reset any previous compound drawable
+                tvSubtitle.setCompoundDrawablesRelative(null, null, null, null)
 
                  // Reset reusable state that may linger from recycled views
                 ivCover.background = null
@@ -73,6 +84,27 @@ class LibraryAdapter(
                             ivCover.background = null
                         }
                     }
+                }
+
+                // Mostrar icono de descarga en el subtitle si el ítem está descargado
+                if (downloadedIds.contains(item.id)) {
+                    val ctx = itemView.context
+                    val drawable = androidx.appcompat.content.res.AppCompatResources.getDrawable(ctx, R.drawable.ic_download)?.mutate()
+                    if (drawable != null) {
+                        // Ajustar tamaño al alto del texto del subtitle
+                        val size = tvSubtitle.lineHeight
+                        drawable.setBounds(0, 0, size, size)
+                        // Tint al mismo color usado en ivDownloaded (#1DB954)
+                        try {
+                            drawable.setTint(android.graphics.Color.parseColor("#FF2D55"))
+                        } catch (_: Exception) { /* ignore tint errors */ }
+                        tvSubtitle.setCompoundDrawablesRelative(drawable, null, null, null)
+                        // Padding entre icono y texto (6dp)
+                        val paddingPx = (6 * itemView.resources.displayMetrics.density).toInt()
+                        tvSubtitle.compoundDrawablePadding = paddingPx
+                    }
+                } else {
+                    tvSubtitle.setCompoundDrawablesRelative(null, null, null, null)
                 }
 
                 // Click listener

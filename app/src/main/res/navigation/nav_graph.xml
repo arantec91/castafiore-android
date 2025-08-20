@@ -117,6 +117,12 @@
         tools:layout="@layout/fragment_playback" />
 
     <fragment
+        android:id="@+id/storageFragment"
+        android:name="com.arantec.castafiore.ui.fragments.StorageFragment"
+        android:label="Almacenamiento"
+        tools:layout="@layout/fragment_storage" />
+
+    <fragment
         android:id="@+id/infoFragment"
         android:name="com.arantec.castafiore.ui.fragments.InfoFragment"
         android:label="Información"

@@ -63,6 +63,12 @@ class SettingsFragment : Fragment() {
                 title = getString(R.string.settings_option_playback),
                 iconRes = R.drawable.ic_queue_music
             ),
+            // New Storage option
+            SettingsAdapter.SettingItem(
+                id = "storage",
+                title = getString(R.string.settings_option_storage),
+                iconRes = R.drawable.ic_delete
+            ),
             SettingsAdapter.SettingItem(
                 id = "info",
                 title = getString(R.string.settings_option_info),
@@ -74,6 +80,7 @@ class SettingsFragment : Fragment() {
             when (item.id) {
                 "account" -> findNavController().navigate(R.id.accountFragment)
                 "playback" -> findNavController().navigate(R.id.playbackFragment)
+                "storage" -> findNavController().navigate(R.id.storageFragment)
                 "info" -> findNavController().navigate(R.id.infoFragment)
             }
         }
