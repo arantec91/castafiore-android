@@ -20,6 +20,8 @@ import com.arantec.castafiore.data.repository.MusicRepository
 import com.arantec.castafiore.utils.ImageLoader
 import com.arantec.castafiore.utils.StatusBarUtils
 import com.google.android.material.chip.Chip
+import com.arantec.castafiore.data.download.SongDownloadManager
+import java.io.File
 
 class LibraryFragment : Fragment() {
 
@@ -39,6 +41,12 @@ class LibraryFragment : Fragment() {
     // Mapas para mantener referencias a los objetos completos
     private var albumsMap = mutableMapOf<String, Album>()
     private var playlistsMap = mutableMapOf<String, Playlist>()
+
+    // Descargas
+    private var downloads = mutableListOf<LibraryItem>()
+    private var downloadsComputed = false
+    private var downloadedAlbumsCache = mutableMapOf<String, Boolean>()
+    private var downloadedPlaylistsCache = mutableMapOf<String, Boolean>()
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -100,11 +108,15 @@ class LibraryFragment : Fragment() {
         binding.chipArtists.setOnClickListener {
             selectChip(binding.chipArtists, "artists")
         }
+
+        binding.chipDownloads.setOnClickListener {
+            selectChip(binding.chipDownloads, "downloads")
+        }
     }
 
     private fun selectChip(selectedChip: Chip, filter: String) {
         // Desmarcar todos los chips sin disparar listeners
-        val chips = listOf(binding.chipAll, binding.chipPlaylists, binding.chipAlbums, binding.chipArtists)
+        val chips = listOf(binding.chipAll, binding.chipPlaylists, binding.chipAlbums, binding.chipArtists, binding.chipDownloads)
         chips.forEach { chip ->
             chip.isChecked = false
         }
@@ -130,7 +142,8 @@ class LibraryFragment : Fragment() {
             binding.chipAll,
             binding.chipPlaylists,
             binding.chipAlbums,
-            binding.chipArtists
+            binding.chipArtists,
+            binding.chipDownloads
         )
 
         chips.forEach { chip ->
@@ -158,11 +171,13 @@ class LibraryFragment : Fragment() {
         val isPlaylists = currentFilter == "playlists"
         val isAlbums = currentFilter == "albums"
         val isArtists = currentFilter == "artists"
+        val isDownloads = currentFilter == "downloads"
 
         binding.chipAll.isChecked = isAll
         binding.chipPlaylists.isChecked = isPlaylists
         binding.chipAlbums.isChecked = isAlbums
         binding.chipArtists.isChecked = isArtists
+        binding.chipDownloads.isChecked = isDownloads
 
         updateChipColors()
     }
@@ -358,6 +373,11 @@ class LibraryFragment : Fragment() {
     }
 
     private fun filterContent() {
+        if (currentFilter == "downloads") {
+            filterDownloads()
+            return
+        }
+
         val filteredItems = when (currentFilter) {
             "all" -> allItems.toList()
             "playlists" -> playlists.toList()
@@ -372,6 +392,124 @@ class LibraryFragment : Fragment() {
             hideEmptyState()
             libraryAdapter.updateItems(filteredItems)
         }
+    }
+
+    private fun filterDownloads() {
+        lifecycleScope.launch {
+            showLoading(true)
+            try {
+                computeDownloadsIfNeeded(force = true)
+                val filteredItems = downloads.toList()
+                if (filteredItems.isEmpty()) {
+                    showEmptyState()
+                } else {
+                    hideEmptyState()
+                    libraryAdapter.updateItems(filteredItems)
+                }
+            } catch (e: Exception) {
+                showError("Error al cargar descargados: ${e.message}")
+            } finally {
+                showLoading(false)
+            }
+        }
+    }
+
+    private suspend fun computeDownloadsIfNeeded(force: Boolean = false) {
+        if (downloadsComputed && !force) return
+        downloads.clear()
+        if (force) {
+            downloadedAlbumsCache.clear()
+            downloadedPlaylistsCache.clear()
+            downloadsComputed = false
+        }
+
+        val dm = SongDownloadManager.getInstance(requireContext())
+
+        // Agregar Playlists descargadas (excluyendo 'liked_songs')
+        for (pl in playlistsMap.values) {
+            if (pl.id == "liked_songs") continue
+            val cached = downloadedPlaylistsCache[pl.id]
+            val isDownloaded = if (cached != null) {
+                cached
+            } else {
+                var fullyDownloaded = false
+                musicRepository.getPlaylistSongs(pl.id).onSuccess { songs ->
+                    fullyDownloaded = songs.isNotEmpty() && songs.all { song ->
+                        val path = dm.createDownloadPath(song)
+                        File(path).exists()
+                    }
+                }
+                downloadedPlaylistsCache[pl.id] = fullyDownloaded
+                fullyDownloaded
+            }
+
+            if (isDownloaded) {
+                // Buscar el LibraryItem ya preparado para la playlist
+                playlists.find { it.id == pl.id }?.let { item ->
+                    downloads.add(item)
+                } ?: run {
+                    // Fallback simple
+                    downloads.add(
+                        LibraryItem(
+                            id = pl.id,
+                            title = pl.name,
+                            subtitle = "Playlist",
+                            imageUrl = null,
+                            type = LibraryItemType.PLAYLIST
+                        )
+                    )
+                }
+            }
+        }
+
+        // Agregar Álbumes descargados
+        for (al in albumsMap.values) {
+            val cached = downloadedAlbumsCache[al.id]
+            val isDownloaded = if (cached != null) {
+                cached
+            } else {
+                var fullyDownloaded = false
+                musicRepository.getAlbumSongs(al.id).onSuccess { songs ->
+                    fullyDownloaded = songs.isNotEmpty() && songs.all { song ->
+                        val path = dm.createDownloadPath(song)
+                        File(path).exists()
+                    }
+                }
+                downloadedAlbumsCache[al.id] = fullyDownloaded
+                fullyDownloaded
+            }
+
+            if (isDownloaded) {
+                albums.find { it.id == al.id }?.let { item ->
+                    downloads.add(item)
+                } ?: run {
+                    val (username, token, salt) = musicRepository.getAuthParams()
+                    val imageUrl = ImageLoader.buildCoverArtUrl(
+                        musicRepository.serverUrl!!,
+                        al.id,
+                        username,
+                        token,
+                        salt,
+                        200
+                    )
+                    downloads.add(
+                        LibraryItem(
+                            id = al.id,
+                            title = al.name,
+                            subtitle = "Álbum • ${al.artist}",
+                            imageUrl = imageUrl,
+                            type = LibraryItemType.ALBUM
+                        )
+                    )
+                }
+            }
+        }
+
+        // Orden opcional: mantener orden por tipo como en allItems
+        // Primero playlists, luego álbumes
+        downloads.sortWith(compareBy({ it.type != LibraryItemType.PLAYLIST }, { it.title.lowercase() }))
+
+        downloadsComputed = true
     }
 
     private fun handleItemClick(item: LibraryItem) {

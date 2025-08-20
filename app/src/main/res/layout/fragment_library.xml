@@ -106,6 +106,20 @@
                 app:chipStartPadding="14dp"
                 app:chipEndPadding="14dp" />
 
+            <com.google.android.material.chip.Chip
+                android:id="@+id/chipDownloads"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="8dp"
+                android:text="Descargados"
+                android:textColor="#FFFFFF"
+                android:textSize="14sp"
+                android:checkable="true"
+                app:chipCornerRadius="20dp"
+                app:chipMinHeight="40dp"
+                app:chipStartPadding="14dp"
+                app:chipEndPadding="14dp" />
+
         </LinearLayout>
     </HorizontalScrollView>
 
