@@ -114,8 +114,14 @@ class PlaylistDetailFragment : Fragment() {
         setupFab()
         setupMoreButton()
 
-        // Download button: start playlist download
-        binding.btnDownload.setOnClickListener { downloadPlaylist() }
+        // Download button: start playlist download or confirm delete if fully downloaded
+        binding.btnDownload.setOnClickListener {
+            if (isPlaylistFullyDownloaded()) {
+                showConfirmDeletePlaylistDownloads()
+            } else {
+                downloadPlaylist()
+            }
+        }
         // Observe download states and update UI immediately
         observeDownloadStates()
         updateDownloadUIState()
@@ -745,5 +751,63 @@ class PlaylistDetailFragment : Fragment() {
         _binding = null
         // Ensure unbound
         unbindMusicService()
+    }
+
+    private fun isPlaylistFullyDownloaded(): Boolean {
+        val dm = SongDownloadManager.getInstance(requireContext())
+        val songs = playlistSongs.toList()
+        if (songs.isEmpty()) return false
+        return songs.all { File(dm.createDownloadPath(it)).exists() }
+    }
+
+    private fun showConfirmDeletePlaylistDownloads() {
+        val dm = SongDownloadManager.getInstance(requireContext())
+        val downloadedSongs = playlistSongs.filter { File(dm.createDownloadPath(it)).exists() }
+        if (downloadedSongs.isEmpty()) {
+            Toast.makeText(requireContext(), "No hay descargas para eliminar", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val count = downloadedSongs.size
+        val message = if (count == 1) {
+            "Se eliminará 1 canción descargada de esta playlist. ¿Deseas continuar?"
+        } else {
+            "Se eliminarán $count canciones descargadas de esta playlist. ¿Deseas continuar?"
+        }
+        AlertDialog.Builder(requireContext())
+            .setTitle("Eliminar descargas de la playlist")
+            .setMessage(message)
+            .setPositiveButton("Eliminar") { _, _ ->
+                deletePlaylistDownloads(downloadedSongs)
+            }
+            .setNegativeButton(R.string.cancel, null)
+            .show()
+    }
+
+    private fun deletePlaylistDownloads(songsToDelete: List<Song>) {
+        val dm = SongDownloadManager.getInstance(requireContext())
+        var deleted = 0
+        songsToDelete.forEach { song ->
+            val removed = dm.deleteSong(song.id)
+            if (removed) {
+                deleted++
+            } else {
+                try {
+                    val path = dm.createDownloadPath(song)
+                    val f = File(path)
+                    if (f.exists() && f.delete()) {
+                        deleted++
+                    }
+                    dm.cancelDownload(song.id)
+                } catch (_: Exception) { /* ignore */ }
+            }
+        }
+        updateDownloadUIState()
+        songAdapter.notifyDataSetChanged()
+        val msg = when (deleted) {
+            0 -> "No se pudo eliminar ninguna descarga"
+            1 -> "Se eliminó 1 descarga"
+            else -> "Se eliminaron $deleted descargas"
+        }
+        Toast.makeText(requireContext(), msg, Toast.LENGTH_SHORT).show()
     }
 }

@@ -94,7 +94,13 @@ class FavoritesFragment : Fragment() {
         setupFab()
 
         // Download button and observers
-        binding.btnDownload.setOnClickListener { downloadFavorites() }
+        binding.btnDownload.setOnClickListener {
+            if (isFavoritesFullyDownloaded()) {
+                showConfirmDeleteFavoritesDownloads()
+            } else {
+                downloadFavorites()
+            }
+        }
         observeDownloadStates()
         updateDownloadUIState()
     }
@@ -564,5 +570,64 @@ class FavoritesFragment : Fragment() {
         // Extra safety: ensure unbound
         unbindMusicService()
         _binding = null
+    }
+
+    private fun isFavoritesFullyDownloaded(): Boolean {
+        val dm = SongDownloadManager.getInstance(requireContext())
+        val songs = favoriteSongs.toList()
+        if (songs.isEmpty()) return false
+        return songs.all { File(dm.createDownloadPath(it)).exists() }
+    }
+
+    private fun showConfirmDeleteFavoritesDownloads() {
+        val dm = SongDownloadManager.getInstance(requireContext())
+        val downloadedSongs = favoriteSongs.filter { File(dm.createDownloadPath(it)).exists() }
+        if (downloadedSongs.isEmpty()) {
+            android.widget.Toast.makeText(requireContext(), "No hay descargas para eliminar", android.widget.Toast.LENGTH_SHORT).show()
+            return
+        }
+        val count = downloadedSongs.size
+        val title = "Eliminar descargas de favoritas"
+        val message = if (count == 1) {
+            "Se eliminará 1 canción descargada de tus favoritas. ¿Deseas continuar?"
+        } else {
+            "Se eliminarán $count canciones descargadas de tus favoritas. ¿Deseas continuar?"
+        }
+        androidx.appcompat.app.AlertDialog.Builder(requireContext())
+            .setTitle(title)
+            .setMessage(message)
+            .setPositiveButton("Eliminar") { _, _ ->
+                deleteFavoritesDownloads(downloadedSongs)
+            }
+            .setNegativeButton(R.string.cancel, null)
+            .show()
+    }
+
+    private fun deleteFavoritesDownloads(songsToDelete: List<Song>) {
+        val dm = SongDownloadManager.getInstance(requireContext())
+        var deleted = 0
+        songsToDelete.forEach { song ->
+            val removed = dm.deleteSong(song.id)
+            if (removed) {
+                deleted++
+            } else {
+                try {
+                    val path = dm.createDownloadPath(song)
+                    val f = File(path)
+                    if (f.exists() && f.delete()) {
+                        deleted++
+                    }
+                    dm.cancelDownload(song.id)
+                } catch (_: Exception) { /* ignore */ }
+            }
+        }
+        updateDownloadUIState()
+        songAdapter.notifyDataSetChanged()
+        val msg = when (deleted) {
+            0 -> "No se pudo eliminar ninguna descarga"
+            1 -> "Se eliminó 1 descarga"
+            else -> "Se eliminaron $deleted descargas"
+        }
+        android.widget.Toast.makeText(requireContext(), msg, android.widget.Toast.LENGTH_SHORT).show()
     }
 }

@@ -409,7 +409,12 @@ class AlbumDetailFragment : Fragment() {
         // Botón de descarga de álbum
         binding.btnDownload.setOnClickListener {
             currentAlbum?.let { album ->
-                downloadAlbum(album)
+                // Si todo el álbum ya está descargado, pedir confirmación para eliminar
+                if (isAlbumFullyDownloaded()) {
+                    showConfirmDeleteAlbumDownloads()
+                } else {
+                    downloadAlbum(album)
+                }
             }
         }
     }
@@ -960,6 +965,10 @@ class AlbumDetailFragment : Fragment() {
         currentAlbum?.let { album ->
             // Deshabilitar mientras se procesa para evitar taps repetidos
             binding.btnFavorite.isEnabled = false
+
+            // Guardar estado previo para saber si estamos quitando de favoritos
+            val wasFavorited = isFavorited
+
             lifecycleScope.launch {
                 try {
                     val result = if (isFavorited) {
@@ -970,9 +979,22 @@ class AlbumDetailFragment : Fragment() {
 
                     result.fold(
                         onSuccess = {
+                            // Toggle localmente
                             isFavorited = !isFavorited
                             updateFavoriteButton()
                             binding.btnFavorite.isEnabled = true
+
+                            // Si se estaba en favoritos y el álbum está completamente descargado, eliminar descargas sin confirmar
+                            if (wasFavorited && isAlbumFullyDownloaded()) {
+                                // Eliminar todas las descargas del álbum automáticamente
+                                val downloadedSongs = albumSongs.filter { song ->
+                                    val dm = SongDownloadManager.getInstance(requireContext())
+                                    java.io.File(dm.createDownloadPath(song)).exists()
+                                }
+                                if (downloadedSongs.isNotEmpty()) {
+                                    deleteAlbumDownloads(downloadedSongs)
+                                }
+                            }
                         },
                         onFailure = { error ->
                             binding.btnFavorite.isEnabled = true
@@ -1219,5 +1241,75 @@ class AlbumDetailFragment : Fragment() {
             isBound = false
             musicService = null
         }
+    }
+
+    private fun isAlbumFullyDownloaded(): Boolean {
+        val dm = SongDownloadManager.getInstance(requireContext())
+        val songs = albumSongs.toList()
+        if (songs.isEmpty()) return false
+        return songs.all { java.io.File(dm.createDownloadPath(it)).exists() }
+    }
+
+    private fun showConfirmDeleteAlbumDownloads() {
+        val downloadedSongs = albumSongs.filter { song ->
+            val dm = SongDownloadManager.getInstance(requireContext())
+            java.io.File(dm.createDownloadPath(song)).exists()
+        }
+        if (downloadedSongs.isEmpty()) {
+            // Nada que eliminar
+            android.widget.Toast.makeText(requireContext(), "No hay descargas para eliminar", android.widget.Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val count = downloadedSongs.size
+        val title = "Eliminar descargas del álbum"
+        val message = if (count == 1) {
+            "Se eliminará 1 canción descargada de este álbum. ¿Deseas continuar?"
+        } else {
+            "Se eliminarán $count canciones descargadas de este álbum. ¿Deseas continuar?"
+        }
+
+        androidx.appcompat.app.AlertDialog.Builder(requireContext())
+            .setTitle(title)
+            .setMessage(message)
+            .setPositiveButton("Eliminar") { _, _ ->
+                deleteAlbumDownloads(downloadedSongs)
+            }
+            .setNegativeButton("Cancelar", null)
+            .show()
+    }
+
+    private fun deleteAlbumDownloads(songsToDelete: List<Song>) {
+        val dm = SongDownloadManager.getInstance(requireContext())
+        var deleted = 0
+        songsToDelete.forEach { song ->
+            // Intentar eliminar vía DownloadManager para mantener estado
+            val removed = dm.deleteSong(song.id)
+            if (removed) {
+                deleted++
+            } else {
+                // Fallback: borrar el archivo directamente si existe
+                try {
+                    val path = dm.createDownloadPath(song)
+                    val file = java.io.File(path)
+                    if (file.exists() && file.delete()) {
+                        deleted++
+                    }
+                    // Cancelar cualquier trabajo pendiente asociado
+                    dm.cancelDownload(song.id)
+                } catch (_: Exception) { /* ignore */ }
+            }
+        }
+
+        // Actualizar UI
+        updateDownloadUIState()
+        songAdapter.notifyDataSetChanged()
+
+        val msg = when (deleted) {
+            0 -> "No se pudo eliminar ninguna descarga"
+            1 -> "Se eliminó 1 descarga"
+            else -> "Se eliminaron $deleted descargas"
+        }
+        android.widget.Toast.makeText(requireContext(), msg, android.widget.Toast.LENGTH_SHORT).show()
     }
 }
