@@ -27,7 +27,8 @@ import com.bumptech.glide.Glide
 import com.bumptech.glide.load.engine.DiskCacheStrategy
 import com.bumptech.glide.request.RequestOptions
 import androidx.palette.graphics.Palette
-import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.Dispatchers
 import androidx.core.content.ContextCompat
 import android.content.res.ColorStateList
 import kotlinx.coroutines.launch
@@ -50,6 +51,10 @@ class AlbumDetailFragment : Fragment() {
     private var isBound = false
     private var currentAlbum: Album? = null
     private var albumSongs = mutableListOf<Song>()
+
+        // Cached summary to avoid excessive UI updates during downloads
+        private var lastCompletedIds: Set<String> = emptySet()
+        private var lastAnyDownloading: Boolean = false
 
     private var dominantNavIconColor: Int? = null
     private var isPlaying = false
@@ -411,13 +416,29 @@ class AlbumDetailFragment : Fragment() {
     private fun observeDownloadStates() {
         val dm = SongDownloadManager.getInstance(requireContext())
         viewLifecycleOwner.lifecycleScope.launch {
-            dm.downloadStates.collectLatest {
-                if (isAdded && _binding != null) {
-                    updateDownloadUIState()
-                    // Refrescar listado para mostrar iconos de descarga por canción
-                    songAdapter.notifyDataSetChanged()
+            dm.downloadStates
+                .map { states ->
+                    val songs = albumSongs.toList()
+                    val completed = songs.asSequence()
+                        .map { it.id to java.io.File(dm.createDownloadPath(it)).exists() }
+                        .filter { it.second }
+                        .map { it.first }
+                        .toSet()
+                    val anyDownloading = songs.any { dm.isSongDownloading(it.id) }
+                    Pair(completed, anyDownloading)
                 }
-            }
+                .distinctUntilChanged()
+                .flowOn(kotlinx.coroutines.Dispatchers.Default)
+                .collect { (completedIds, anyDownloading) ->
+                    if (!isAdded || _binding == null) return@collect
+                    val changed = completedIds != lastCompletedIds || anyDownloading != lastAnyDownloading
+                    if (changed) {
+                        lastCompletedIds = completedIds
+                        lastAnyDownloading = anyDownloading
+                        updateDownloadUIState()
+                        songAdapter.notifyDataSetChanged()
+                    }
+                }
         }
     }
 

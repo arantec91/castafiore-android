@@ -27,7 +27,8 @@ import com.arantec.castafiore.ui.adapters.SongAdapter
 import com.arantec.castafiore.utils.ImageLoader
 import com.arantec.castafiore.utils.StatusBarUtils
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.Dispatchers
 import com.bumptech.glide.Glide
 import java.util.Locale
 import kotlin.random.Random
@@ -58,6 +59,9 @@ class PlaylistDetailFragment : Fragment() {
     private var playlistInfo: Playlist? = null
 
     private val playlistSongs = mutableListOf<Song>()
+    // Cached summary to avoid excessive UI updates during downloads
+    private var lastCompletedIds: Set<String> = emptySet()
+    private var lastAnyDownloading: Boolean = false
     private var isPlaying = false
 
     private var playbackStateListener: ((Boolean) -> Unit)? = null
@@ -575,12 +579,29 @@ class PlaylistDetailFragment : Fragment() {
     private fun observeDownloadStates() {
         val dm = SongDownloadManager.getInstance(requireContext())
         viewLifecycleOwner.lifecycleScope.launch {
-            dm.downloadStates.collectLatest {
-                if (isAdded && _binding != null) {
-                    updateDownloadUIState()
-                    songAdapter.notifyDataSetChanged()
+            dm.downloadStates
+                .map {
+                    val songs = playlistSongs.toList()
+                    val completed = songs.asSequence()
+                        .map { it.id to java.io.File(dm.createDownloadPath(it)).exists() }
+                        .filter { it.second }
+                        .map { it.first }
+                        .toSet()
+                    val anyDownloading = songs.any { dm.isSongDownloading(it.id) }
+                    Pair(completed, anyDownloading)
                 }
-            }
+                .distinctUntilChanged()
+                .flowOn(Dispatchers.Default)
+                .collect { (completedIds, anyDownloading) ->
+                    if (!isAdded || _binding == null) return@collect
+                    val changed = completedIds != lastCompletedIds || anyDownloading != lastAnyDownloading
+                    if (changed) {
+                        lastCompletedIds = completedIds
+                        lastAnyDownloading = anyDownloading
+                        updateDownloadUIState()
+                        songAdapter.notifyDataSetChanged()
+                    }
+                }
         }
     }
 
