@@ -253,23 +253,37 @@ class MainActivity : AppCompatActivity() {
             binding.tvSongTitle.text = song.title
             binding.tvArtistName.text = song.artist
 
-            // Usar ImageLoader optimizado para el mini player
+            // Preferir portada local si disponible; fallback a URL con ImageLoader
             try {
-                val (username, token, salt) = musicRepository.getAuthParams()
-                val coverUrl = song.albumId?.let { albumId ->
-                    ImageLoader.buildCoverArtUrl(
-                        musicRepository.serverUrl!!,
-                        albumId,
-                        username,
-                        token,
-                        salt,
-                        150 // Tamaño pequeño para mini player
-                    )
+                val dm = com.arantec.castafiore.data.download.SongDownloadManager.getInstance(this)
+                val localCoverPath = try { dm.createCoverPath(song) } catch (_: Exception) { null }
+                var usedLocal = false
+                if (!localCoverPath.isNullOrEmpty()) {
+                    val file = java.io.File(localCoverPath)
+                    if (file.exists()) {
+                        val bmp = android.graphics.BitmapFactory.decodeFile(localCoverPath)
+                        if (bmp != null) {
+                            binding.ivAlbumArt.setImageBitmap(bmp)
+                            usedLocal = true
+                        }
+                    }
                 }
-
-                ImageLoader.loadThumbnail(this, binding.ivAlbumArt, coverUrl)
+                if (!usedLocal) {
+                    val (username, token, salt) = musicRepository.getAuthParams()
+                    val coverUrl = song.albumId?.let { albumId ->
+                        ImageLoader.buildCoverArtUrl(
+                            musicRepository.serverUrl!!,
+                            albumId,
+                            username,
+                            token,
+                            salt,
+                            150 // Tamaño pequeño para mini player
+                        )
+                    }
+                    ImageLoader.loadThumbnail(this, binding.ivAlbumArt, coverUrl)
+                }
             } catch (_: Exception) {
-                // Si falla la autenticación, usar placeholder
+                // Si falla, usar placeholder
                 binding.ivAlbumArt.setImageResource(R.drawable.ic_album_placeholder)
             }
         } else {

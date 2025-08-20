@@ -24,6 +24,11 @@ import kotlinx.coroutines.launch
 import com.bumptech.glide.Glide
 import java.util.Locale
 import kotlin.random.Random
+import com.arantec.castafiore.data.download.SongDownloadManager
+import kotlinx.coroutines.flow.collectLatest
+import androidx.core.content.ContextCompat
+import android.content.res.ColorStateList
+import java.io.File
 
 class FavoritesFragment : Fragment() {
 
@@ -83,6 +88,11 @@ class FavoritesFragment : Fragment() {
         // bindMusicService()
         loadFavorites()
         setupFab()
+
+        // Download button and observers
+        binding.btnDownload.setOnClickListener { downloadFavorites() }
+        observeDownloadStates()
+        updateDownloadUIState()
     }
 
     private fun setupToolbar() {
@@ -168,6 +178,8 @@ class FavoritesFragment : Fragment() {
                     favoriteSongs.clear()
                     favoriteSongs.addAll(songs)
                     songAdapter.updateSongs(favoriteSongs)
+                    updateDownloadUIState()
+                    songAdapter.notifyDataSetChanged()
 
                     // Info header
                     binding.tvTitle.text = getString(R.string.favorite_songs_title)
@@ -257,6 +269,63 @@ class FavoritesFragment : Fragment() {
                 if (isAdded && _binding != null) {
                     binding.fabPlay.setImageResource(if (isPlaying) R.drawable.ic_pause else R.drawable.ic_play)
                 }
+            }
+        }
+    }
+
+    // --- Downloads for Favorites ---
+    private fun observeDownloadStates() {
+        val dm = SongDownloadManager.getInstance(requireContext())
+        viewLifecycleOwner.lifecycleScope.launch {
+            dm.downloadStates.collectLatest {
+                if (isAdded && _binding != null) {
+                    updateDownloadUIState()
+                    songAdapter.notifyDataSetChanged()
+                }
+            }
+        }
+    }
+
+    private fun updateDownloadUIState() {
+        if (!isAdded || _binding == null) return
+        val dm = SongDownloadManager.getInstance(requireContext())
+        val songs = favoriteSongs.toList()
+        val anyDownloading = songs.any { dm.isSongDownloading(it.id) }
+        val allDownloaded = songs.isNotEmpty() && songs.all { File(dm.createDownloadPath(it)).exists() }
+
+        binding.progressDownload.visibility = if (anyDownloading) View.VISIBLE else View.GONE
+        binding.btnDownload.visibility = if (anyDownloading) View.INVISIBLE else View.VISIBLE
+
+        val tintColorRes = if (allDownloaded) R.color.primary else R.color.text_secondary
+        binding.btnDownload.imageTintList = ColorStateList.valueOf(
+            ContextCompat.getColor(requireContext(), tintColorRes)
+        )
+    }
+
+    private fun downloadFavorites() {
+        if (favoriteSongs.isEmpty()) {
+            android.widget.Toast.makeText(requireContext(), "No hay canciones para descargar", android.widget.Toast.LENGTH_SHORT).show()
+            return
+        }
+        val dm = SongDownloadManager.getInstance(requireContext())
+        val alreadyDownloaded = favoriteSongs.count { dm.isSongDownloaded(it.id) }
+        val currentlyDownloading = favoriteSongs.count { dm.isSongDownloading(it.id) }
+        val toDownload = favoriteSongs.filter { !dm.isSongDownloaded(it.id) && !dm.isSongDownloading(it.id) }
+        when {
+            alreadyDownloaded == favoriteSongs.size -> {
+                android.widget.Toast.makeText(requireContext(), "Todas las favoritas ya están descargadas", android.widget.Toast.LENGTH_SHORT).show()
+            }
+            toDownload.isEmpty() && currentlyDownloading > 0 -> {
+                android.widget.Toast.makeText(requireContext(), "Descargando favoritas ($currentlyDownloading pendientes)", android.widget.Toast.LENGTH_SHORT).show()
+            }
+            else -> {
+                toDownload.forEach { song -> dm.downloadSong(song) }
+                val message = if (alreadyDownloaded > 0) {
+                    "Descargando ${toDownload.size} canciones restantes"
+                } else {
+                    "Descargando favoritas (${toDownload.size} canciones)"
+                }
+                android.widget.Toast.makeText(requireContext(), message, android.widget.Toast.LENGTH_LONG).show()
             }
         }
     }

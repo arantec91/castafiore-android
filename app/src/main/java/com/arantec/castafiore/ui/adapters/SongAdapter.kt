@@ -9,6 +9,9 @@ import com.arantec.castafiore.databinding.ItemSongBinding
 import com.arantec.castafiore.data.repository.MusicRepository
 import com.arantec.castafiore.utils.ImageLoader
 import com.arantec.castafiore.R
+import com.arantec.castafiore.data.download.SongDownloadManager
+import android.view.View
+import java.io.File
 
 class SongAdapter(
     private val onSongClick: (Song, Int) -> Unit,
@@ -76,6 +79,17 @@ class SongAdapter(
 
                 tvSongTitle.text = song.title
                 tvSongArtist.text = song.artist
+
+                // Indicador de descarga
+                runCatching {
+                    val dm = SongDownloadManager.getInstance(root.context)
+                    val path = dm.createDownloadPath(song)
+                    if (File(path).exists()) {
+                        ivDownloadStatus.visibility = View.VISIBLE
+                    } else {
+                        ivDownloadStatus.visibility = View.GONE
+                    }
+                }
 
                 // Cambiar solo el color del título si es la canción actual
                 if (song.id == playingSongId) {

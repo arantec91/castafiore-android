@@ -27,6 +27,9 @@ import com.bumptech.glide.Glide
 import com.bumptech.glide.load.engine.DiskCacheStrategy
 import com.bumptech.glide.request.RequestOptions
 import androidx.palette.graphics.Palette
+import kotlinx.coroutines.flow.collectLatest
+import androidx.core.content.ContextCompat
+import android.content.res.ColorStateList
 import kotlinx.coroutines.launch
 import com.arantec.castafiore.utils.StatusBarUtils
 import com.arantec.castafiore.utils.ImageLoader
@@ -34,6 +37,7 @@ import android.view.animation.AlphaAnimation
 import kotlin.random.Random
 import android.graphics.drawable.GradientDrawable
 import androidx.core.graphics.toColorInt
+import java.io.File
 
 class AlbumDetailFragment : Fragment() {
 
@@ -135,6 +139,8 @@ class AlbumDetailFragment : Fragment() {
                 setupClickListeners()
                 loadAlbumDetails()
                 checkFavoriteStatus()
+                observeDownloadStates()
+                updateDownloadUIState()
             }
         }
     }
@@ -393,6 +399,44 @@ class AlbumDetailFragment : Fragment() {
         binding.btnFavorite.setOnClickListener {
             toggleFavorite()
         }
+
+        // Botón de descarga de álbum
+        binding.btnDownload.setOnClickListener {
+            currentAlbum?.let { album ->
+                downloadAlbum(album)
+            }
+        }
+    }
+
+    private fun observeDownloadStates() {
+        val dm = SongDownloadManager.getInstance(requireContext())
+        viewLifecycleOwner.lifecycleScope.launch {
+            dm.downloadStates.collectLatest {
+                if (isAdded && _binding != null) {
+                    updateDownloadUIState()
+                    // Refrescar listado para mostrar iconos de descarga por canción
+                    songAdapter.notifyDataSetChanged()
+                }
+            }
+        }
+    }
+
+    private fun updateDownloadUIState() {
+        if (!isAdded || _binding == null) return
+        val dm = SongDownloadManager.getInstance(requireContext())
+        val songs = albumSongs.toList()
+        val anyDownloading = songs.any { dm.isSongDownloading(it.id) }
+        val allDownloaded = songs.isNotEmpty() && songs.all { java.io.File(dm.createDownloadPath(it)).exists() }
+
+        // Mostrar indicador mientras se descarga algo del álbum
+        binding.progressDownload.visibility = if (anyDownloading) View.VISIBLE else View.GONE
+        binding.btnDownload.visibility = if (anyDownloading) View.INVISIBLE else View.VISIBLE
+
+        // Cambiar color del botón cuando todas las canciones estén descargadas
+        val tintColorRes = if (allDownloaded) R.color.primary else R.color.text_secondary
+        binding.btnDownload.imageTintList = ColorStateList.valueOf(
+            ContextCompat.getColor(requireContext(), tintColorRes)
+        )
     }
 
     private fun loadAlbumDetails() {
@@ -413,6 +457,8 @@ class AlbumDetailFragment : Fragment() {
                                 albumSongs.clear()
                                 albumSongs.addAll(songsToUse)
                                 songAdapter.updateSongs(albumSongs)
+                                updateDownloadUIState()
+                                songAdapter.notifyDataSetChanged()
                             } else {
                                 // Si no hay canciones en la respuesta, generar de muestra
                                 generateSampleSongs(detailedAlbum)

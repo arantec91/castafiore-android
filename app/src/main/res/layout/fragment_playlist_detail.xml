@@ -43,8 +43,8 @@
                 <!-- Playlist cover (or placeholder) -->
                 <ImageView
                     android:id="@+id/ivHeaderCover"
-                    android:layout_width="280dp"
-                    android:layout_height="280dp"
+                    android:layout_width="220dp"
+                    android:layout_height="220dp"
                     android:layout_centerInParent="true"
                     android:layout_marginTop="60dp"
                     android:scaleType="centerCrop"
@@ -128,15 +128,45 @@
                 android:layout_marginHorizontal="20dp"
                 android:layout_marginBottom="24dp">
 
+                <FrameLayout
+                    android:id="@+id/btnDownloadContainer"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    app:layout_constraintStart_toStartOf="parent"
+                    app:layout_constraintTop_toTopOf="parent"
+                    app:layout_constraintBottom_toBottomOf="parent">
+
+                    <ImageButton
+                        android:id="@+id/btnDownload"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:background="?attr/selectableItemBackgroundBorderless"
+                        android:contentDescription="@string/download"
+                        android:src="@drawable/ic_download"
+                        app:tint="@color/text_secondary" />
+
+                    <com.google.android.material.progressindicator.CircularProgressIndicator
+                        android:id="@+id/progressDownload"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:indeterminate="true"
+                        android:visibility="gone"
+                        app:indicatorInset="2dp"
+                        app:indicatorSize="24dp"
+                        app:trackThickness="3dp"
+                        app:indicatorColor="@color/primary" />
+                </FrameLayout>
+
                 <ImageButton
                     android:id="@+id/btnMore"
                     android:layout_width="40dp"
                     android:layout_height="40dp"
+                    android:layout_marginStart="12dp"
                     android:background="?attr/selectableItemBackgroundBorderless"
                     android:contentDescription="@string/more_options"
                     android:src="@drawable/ic_more_vert"
                     app:tint="@color/white"
-                    app:layout_constraintStart_toStartOf="parent"
+                    app:layout_constraintStart_toEndOf="@id/btnDownloadContainer"
                     app:layout_constraintTop_toTopOf="parent"
                     app:layout_constraintBottom_toBottomOf="parent" />
 

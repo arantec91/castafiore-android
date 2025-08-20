@@ -255,6 +255,17 @@ class SongDownloadManager private constructor(private val context: Context) {
     }
 
     /**
+     * Crea la ruta de portada para una canción (imagen de álbum)
+     */
+    fun createCoverPath(song: Song): String {
+        val musicDir = File(context.getExternalFilesDir(Environment.DIRECTORY_PICTURES), "Castafiore/Covers")
+        val artistDir = File(musicDir, sanitizeFileName(song.artist))
+        val albumDir = File(artistDir, sanitizeFileName(song.album))
+        albumDir.mkdirs()
+        return File(albumDir, "cover.jpg").absolutePath
+    }
+
+    /**
      * Obtiene la URL de descarga de la canción
      */
     fun getSongDownloadUrl(song: Song): String {
@@ -270,6 +281,8 @@ class SongDownloadManager private constructor(private val context: Context) {
             .putString("song_album", song.album)
             .putInt("song_track", song.track ?: 0)
             .putInt("song_duration", song.duration)
+            .putString("song_albumId", song.albumId ?: "")
+            .putString("song_coverArt", song.coverArt ?: "")
             .build()
     }
 

@@ -258,19 +258,30 @@ class MusicService : Service() {
 
     private fun startNewSong() {
         val song = currentSong ?: return
-        val serverUrl = musicRepository.serverUrl ?: return
-        val (username, token, salt) = musicRepository.getAuthParams()
-        // Apply quality preference: high quality = original; basic = 128 kbps mp3
-        val highQuality = musicRepository.highQualityEnabled
-        val maxBitRate = if (highQuality) null else 128
-        val format = if (highQuality) null else "mp3"
-        val streamUrl = song.getStreamUrl(serverUrl, username, token, salt, maxBitRate, format)
-        val qualityTag = if (highQuality) "orig" else "128"
-        val cacheKey = "song_${song.id}_$qualityTag"
-        val mediaItem = MediaItem.Builder()
-            .setUri(streamUrl)
-            .setCustomCacheKey(cacheKey)
-            .build()
+        val dm = com.arantec.castafiore.data.download.SongDownloadManager.getInstance(this)
+        val localPath = try { dm.createDownloadPath(song) } catch (_: Exception) { null }
+        val localFile = if (!localPath.isNullOrEmpty()) java.io.File(localPath) else null
+
+        val mediaItemBuilder = MediaItem.Builder()
+        if (localFile != null && localFile.exists()) {
+            // Use local file for offline playback
+            val uri = android.net.Uri.fromFile(localFile)
+            mediaItemBuilder.setUri(uri)
+        } else {
+            val serverUrl = musicRepository.serverUrl ?: return
+            val (username, token, salt) = musicRepository.getAuthParams()
+            // Apply quality preference: high quality = original; basic = 128 kbps mp3
+            val highQuality = musicRepository.highQualityEnabled
+            val maxBitRate = if (highQuality) null else 128
+            val format = if (highQuality) null else "mp3"
+            val streamUrl = song.getStreamUrl(serverUrl, username, token, salt, maxBitRate, format)
+            val qualityTag = if (highQuality) "orig" else "128"
+            val cacheKey = "song_${song.id}_$qualityTag"
+            mediaItemBuilder
+                .setUri(streamUrl)
+                .setCustomCacheKey(cacheKey)
+        }
+        val mediaItem = mediaItemBuilder.build()
         exoPlayer?.setMediaItem(mediaItem)
         // Also enqueue the next item so the player can prepare it in advance
         enqueueNextMediaItem()
@@ -514,19 +525,31 @@ class MusicService : Service() {
 
         // Cargar carátula en background y actualizar notificación
         val song = currentSong
-        if (song != null && musicRepository.serverUrl != null) {
-            val (u, t, s) = musicRepository.getAuthParams()
-            val coverUrl = song.getCoverArtUrl(musicRepository.serverUrl!!, u, t, s)
+        if (song != null) {
             CoroutineScope(Dispatchers.IO).launch {
-                val bitmap = try {
-                    if (coverUrl != null) {
-                        val future = com.bumptech.glide.Glide.with(this@MusicService)
-                            .asBitmap()
-                            .load(coverUrl)
-                            .submit(256, 256)
-                        future.get()
-                    } else null
-                } catch (_: Exception) { null }
+                // Preferir portada local si existe
+                val dm = com.arantec.castafiore.data.download.SongDownloadManager.getInstance(this@MusicService)
+                val coverPath = try { dm.createCoverPath(song) } catch (_: Exception) { null }
+                var bitmap: android.graphics.Bitmap? = null
+                if (!coverPath.isNullOrEmpty()) {
+                    val file = java.io.File(coverPath)
+                    if (file.exists()) {
+                        bitmap = android.graphics.BitmapFactory.decodeFile(coverPath)
+                    }
+                }
+                if (bitmap == null && musicRepository.serverUrl != null) {
+                    val (u, t, s) = musicRepository.getAuthParams()
+                    val coverUrl = song.getCoverArtUrl(musicRepository.serverUrl!!, u, t, s)
+                    try {
+                        if (coverUrl != null) {
+                            val future = com.bumptech.glide.Glide.with(this@MusicService)
+                                .asBitmap()
+                                .load(coverUrl)
+                                .submit(256, 256)
+                            bitmap = future.get()
+                        }
+                    } catch (_: Exception) { bitmap = null }
+                }
 
                 withContext(Dispatchers.Main) {
                     val notification = buildBaseNotification(bitmap).build()
@@ -909,18 +932,26 @@ class MusicService : Service() {
     private fun enqueueNextMediaItem() {
         if (repeatMode == RepeatMode.ONE) return
         val nextSong = playlist.getOrNull(currentIndex + 1) ?: return
-        val serverUrl = musicRepository.serverUrl ?: return
-        val (username, token, salt) = musicRepository.getAuthParams()
-        val highQuality = musicRepository.highQualityEnabled
-        val maxBitRate = if (highQuality) null else 128
-        val format = if (highQuality) null else "mp3"
-        val streamUrl = nextSong.getStreamUrl(serverUrl, username, token, salt, maxBitRate, format)
-        val qualityTag = if (highQuality) "orig" else "128"
-        val cacheKey = "song_${nextSong.id}_$qualityTag"
-        val nextItem = MediaItem.Builder()
-            .setUri(streamUrl)
-            .setCustomCacheKey(cacheKey)
-            .build()
+        val dm = com.arantec.castafiore.data.download.SongDownloadManager.getInstance(this)
+        val localPath = try { dm.createDownloadPath(nextSong) } catch (_: Exception) { null }
+        val localFile = if (!localPath.isNullOrEmpty()) java.io.File(localPath) else null
+
+        val builder = MediaItem.Builder()
+        if (localFile != null && localFile.exists()) {
+            val uri = android.net.Uri.fromFile(localFile)
+            builder.setUri(uri)
+        } else {
+            val serverUrl = musicRepository.serverUrl ?: return
+            val (username, token, salt) = musicRepository.getAuthParams()
+            val highQuality = musicRepository.highQualityEnabled
+            val maxBitRate = if (highQuality) null else 128
+            val format = if (highQuality) null else "mp3"
+            val streamUrl = nextSong.getStreamUrl(serverUrl, username, token, salt, maxBitRate, format)
+            val qualityTag = if (highQuality) "orig" else "128"
+            val cacheKey = "song_${nextSong.id}_$qualityTag"
+            builder.setUri(streamUrl).setCustomCacheKey(cacheKey)
+        }
+        val nextItem = builder.build()
         // Clear any items after current to avoid buildup, then add one next
         val player = exoPlayer ?: return
         val currentIdxInPlayer = player.currentMediaItemIndex

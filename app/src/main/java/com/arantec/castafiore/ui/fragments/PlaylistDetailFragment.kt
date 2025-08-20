@@ -27,6 +27,7 @@ import com.arantec.castafiore.ui.adapters.SongAdapter
 import com.arantec.castafiore.utils.ImageLoader
 import com.arantec.castafiore.utils.StatusBarUtils
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.collectLatest
 import com.bumptech.glide.Glide
 import java.util.Locale
 import kotlin.random.Random
@@ -34,9 +35,13 @@ import androidx.core.graphics.toColorInt
 import androidx.palette.graphics.Palette
 import android.graphics.Bitmap
 import android.graphics.drawable.GradientDrawable
+import androidx.core.content.ContextCompat
+import android.content.res.ColorStateList
 import com.bumptech.glide.request.target.CustomTarget
 import com.bumptech.glide.request.transition.Transition
 import android.graphics.drawable.Drawable
+import com.arantec.castafiore.data.download.SongDownloadManager
+import java.io.File
 
 class PlaylistDetailFragment : Fragment() {
 
@@ -104,6 +109,13 @@ class PlaylistDetailFragment : Fragment() {
         setupRecyclerView()
         setupFab()
         setupMoreButton()
+
+        // Download button: start playlist download
+        binding.btnDownload.setOnClickListener { downloadPlaylist() }
+        // Observe download states and update UI immediately
+        observeDownloadStates()
+        updateDownloadUIState()
+
         // Defer binding to onStart so only visible fragment attaches listeners
         // bindMusicService()
         loadPlaylist()
@@ -345,6 +357,8 @@ class PlaylistDetailFragment : Fragment() {
                     playlistSongs.clear()
                     playlistSongs.addAll(songs)
                     songAdapter.updateSongs(playlistSongs)
+                    updateDownloadUIState()
+                    songAdapter.notifyDataSetChanged()
 
                     // Info
                     binding.tvInfo.text = buildInfoText(playlistSongs)
@@ -556,6 +570,34 @@ class PlaylistDetailFragment : Fragment() {
             }
             .setNegativeButton(R.string.cancel, null)
             .show()
+    }
+
+    private fun observeDownloadStates() {
+        val dm = SongDownloadManager.getInstance(requireContext())
+        viewLifecycleOwner.lifecycleScope.launch {
+            dm.downloadStates.collectLatest {
+                if (isAdded && _binding != null) {
+                    updateDownloadUIState()
+                    songAdapter.notifyDataSetChanged()
+                }
+            }
+        }
+    }
+
+    private fun updateDownloadUIState() {
+        if (!isAdded || _binding == null) return
+        val dm = SongDownloadManager.getInstance(requireContext())
+        val songs = playlistSongs.toList()
+        val anyDownloading = songs.any { dm.isSongDownloading(it.id) }
+        val allDownloaded = songs.isNotEmpty() && songs.all { File(dm.createDownloadPath(it)).exists() }
+
+        binding.progressDownload.visibility = if (anyDownloading) View.VISIBLE else View.GONE
+        binding.btnDownload.visibility = if (anyDownloading) View.INVISIBLE else View.VISIBLE
+
+        val tintColorRes = if (allDownloaded) R.color.primary else R.color.text_secondary
+        binding.btnDownload.imageTintList = ColorStateList.valueOf(
+            ContextCompat.getColor(requireContext(), tintColorRes)
+        )
     }
 
     private fun confirmDeletePlaylist() {

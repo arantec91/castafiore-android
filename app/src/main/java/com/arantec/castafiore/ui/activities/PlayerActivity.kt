@@ -337,6 +337,21 @@ class PlayerActivity : AppCompatActivity() {
 
     private fun loadAlbumArt(song: Song) {
         try {
+            // Preferir portada local si está disponible
+            val dm = SongDownloadManager.getInstance(this)
+            val localCoverPath = try { dm.createCoverPath(song) } catch (_: Exception) { null }
+            if (!localCoverPath.isNullOrEmpty()) {
+                val file = java.io.File(localCoverPath)
+                if (file.exists()) {
+                    val bmp = android.graphics.BitmapFactory.decodeFile(localCoverPath)
+                    if (bmp != null) {
+                        binding.ivAlbumCover.setImageBitmap(bmp)
+                        extractColorsAndApplyTheme(bmp)
+                        return
+                    }
+                }
+            }
+
             val (username, token, salt) = musicRepository.getAuthParams()
             val coverUrl = if (song.albumId != null) {
                 "${musicRepository.serverUrl}/rest/getCoverArt.view?id=${song.albumId}&u=$username&t=$token&s=$salt&v=1.16.1&c=Castafiore&size=500"

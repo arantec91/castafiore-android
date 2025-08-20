@@ -16,6 +16,7 @@ import okio.buffer
 import okio.sink
 import java.io.File
 import java.io.IOException
+import android.graphics.BitmapFactory
 
 class SongDownloadWorker(
     context: Context,
@@ -49,8 +50,9 @@ class SongDownloadWorker(
                 album = songAlbum,
                 duration = songDuration,
                 track = songTrack,
-                albumId = "",
-                artistId = ""
+                albumId = inputData.getString("song_albumId")?.takeIf { it.isNotEmpty() },
+                artistId = "",
+                coverArt = inputData.getString("song_coverArt")?.takeIf { it.isNotEmpty() }
             )
 
             // Crear la ruta de descarga
@@ -74,6 +76,18 @@ class SongDownloadWorker(
             val success = downloadFile(downloadUrl, downloadPath, songTitle, songArtist)
 
             if (success) {
+                // Intentar descargar la portada en segundo plano (si hay info)
+                try {
+                    val coverId = song.coverArt ?: song.albumId
+                    val server = musicRepository.serverUrl
+                    if (!coverId.isNullOrEmpty() && !server.isNullOrEmpty()) {
+                        val (u, t, s) = musicRepository.getAuthParams()
+                        val coverUrl = "$server/rest/getCoverArt.view?id=$coverId&u=$u&t=$t&s=$s&v=1.16.1&c=Castafiore&size=500"
+                        val coverPath = downloadManager.createCoverPath(song)
+                        downloadImage(coverUrl, coverPath)
+                    }
+                } catch (_: Exception) { /* Ignorar errores de portada */ }
+
                 // Notificación de descarga completada
                 showCompletedNotification(songTitle, songArtist)
 
@@ -166,6 +180,26 @@ class SongDownloadWorker(
             // Limpiar archivo parcial si hay error
             File(destinationPath).delete()
             return@withContext false
+        }
+    }
+
+    private fun downloadImage(url: String, destinationPath: String): Boolean {
+        return try {
+            val client = OkHttpClient()
+            val request = Request.Builder().url(url).build()
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) return false
+                val body = response.body ?: return false
+                val file = File(destinationPath)
+                file.parentFile?.mkdirs()
+                file.sink().buffer().use { sink ->
+                    sink.writeAll(body.source())
+                    sink.flush()
+                }
+                true
+            }
+        } catch (_: Exception) {
+            false
         }
     }
 
