@@ -116,7 +116,13 @@ class LibraryFragment : Fragment() {
 
     private fun selectChip(selectedChip: Chip, filter: String) {
         // Desmarcar todos los chips sin disparar listeners
-        val chips = listOf(binding.chipAll, binding.chipPlaylists, binding.chipAlbums, binding.chipArtists, binding.chipDownloads)
+        val chips = listOf(
+            binding.chipAll,
+            binding.chipDownloads,
+            binding.chipPlaylists,
+            binding.chipAlbums,
+            binding.chipArtists
+        )
         chips.forEach { chip ->
             chip.isChecked = false
         }
@@ -140,10 +146,10 @@ class LibraryFragment : Fragment() {
 
         val chips = listOf(
             binding.chipAll,
+            binding.chipDownloads,
             binding.chipPlaylists,
             binding.chipAlbums,
-            binding.chipArtists,
-            binding.chipDownloads
+            binding.chipArtists
         )
 
         chips.forEach { chip ->

@@ -5,9 +5,12 @@ import android.os.Environment
 import androidx.work.*
 import com.arantec.castafiore.data.models.Song
 import com.arantec.castafiore.data.repository.MusicRepository
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import java.io.File
 import java.util.*
 import java.util.concurrent.TimeUnit
@@ -39,6 +42,12 @@ class SongDownloadManager private constructor(private val context: Context) {
 
     private val musicRepository = MusicRepository.getInstance(context)
     private val workManager = WorkManager.getInstance(context)
+
+    // Pequeño alcance para trabajos IO internos
+    private val ioScope = CoroutineScope(Dispatchers.IO)
+
+    // Mantener registro en memoria para evitar re-intentos de auto-favorito por el mismo álbum
+    private val autoStarredAlbums: MutableSet<String> = Collections.synchronizedSet(mutableSetOf())
 
     // Estado de las descargas
     private val _downloadStates = MutableStateFlow<Map<String, DownloadState>>(emptyMap())
@@ -321,6 +330,8 @@ class SongDownloadManager private constructor(private val context: Context) {
                             progress = 100,
                             filePath = filePath
                         ))
+                        // Intentar marcar como favorito el álbum si todas sus canciones están descargadas
+                        maybeAutoStarAlbum(state.song)
                     }
                 }
                 WorkInfo.State.FAILED -> {
@@ -342,6 +353,44 @@ class SongDownloadManager private constructor(private val context: Context) {
                     }
                 }
                 else -> { /* Estados ENQUEUED y BLOCKED no requieren acción */ }
+            }
+        }
+    }
+
+    // Verifica si el álbum de la canción indicada tiene todas sus canciones descargadas y, de ser así, lo marca como favorito
+    private fun maybeAutoStarAlbum(song: Song) {
+        val albumId = song.albumId ?: return
+        if (albumId.isEmpty()) return
+        if (autoStarredAlbums.contains(albumId)) return
+
+        ioScope.launch {
+            try {
+                // Obtener todas las canciones del álbum
+                musicRepository.getAlbumSongs(albumId).onSuccess { songs ->
+                    if (songs.isNullOrEmpty()) return@onSuccess
+                    val allDownloaded = songs.all { s ->
+                        val path = createDownloadPath(s)
+                        File(path).exists()
+                    }
+                    if (allDownloaded) {
+                        // Evitar duplicar llamadas si ya está en favoritos
+                        musicRepository.isAlbumStarred(albumId).fold(
+                            onSuccess = { starred ->
+                                if (!starred) {
+                                    musicRepository.starAlbum(albumId)
+                                }
+                                autoStarredAlbums.add(albumId)
+                            },
+                            onFailure = {
+                                // Intentar igualmente, el endpoint suele ser idempotente
+                                musicRepository.starAlbum(albumId)
+                                autoStarredAlbums.add(albumId)
+                            }
+                        )
+                    }
+                }
+            } catch (_: Exception) {
+                // Silenciar errores para no interferir con el flujo de descargas
             }
         }
     }

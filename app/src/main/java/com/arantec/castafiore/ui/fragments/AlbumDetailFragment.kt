@@ -59,6 +59,7 @@ class AlbumDetailFragment : Fragment() {
     private var dominantNavIconColor: Int? = null
     private var isPlaying = false
     private var isFavorited = false // Nueva variable para el estado de favoritos
+    private var autoFavoritedFromDownload = false // Evita repetir la acción al detectar descargas completas
 
     // Referencias a los listeners para poder removerlos después
     private var playbackStateListener: ((Boolean) -> Unit)? = null
@@ -458,6 +459,27 @@ class AlbumDetailFragment : Fragment() {
         binding.btnDownload.imageTintList = ColorStateList.valueOf(
             ContextCompat.getColor(requireContext(), tintColorRes)
         )
+
+        // Nuevo: Si el álbum está completamente descargado, marcar como favorito y actualizar el botón
+        if (allDownloaded && !isFavorited) {
+            isFavorited = true
+            updateFavoriteButton()
+
+            if (!autoFavoritedFromDownload) {
+                autoFavoritedFromDownload = true
+                val albumId = currentAlbum?.id
+                if (!albumId.isNullOrEmpty()) {
+                    viewLifecycleOwner.lifecycleScope.launch {
+                        try {
+                            // Endpoint idempotente; si ya estaba en favoritos no causa problema
+                            musicRepository.starAlbum(albumId)
+                        } catch (_: Exception) {
+                            // Silenciar para no afectar la UI
+                        }
+                    }
+                }
+            }
+        }
     }
 
     private fun loadAlbumDetails() {
