@@ -7,6 +7,8 @@ import android.view.View
 import android.view.Window
 import android.view.WindowInsetsController
 import androidx.core.content.ContextCompat
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.fragment.app.Fragment
 import com.arantec.castafiore.R
 
@@ -58,5 +60,28 @@ object StatusBarUtils {
      */
     fun setStatusBarColor(activity: Activity) {
         setAppStatusBarColor(activity.window, activity)
+    }
+
+    /**
+     * Applies only the top system bar inset (status bar height) as additional paddingTop to the given view.
+     * This ensures content does not draw under the status bar without introducing bottom insets that caused gaps.
+     */
+    fun applyStatusBarTopPadding(target: View) {
+        // Apply only on Android 14+ where edge-to-edge behavioral changes can cause content overlap
+        if (Build.VERSION.SDK_INT < 34) return
+
+        val initialLeft = target.paddingLeft
+        val initialTop = target.paddingTop
+        val initialRight = target.paddingRight
+        val initialBottom = target.paddingBottom
+
+        ViewCompat.setOnApplyWindowInsetsListener(target) { v, insets ->
+            val statusBars = insets.getInsets(WindowInsetsCompat.Type.statusBars())
+            v.setPadding(initialLeft, initialTop + statusBars.top, initialRight, initialBottom)
+            // Return original insets so children can consume as needed
+            insets
+        }
+        // Request insets application
+        ViewCompat.requestApplyInsets(target)
     }
 }

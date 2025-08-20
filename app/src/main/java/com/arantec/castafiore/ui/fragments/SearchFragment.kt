@@ -102,6 +102,9 @@ class SearchFragment : Fragment() {
         musicRepository = MusicRepository.getInstance(requireContext())
         serverUrl = musicRepository.serverUrl
 
+        // Asegurar que el contenido no se dibuje bajo la status bar, sin añadir insets inferiores
+        StatusBarUtils.applyStatusBarTopPadding(binding.root)
+
         setupUI()
         setupRecycler()
         setupSearchFunctionality()

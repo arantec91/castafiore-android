@@ -54,6 +54,9 @@ class LibraryFragment : Fragment() {
 
         musicRepository = MusicRepository.getInstance(requireContext())
 
+        // Asegurar que el contenido no se dibuje bajo la status bar, sin añadir insets inferiores
+        StatusBarUtils.applyStatusBarTopPadding(binding.root)
+
         // Restaurar filtro si viene de estado guardado
         savedInstanceState?.getString("currentFilter")?.let { restored ->
             currentFilter = restored

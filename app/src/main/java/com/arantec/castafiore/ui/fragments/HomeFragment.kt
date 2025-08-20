@@ -83,6 +83,9 @@ class HomeFragment : Fragment() {
         musicRepository = MusicRepository.getInstance(requireContext())
         appLifecycleManager = AppLifecycleManager.getInstance(requireContext())
 
+        // Asegurar que el contenido no se dibuje bajo la status bar, sin añadir insets inferiores
+        StatusBarUtils.applyStatusBarTopPadding(binding.root)
+
         setupUI()
         setupRecyclerViews()
         setupRefreshSystem()
