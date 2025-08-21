@@ -83,4 +83,62 @@
         <item name="android:textColor">@color/text_primary</item>
         <item name="checkedIconTint">@color/primary</item>
     </style>
+
+    <!-- Dialog: Apariencia de forma reutilizable -->
+    <style name="ShapeAppearance.Castafiore.Medium" parent="ShapeAppearance.MaterialComponents.MediumComponent">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSize">16dp</item>
+    </style>
+
+    <!-- Dialog: Tipografías -->
+    <style name="TextAppearance.Castafiore.AlertDialog.Title" parent="TextAppearance.MaterialComponents.Headline6">
+        <item name="android:textColor">@color/text_primary</item>
+    </style>
+    <style name="TextAppearance.Castafiore.AlertDialog.Body" parent="TextAppearance.MaterialComponents.Body2">
+        <item name="android:textColor">@color/text_secondary</item>
+    </style>
+
+    <!-- Dialog: Botones -->
+    <style name="Widget.Castafiore.AlertDialog.Button.Base" parent="Widget.MaterialComponents.Button.TextButton.Dialog">
+        <item name="android:textColor">@color/primary</item>
+        <item name="rippleColor">@color/primary_alpha_24</item>
+    </style>
+    <style name="Widget.Castafiore.AlertDialog.Button.Positive" parent="Widget.Castafiore.AlertDialog.Button.Base" />
+    <style name="Widget.Castafiore.AlertDialog.Button.Negative" parent="Widget.Castafiore.AlertDialog.Button.Base" />
+    <style name="Widget.Castafiore.AlertDialog.Button.Neutral" parent="Widget.Castafiore.AlertDialog.Button.Base" />
+
+    <!-- Overlay global para MaterialAlertDialog -->
+    <style name="ThemeOverlay.Castafiore.AlertDialog" parent="ThemeOverlay.MaterialComponents.MaterialAlertDialog">
+        <!-- Márgenes alrededor del fondo del diálogo -->
+        <item name="backgroundInsetStart">16dp</item>
+        <item name="backgroundInsetTop">16dp</item>
+        <item name="backgroundInsetEnd">16dp</item>
+        <item name="backgroundInsetBottom">16dp</item>
+
+        <!-- Forma redondeada -->
+        <item name="shapeAppearanceOverlay">@style/ShapeAppearance.Castafiore.Medium</item>
+
+        <!-- Colores de superficie -->
+        <item name="colorSurface">@color/dark_surface</item>
+        <item name="colorOnSurface">@color/dark_on_surface</item>
+
+        <!-- Tipografías personalizadas -->
+        <item name="materialAlertDialogTitleTextStyle">@style/TextAppearance.Castafiore.AlertDialog.Title</item>
+        <item name="materialAlertDialogBodyTextStyle">@style/TextAppearance.Castafiore.AlertDialog.Body</item>
+
+        <!-- Estilos de botones -->
+        <item name="buttonBarPositiveButtonStyle">@style/Widget.Castafiore.AlertDialog.Button.Positive</item>
+        <item name="buttonBarNegativeButtonStyle">@style/Widget.Castafiore.AlertDialog.Button.Negative</item>
+        <item name="buttonBarNeutralButtonStyle">@style/Widget.Castafiore.AlertDialog.Button.Neutral</item>
+    </style>
+
+    <!-- Overlay seguro para AlertDialog de AppCompat (fallback) -->
+    <style name="ThemeOverlay.Castafiore.AlertDialog.AppCompat" parent="ThemeOverlay.AppCompat.Dialog.Alert">
+        <!-- Fondo redondeado y colores -->
+        <item name="android:windowBackground">@drawable/bg_alert_dialog_castafiore</item>
+        <item name="colorAccent">@color/primary</item>
+        <item name="android:colorAccent">@color/primary</item>
+        <item name="android:textColorPrimary">@color/text_primary</item>
+        <item name="android:textColorSecondary">@color/text_secondary</item>
+    </style>
 </resources>

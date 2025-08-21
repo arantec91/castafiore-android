@@ -763,7 +763,7 @@ class AlbumDetailFragment : Fragment() {
 
                 if (downloadManager.isSongDownloaded(selectedSong.id)) {
                     // Mostrar diálogo de confirmación
-                    android.app.AlertDialog.Builder(requireContext())
+                    androidx.appcompat.app.AlertDialog.Builder(requireContext())
                         .setTitle("Eliminar descarga")
                         .setMessage("¿Estás seguro de que quieres eliminar la descarga de \"${selectedSong.title}\"?")
                         .setPositiveButton("Eliminar") { _, _ ->
@@ -923,7 +923,7 @@ class AlbumDetailFragment : Fragment() {
             if (album.genre != null) append("Género: ${album.genre}\n")
         }
 
-        android.app.AlertDialog.Builder(requireContext())
+        androidx.appcompat.app.AlertDialog.Builder(requireContext())
             .setTitle("Información del Álbum")
             .setMessage(infoMessage)
             .setPositiveButton("Cerrar") { dialog, _ -> dialog.dismiss() }

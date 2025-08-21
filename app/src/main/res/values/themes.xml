@@ -33,7 +33,7 @@
         <item name="android:statusBarColor">@color/dark_background</item>
         <item name="android:navigationBarColor">@color/dark_background</item>
         <item name="android:windowLightStatusBar">false</item>
-        <item name="android:windowLightNavigationBar">false</item>
+        <item name="android:windowLightNavigationBar" tools:targetApi="27">false</item>
 
         <!-- Outline para modo oscuro -->
         <item name="colorOutline">@color/dark_outline</item>
@@ -45,6 +45,11 @@
 
         <!-- Bottom navigation color -->
         <item name="bottomNavigationStyle">@style/BottomNavigationView.Primary</item>
+
+        <!-- Estilo global para MaterialAlertDialog -->
+        <item name="materialAlertDialogTheme">@style/ThemeOverlay.Castafiore.AlertDialog</item>
+        <!-- Fallback para AlertDialog de AppCompat -->
+        <item name="alertDialogTheme">@style/ThemeOverlay.Castafiore.AlertDialog.AppCompat</item>
     </style>
 
     <!-- Tema específico para QueueActivity que fuerza barras opacas en API 36 -->
@@ -53,7 +58,7 @@
         <item name="android:statusBarColor">@color/background_primary</item>
         <item name="android:navigationBarColor">@color/background_primary</item>
         <item name="android:windowLightStatusBar">false</item>
-        <item name="android:windowLightNavigationBar">false</item>
+        <item name="android:windowLightNavigationBar" tools:targetApi="27">false</item>
 
         <!-- Deshabilitar edge-to-edge completamente -->
         <item name="android:windowLayoutInDisplayCutoutMode" tools:targetApi="p">never</item>
@@ -67,6 +72,6 @@
         <item name="android:windowContentOverlay">@null</item>
 
         <!-- Configuración específica para Android 14+ -->
-        <item name="android:windowOptOutEdgeToEdgeEnforcement" tools:targetApi="34">true</item>
+        <item name="android:windowOptOutEdgeToEdgeEnforcement" tools:targetApi="35">true</item>
     </style>
 </resources>

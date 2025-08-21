@@ -379,7 +379,7 @@ class FavoritesFragment : Fragment() {
             .setOnDeleteDownloadClickListener { selectedSong ->
                 val downloadManager = com.arantec.castafiore.data.download.SongDownloadManager.getInstance(requireContext())
                 if (downloadManager.isSongDownloaded(selectedSong.id)) {
-                    val builder = android.app.AlertDialog.Builder(requireContext())
+                    val builder = androidx.appcompat.app.AlertDialog.Builder(requireContext())
                     builder.setTitle(R.string.delete_download)
                     builder.setMessage(getString(R.string.delete_download_confirm, selectedSong.title))
                     builder.setPositiveButton(R.string.delete) { dialogInterface: android.content.DialogInterface, _: Int ->
