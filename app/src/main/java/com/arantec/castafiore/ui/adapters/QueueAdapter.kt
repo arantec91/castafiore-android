@@ -10,6 +10,11 @@ import com.arantec.castafiore.data.repository.MusicRepository
 import com.arantec.castafiore.databinding.ItemQueueSongBinding
 import com.bumptech.glide.Glide
 import com.bumptech.glide.load.resource.drawable.DrawableTransitionOptions
+import com.arantec.castafiore.utils.ImageLoader
+import com.arantec.castafiore.utils.NetworkUtils
+import com.arantec.castafiore.data.download.SongDownloadManager
+import com.bumptech.glide.request.RequestOptions
+import java.io.File
 import java.util.Collections
 
 interface ItemTouchHelperAdapter {
@@ -60,13 +65,49 @@ class QueueAdapter(
 
         private fun loadAlbumArt(song: Song) {
             try {
+                val context = binding.ivAlbumArt.context
                 val (username, token, salt) = musicRepository.getAuthParams()
-                val coverUrl = if (song.albumId != null) {
-                    "${musicRepository.serverUrl}/rest/getCoverArt.view?id=${song.albumId}&u=$username&t=$token&s=$salt&v=1.16.1&c=Castafiore&size=200"
-                } else {
-                    null
+                val server = musicRepository.serverUrl
+
+                // Construir URL remota si es posible
+                val coverId = song.coverArt ?: song.albumId
+                val coverUrl = if (!server.isNullOrEmpty() && !coverId.isNullOrEmpty()) {
+                    ImageLoader.buildCoverArtUrl(
+                        server,
+                        coverId,
+                        username,
+                        token,
+                        salt,
+                        200
+                    )
+                } else null
+
+                // 1) Preferir portada local descargada si existe
+                val dm = SongDownloadManager.getInstance(context)
+                val localCoverFile = File(dm.createCoverPath(song))
+                if (localCoverFile.exists()) {
+                    Glide.with(context)
+                        .load(localCoverFile)
+                        .placeholder(R.drawable.ic_album_placeholder)
+                        .error(R.drawable.ic_album_placeholder)
+                        .transition(DrawableTransitionOptions.withCrossFade(200))
+                        .into(binding.ivAlbumArt)
+                    return
                 }
 
+                // 2) Si no hay red, intentar cargar solo desde caché de Glide
+                if (!NetworkUtils.isNetworkAvailable(context) && coverUrl != null) {
+                    Glide.with(context)
+                        .load(coverUrl)
+                        .apply(RequestOptions().onlyRetrieveFromCache(true))
+                        .placeholder(R.drawable.ic_album_placeholder)
+                        .error(R.drawable.ic_album_placeholder)
+                        .transition(DrawableTransitionOptions.withCrossFade(200))
+                        .into(binding.ivAlbumArt)
+                    return
+                }
+
+                // 3) Carga normal desde URL
                 if (coverUrl != null) {
                     Glide.with(binding.ivAlbumArt.context)
                         .load(coverUrl)

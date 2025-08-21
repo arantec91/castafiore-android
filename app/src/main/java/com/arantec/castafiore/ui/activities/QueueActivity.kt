@@ -26,6 +26,11 @@ import com.arantec.castafiore.ui.dialogs.PlaylistSelectorBottomSheet
 import androidx.core.view.WindowCompat
 import androidx.core.content.ContextCompat
 import com.arantec.castafiore.utils.snack
+import com.arantec.castafiore.utils.ImageLoader
+import com.arantec.castafiore.utils.NetworkUtils
+import com.arantec.castafiore.data.download.SongDownloadManager
+import com.bumptech.glide.request.RequestOptions
+import java.io.File
 
 class QueueActivity : AppCompatActivity() {
 
@@ -289,14 +294,40 @@ class QueueActivity : AppCompatActivity() {
     private fun loadCurrentAlbumArt(song: Song) {
         try {
             val (username, token, salt) = musicRepository.getAuthParams()
-            val coverUrl = if (song.albumId != null) {
-                "${musicRepository.serverUrl}/rest/getCoverArt.view?id=${song.albumId}&u=$username&t=$token&s=$salt&v=1.16.1&c=Castafiore&size=200"
-            } else {
-                null
+            val server = musicRepository.serverUrl
+            val coverId = song.coverArt ?: song.albumId
+            val coverUrl = if (!server.isNullOrEmpty() && !coverId.isNullOrEmpty()) {
+                ImageLoader.buildCoverArtUrl(server, coverId, username, token, salt, 200)
+            } else null
+
+            val context = this
+            val dm = SongDownloadManager.getInstance(context)
+            val localCoverFile = File(dm.createCoverPath(song))
+
+            // 1) Portada local si existe
+            if (localCoverFile.exists()) {
+                Glide.with(context)
+                    .load(localCoverFile)
+                    .placeholder(R.drawable.ic_album_placeholder)
+                    .error(R.drawable.ic_album_placeholder)
+                    .into(binding.ivCurrentAlbumArt)
+                return
             }
 
+            // 2) Sin conexión: intentar desde caché
+            if (!NetworkUtils.isNetworkAvailable(context) && coverUrl != null) {
+                Glide.with(context)
+                    .load(coverUrl)
+                    .apply(RequestOptions().onlyRetrieveFromCache(true))
+                    .placeholder(R.drawable.ic_album_placeholder)
+                    .error(R.drawable.ic_album_placeholder)
+                    .into(binding.ivCurrentAlbumArt)
+                return
+            }
+
+            // 3) Carga normal desde URL
             if (coverUrl != null) {
-                Glide.with(this)
+                Glide.with(context)
                     .load(coverUrl)
                     .placeholder(R.drawable.ic_album_placeholder)
                     .error(R.drawable.ic_album_placeholder)
@@ -429,13 +460,34 @@ class QueueActivity : AppCompatActivity() {
 
         try {
             val (username, token, salt) = musicRepository.getAuthParams()
-            val coverUrl = if (song.albumId != null) {
-                "${musicRepository.serverUrl}/rest/getCoverArt.view?id=${song.albumId}&u=$username&t=$token&s=$salt&v=1.16.1&c=Castafiore&size=300"
-            } else {
-                null
-            }
+            val server = musicRepository.serverUrl
+            val coverId = song.coverArt ?: song.albumId
+            val coverUrl = if (!server.isNullOrEmpty() && !coverId.isNullOrEmpty()) {
+                ImageLoader.buildCoverArtUrl(server, coverId, username, token, salt, 300)
+            } else null
 
-            if (coverUrl != null) {
+            val dm = SongDownloadManager.getInstance(this)
+            val localCoverFile = File(dm.createCoverPath(song))
+
+            // 1) Local cover
+            if (localCoverFile.exists()) {
+                Glide.with(this)
+                    .load(localCoverFile)
+                    .placeholder(R.drawable.ic_album_placeholder)
+                    .error(R.drawable.ic_album_placeholder)
+                    .transition(com.bumptech.glide.load.resource.drawable.DrawableTransitionOptions.withCrossFade(200))
+                    .into(ivCover)
+            } else if (!NetworkUtils.isNetworkAvailable(this) && coverUrl != null) {
+                // 2) Cache-only when offline
+                Glide.with(this)
+                    .load(coverUrl)
+                    .apply(RequestOptions().onlyRetrieveFromCache(true))
+                    .placeholder(R.drawable.ic_album_placeholder)
+                    .error(R.drawable.ic_album_placeholder)
+                    .transition(com.bumptech.glide.load.resource.drawable.DrawableTransitionOptions.withCrossFade(200))
+                    .into(ivCover)
+            } else if (coverUrl != null) {
+                // 3) Normal remote load
                 Glide.with(this)
                     .load(coverUrl)
                     .placeholder(R.drawable.ic_album_placeholder)
