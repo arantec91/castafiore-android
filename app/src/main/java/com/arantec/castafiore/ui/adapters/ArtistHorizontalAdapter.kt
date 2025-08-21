@@ -1,6 +1,9 @@
 package com.arantec.castafiore.ui.adapters
 
+import android.util.TypedValue
+import android.view.Gravity
 import android.view.LayoutInflater
+import android.view.View
 import android.view.ViewGroup
 import androidx.recyclerview.widget.RecyclerView
 import com.arantec.castafiore.R
@@ -12,7 +15,11 @@ import com.google.android.material.imageview.ShapeableImageView
 import com.google.android.material.shape.RelativeCornerSize
 
 class ArtistHorizontalAdapter(
-    private val onArtistClick: (Artist) -> Unit
+    private val onArtistClick: (Artist) -> Unit,
+    private val imageSizeDp: Int? = null,
+    private val textWidthDp: Int? = null,
+    private val textSizeSp: Float? = null,
+    private val centerText: Boolean = false
 ) : RecyclerView.Adapter<ArtistHorizontalAdapter.ArtistViewHolder>() {
 
     private var artists: List<Artist> = emptyList()
@@ -37,6 +44,36 @@ class ArtistHorizontalAdapter(
         private val binding: ItemArtistHorizontalBinding
     ) : RecyclerView.ViewHolder(binding.root) {
         fun bind(artist: Artist) {
+            // Apply per-instance sizing if provided
+            val density = binding.root.resources.displayMetrics.density
+            imageSizeDp?.let { dp ->
+                val px = (dp * density).toInt()
+                val lp = binding.ivArtistImage.layoutParams
+                if (lp.width != px || lp.height != px) {
+                    lp.width = px
+                    lp.height = px
+                    binding.ivArtistImage.layoutParams = lp
+                }
+            }
+            textWidthDp?.let { dp ->
+                val px = (dp * density).toInt()
+                val tlp = binding.tvArtistName.layoutParams
+                if (tlp.width != px) {
+                    tlp.width = px
+                    binding.tvArtistName.layoutParams = tlp
+                }
+            }
+            textSizeSp?.let { sp ->
+                binding.tvArtistName.setTextSize(TypedValue.COMPLEX_UNIT_SP, sp)
+            }
+            if (centerText) {
+                binding.tvArtistName.textAlignment = View.TEXT_ALIGNMENT_CENTER
+                binding.tvArtistName.gravity = Gravity.CENTER_HORIZONTAL
+            } else {
+                binding.tvArtistName.textAlignment = View.TEXT_ALIGNMENT_VIEW_START
+                binding.tvArtistName.gravity = Gravity.START
+            }
+
             binding.tvArtistName.text = artist.name
 
             // Make image circular
@@ -57,7 +94,7 @@ class ArtistHorizontalAdapter(
                 } else {
                     binding.ivArtistImage.setImageResource(R.drawable.ic_person)
                 }
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 binding.ivArtistImage.setImageResource(R.drawable.ic_person)
             }
 
@@ -65,4 +102,3 @@ class ArtistHorizontalAdapter(
         }
     }
 }
-

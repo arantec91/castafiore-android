@@ -13,16 +13,20 @@ import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.fragment.findNavController
 import androidx.recyclerview.widget.LinearLayoutManager
-import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import com.arantec.castafiore.R
 import com.arantec.castafiore.data.models.Album
 import com.arantec.castafiore.data.repository.MusicRepository
 import com.arantec.castafiore.databinding.FragmentHomeBinding
 import com.arantec.castafiore.service.MusicService
 import com.arantec.castafiore.ui.adapters.AlbumHorizontalAdapter
+import com.arantec.castafiore.ui.adapters.ArtistHorizontalAdapter
 import com.arantec.castafiore.utils.AppLifecycleManager
 import com.arantec.castafiore.utils.StatusBarUtils
+import com.arantec.castafiore.utils.ImageLoader
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.supervisorScope
 
 class HomeFragment : Fragment() {
 
@@ -34,6 +38,7 @@ class HomeFragment : Fragment() {
     private lateinit var recentlyPlayedAdapter: AlbumHorizontalAdapter
     private lateinit var mostPlayedAdapter: AlbumHorizontalAdapter
     private lateinit var discoverAdapter: AlbumHorizontalAdapter
+    private lateinit var similarArtistsAdapter: ArtistHorizontalAdapter
     private var musicService: MusicService? = null
     private var isBound = false
 
@@ -120,17 +125,24 @@ class HomeFragment : Fragment() {
     }
 
     private fun setupRecyclerViews() {
+        // Pool compartido para mejorar el reciclado entre listas horizontales
+        val sharedPool = androidx.recyclerview.widget.RecyclerView.RecycledViewPool()
+
         // Configurar adaptador para álbumes agregados recientemente
         recentlyAddedAdapter = AlbumHorizontalAdapter { album ->
             onAlbumClick(album)
         }
         binding.rvRecentlyAdded.apply {
-            layoutManager = LinearLayoutManager(context, LinearLayoutManager.HORIZONTAL, false)
+            val lm = LinearLayoutManager(context, LinearLayoutManager.HORIZONTAL, false)
+            lm.isItemPrefetchEnabled = true
+            lm.initialPrefetchItemCount = 6
+            layoutManager = lm
             adapter = recentlyAddedAdapter
-            // Optimizaciones de rendimiento
             setHasFixedSize(true)
             setItemViewCacheSize(10)
             isNestedScrollingEnabled = false
+            setRecycledViewPool(sharedPool)
+            (itemAnimator as? androidx.recyclerview.widget.SimpleItemAnimator)?.supportsChangeAnimations = false
         }
 
         // Configurar adaptador para álbumes reproducidos recientemente
@@ -138,11 +150,16 @@ class HomeFragment : Fragment() {
             onAlbumClick(album)
         }
         binding.rvRecentlyPlayed.apply {
-            layoutManager = LinearLayoutManager(context, LinearLayoutManager.HORIZONTAL, false)
+            val lm = LinearLayoutManager(context, LinearLayoutManager.HORIZONTAL, false)
+            lm.isItemPrefetchEnabled = true
+            lm.initialPrefetchItemCount = 6
+            layoutManager = lm
             adapter = recentlyPlayedAdapter
             setHasFixedSize(true)
             setItemViewCacheSize(10)
             isNestedScrollingEnabled = false
+            setRecycledViewPool(sharedPool)
+            (itemAnimator as? androidx.recyclerview.widget.SimpleItemAnimator)?.supportsChangeAnimations = false
         }
 
         // Configurar adaptador para álbumes más reproducidos
@@ -150,11 +167,16 @@ class HomeFragment : Fragment() {
             onAlbumClick(album)
         }
         binding.rvMostPlayed.apply {
-            layoutManager = LinearLayoutManager(context, LinearLayoutManager.HORIZONTAL, false)
+            val lm = LinearLayoutManager(context, LinearLayoutManager.HORIZONTAL, false)
+            lm.isItemPrefetchEnabled = true
+            lm.initialPrefetchItemCount = 6
+            layoutManager = lm
             adapter = mostPlayedAdapter
             setHasFixedSize(true)
             setItemViewCacheSize(10)
             isNestedScrollingEnabled = false
+            setRecycledViewPool(sharedPool)
+            (itemAnimator as? androidx.recyclerview.widget.SimpleItemAnimator)?.supportsChangeAnimations = false
         }
 
         // Configurar adaptador para álbumes de descubrimiento
@@ -162,28 +184,52 @@ class HomeFragment : Fragment() {
             onAlbumClick(album)
         }
         binding.rvDiscover.apply {
-            layoutManager = LinearLayoutManager(context, LinearLayoutManager.HORIZONTAL, false)
+            val lm = LinearLayoutManager(context, LinearLayoutManager.HORIZONTAL, false)
+            lm.isItemPrefetchEnabled = true
+            lm.initialPrefetchItemCount = 6
+            layoutManager = lm
             adapter = discoverAdapter
             setHasFixedSize(true)
             setItemViewCacheSize(10)
             isNestedScrollingEnabled = false
+            setRecycledViewPool(sharedPool)
+            (itemAnimator as? androidx.recyclerview.widget.SimpleItemAnimator)?.supportsChangeAnimations = false
+        }
+
+        // Configurar adaptador para artistas similares al último reproducido
+        similarArtistsAdapter = ArtistHorizontalAdapter(
+            onArtistClick = { artist -> onArtistClick(artist) },
+            imageSizeDp = 128,      // larger avatar
+            textWidthDp = 128,      // match image width
+            textSizeSp = 14f,       // slightly larger text
+            centerText = true       // center artist name in Home
+        )
+        binding.rvSimilarArtists.apply {
+            val lm = LinearLayoutManager(context, LinearLayoutManager.HORIZONTAL, false)
+            lm.isItemPrefetchEnabled = true
+            lm.initialPrefetchItemCount = 6
+            layoutManager = lm
+            adapter = similarArtistsAdapter
+            setHasFixedSize(true)
+            setItemViewCacheSize(10)
+            isNestedScrollingEnabled = false
+            setRecycledViewPool(sharedPool)
+            (itemAnimator as? androidx.recyclerview.widget.SimpleItemAnimator)?.supportsChangeAnimations = false
         }
     }
 
     private fun setupRefreshSystem() {
-        // Configurar pull-to-refresh si existe en el layout
-        binding.swipeRefreshLayout?.let { swipeRefresh ->
-            swipeRefresh.setOnRefreshListener {
-                performRefresh(isManualRefresh = true)
-            }
-
-            // Configurar colores del refresh indicator
-            swipeRefresh.setColorSchemeResources(
-                R.color.primary,
-                R.color.primary_dark,
-                R.color.secondary
-            )
+        // Configurar pull-to-refresh
+        val swipeRefresh = binding.swipeRefreshLayout
+        swipeRefresh.setOnRefreshListener {
+            performRefresh(isManualRefresh = true)
         }
+        // Configurar colores del refresh indicator
+        swipeRefresh.setColorSchemeResources(
+            R.color.primary,
+            R.color.primary_dark,
+            R.color.secondary
+        )
 
         // Registrar listener para refresh automático
         appLifecycleManager.addRefreshListener(autoRefreshListener)
@@ -207,14 +253,15 @@ class HomeFragment : Fragment() {
             val timeSinceLastLoad = currentTime - lastLoadTime
             if (timeSinceLastLoad < MANUAL_REFRESH_COOLDOWN) {
                 android.util.Log.d(TAG, "Refresh manual en cooldown - ignorando")
-                binding.swipeRefreshLayout?.isRefreshing = false
+                binding.swipeRefreshLayout.isRefreshing = false
                 return
             }
         }
 
         android.util.Log.d(TAG, "Iniciando refresh - Auto: $isAutoRefresh, Manual: $isManualRefresh, Force: $forceRefresh")
 
-        lifecycleScope.launch {
+        // Usar lifecycle del view para evitar fugas cuando se destruye la vista
+        viewLifecycleOwner.lifecycleScope.launch {
             try {
                 if (isAutoRefresh) {
                     // Para auto-refresh, limpiar cache selectivamente para obtener datos frescos
@@ -239,7 +286,7 @@ class HomeFragment : Fragment() {
                 showError("Error al actualizar datos: ${e.message}")
             } finally {
                 // Ocultar indicador de refresh
-                binding.swipeRefreshLayout?.isRefreshing = false
+                binding.swipeRefreshLayout.isRefreshing = false
             }
         }
     }
@@ -289,14 +336,26 @@ class HomeFragment : Fragment() {
             }
             hideError()
 
-            // Cargar datos secuencialmente
-            loadRecentlyAddedAlbums()
-            loadRecentlyPlayedAlbums()
-            loadMostPlayedAlbums()
-            loadDiscoverAlbums()
+            // Cargar datos base en paralelo (álbumes) para reducir el tiempo total
+            supervisorScope {
+                awaitAll(
+                    async { loadRecentlyAddedAlbums() },
+                    async { loadRecentlyPlayedAlbums() },
+                    async { loadMostPlayedAlbums() },
+                    async { loadDiscoverAlbums() }
+                )
+            }
 
+            // Ocultar el ProgressBar antes de mostrar secciones adicionales
             if (!isRefresh) {
                 showLoading(false)
+            }
+
+            // Ahora cargar la sección de Artistas similares (no mostrar durante ProgressBar)
+            try {
+                loadSimilarArtists()
+            } catch (_: Exception) {
+                // Ignorar; loadSimilarArtists maneja su propia visibilidad
             }
 
             android.util.Log.d(TAG, "Carga de datos completada")
@@ -338,12 +397,13 @@ class HomeFragment : Fragment() {
             return
         }
 
-        lifecycleScope.launch {
+        // Usar lifecycle del view para evitar fugas cuando se destruye la vista
+        viewLifecycleOwner.lifecycleScope.launch {
             try {
                 loadDataInternal(isRefresh = false)
                 isInitialLoad = false
                 lastLoadTime = System.currentTimeMillis()
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 // Error ya manejado en loadDataInternal
             }
         }
@@ -364,7 +424,7 @@ class HomeFragment : Fragment() {
                     loadFallbackAlbums(recentlyAddedAdapter, "newest")
                 }
             )
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             recentlyAddedAdapter.updateAlbums(emptyList())
         }
     }
@@ -379,7 +439,7 @@ class HomeFragment : Fragment() {
                     loadFallbackAlbums(recentlyPlayedAdapter, "recent")
                 }
             )
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             recentlyPlayedAdapter.updateAlbums(emptyList())
         }
     }
@@ -394,7 +454,7 @@ class HomeFragment : Fragment() {
                     loadFallbackAlbums(mostPlayedAdapter, "frequent")
                 }
             )
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             mostPlayedAdapter.updateAlbums(emptyList())
         }
     }
@@ -407,12 +467,12 @@ class HomeFragment : Fragment() {
                     // Tomar hasta 10 álbumes únicos aleatorios de la respuesta
                     discoverAdapter.updateAlbums(albums.take(10))
                 },
-                onFailure = { error ->
+                onFailure = { _ ->
                     // Si falla la API de álbumes aleatorios, usar fallback
                     loadFallbackDiscoverAlbums()
                 }
             )
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             // En caso de excepción, usar fallback
             loadFallbackDiscoverAlbums()
         }
@@ -431,7 +491,7 @@ class HomeFragment : Fragment() {
                     discoverAdapter.updateAlbums(emptyList())
                 }
             )
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             discoverAdapter.updateAlbums(emptyList())
         }
     }
@@ -453,8 +513,65 @@ class HomeFragment : Fragment() {
                     adapter.updateAlbums(emptyList())
                 }
             )
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             adapter.updateAlbums(emptyList())
+        }
+    }
+
+    private suspend fun loadSimilarArtists() {
+        try {
+            // Obtener el último reproducido desde el almacén local
+            val lastSong = musicRepository.getRecentPlays(limit = 1).firstOrNull()
+            val artistId = lastSong?.artistId
+            val artistName = lastSong?.artist
+
+            if (artistId.isNullOrEmpty() || artistName.isNullOrEmpty()) {
+                // No hay último reproducido o no tiene artista asociado
+                with(viewLifecycleOwner.lifecycleScope) {
+                    launch {
+                        binding.similarHeaderContainer.visibility = View.GONE
+                        binding.rvSimilarArtists.visibility = View.GONE
+                    }
+                }
+                return
+            }
+
+            val result = musicRepository.getSimilarArtists(artistId)
+            result.fold(
+                onSuccess = { artists ->
+                    // Filtrar el propio artista y limitar a 10
+                    val list = artists.filter { it.id != artistId }.distinctBy { it.id }.take(10)
+                    if (list.isNotEmpty()) {
+                        similarArtistsAdapter.submit(list)
+                        // Poblamos encabezado con nombre e imagen del artista base
+                        binding.tvSimilarArtistName.text = artistName
+                        try {
+                            val server = musicRepository.serverUrl
+                            if (!server.isNullOrEmpty()) {
+                                val (u, t, s) = musicRepository.getAuthParams()
+                                val url = ImageLoader.buildArtistImageUrl(server, artistId, u, t, s, 300)
+                                ImageLoader.loadArtistImage(requireContext(), binding.ivSimilarArtist, url)
+                            } else {
+                                binding.ivSimilarArtist.setImageResource(com.arantec.castafiore.R.drawable.ic_person)
+                            }
+                        } catch (_: Exception) {
+                            binding.ivSimilarArtist.setImageResource(com.arantec.castafiore.R.drawable.ic_person)
+                        }
+                        binding.similarHeaderContainer.visibility = View.VISIBLE
+                        binding.rvSimilarArtists.visibility = View.VISIBLE
+                    } else {
+                        binding.similarHeaderContainer.visibility = View.GONE
+                        binding.rvSimilarArtists.visibility = View.GONE
+                    }
+                },
+                onFailure = {
+                    binding.similarHeaderContainer.visibility = View.GONE
+                    binding.rvSimilarArtists.visibility = View.GONE
+                }
+            )
+        } catch (_: Exception) {
+            binding.similarHeaderContainer.visibility = View.GONE
+            binding.rvSimilarArtists.visibility = View.GONE
         }
     }
 
@@ -466,23 +583,44 @@ class HomeFragment : Fragment() {
         findNavController().navigate(R.id.albumDetailFragment, bundle)
     }
 
+    private fun onArtistClick(artist: com.arantec.castafiore.data.models.Artist) {
+        val bundle = Bundle().apply {
+            putString("artistId", artist.id)
+            putString("artistName", artist.name)
+        }
+        findNavController().navigate(R.id.artistDetailFragment, bundle)
+    }
+
     private fun showLoading(show: Boolean) {
         binding.progressBar.visibility = if (show) View.VISIBLE else View.GONE
 
-        // Ocultar/mostrar el contenido de las secciones cuando hay loading
-        val contentVisibility = if (show) View.GONE else View.VISIBLE
+        if (show) {
+            // Durante loading, ocultar todo el contenido
+            binding.tvRecentlyAddedTitle.visibility = View.GONE
+            binding.tvRecentlyPlayedTitle.visibility = View.GONE
+            binding.tvMostPlayedTitle.visibility = View.GONE
+            binding.tvDiscoverTitle.visibility = View.GONE
+            binding.similarHeaderContainer.visibility = View.GONE
 
-        // Ocultar títulos de secciones usando binding directamente
-        binding.tvRecentlyAddedTitle.visibility = contentVisibility
-        binding.tvRecentlyPlayedTitle.visibility = contentVisibility
-        binding.tvMostPlayedTitle.visibility = contentVisibility
-        binding.tvDiscoverTitle.visibility = contentVisibility
+            binding.rvRecentlyAdded.visibility = View.GONE
+            binding.rvRecentlyPlayed.visibility = View.GONE
+            binding.rvMostPlayed.visibility = View.GONE
+            binding.rvDiscover.visibility = View.GONE
+            binding.rvSimilarArtists.visibility = View.GONE
+        } else {
+            // Al finalizar loading, restaurar solo las secciones base;
+            // el header y lista de similares quedan según su propio loader
+            binding.tvRecentlyAddedTitle.visibility = View.VISIBLE
+            binding.tvRecentlyPlayedTitle.visibility = View.VISIBLE
+            binding.tvMostPlayedTitle.visibility = View.VISIBLE
+            binding.tvDiscoverTitle.visibility = View.VISIBLE
 
-        // Ocultar RecyclerViews
-        binding.rvRecentlyAdded.visibility = contentVisibility
-        binding.rvRecentlyPlayed.visibility = contentVisibility
-        binding.rvMostPlayed.visibility = contentVisibility
-        binding.rvDiscover.visibility = contentVisibility
+            binding.rvRecentlyAdded.visibility = View.VISIBLE
+            binding.rvRecentlyPlayed.visibility = View.VISIBLE
+            binding.rvMostPlayed.visibility = View.VISIBLE
+            binding.rvDiscover.visibility = View.VISIBLE
+            // No tocar: similarHeaderContainer, rvSimilarArtists
+        }
     }
 
     private fun showError(message: String) {

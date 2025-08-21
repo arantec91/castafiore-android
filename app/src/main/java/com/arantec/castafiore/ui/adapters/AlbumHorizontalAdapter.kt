@@ -2,6 +2,8 @@ package com.arantec.castafiore.ui.adapters
 
 import android.view.LayoutInflater
 import android.view.ViewGroup
+import androidx.recyclerview.widget.DiffUtil
+import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import com.arantec.castafiore.R
 import com.arantec.castafiore.data.models.Album
@@ -11,13 +13,20 @@ import com.arantec.castafiore.utils.ImageLoader
 
 class AlbumHorizontalAdapter(
     private val onAlbumClick: (Album) -> Unit
-) : RecyclerView.Adapter<AlbumHorizontalAdapter.AlbumViewHolder>() {
+) : ListAdapter<Album, AlbumHorizontalAdapter.AlbumViewHolder>(DIFF) {
 
-    private var albums = listOf<Album>()
+    init {
+        setHasStableIds(true)
+    }
 
+    // Backwards-compatible helper so callers don't need to change
     fun updateAlbums(newAlbums: List<Album>) {
-        albums = newAlbums
-        notifyDataSetChanged()
+        submitList(newAlbums)
+    }
+
+    override fun getItemId(position: Int): Long {
+        // Stable ID based on album id
+        return getItem(position).id.hashCode().toLong()
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): AlbumViewHolder {
@@ -28,27 +37,24 @@ class AlbumHorizontalAdapter(
     }
 
     override fun onBindViewHolder(holder: AlbumViewHolder, position: Int) {
-        val album = albums[position]
-        holder.bind(album)
+        holder.bind(getItem(position))
     }
-
-    override fun getItemCount(): Int = albums.size
 
     inner class AlbumViewHolder(
         private val binding: ItemAlbumHorizontalBinding
     ) : RecyclerView.ViewHolder(binding.root) {
 
         fun bind(album: Album) {
-            // Cancelar cualquier carga de imagen anterior para evitar conflictos
+            // Cancel previous image load to avoid incorrect images on fast scroll
             com.bumptech.glide.Glide.with(binding.root.context).clear(binding.ivAlbumCover)
 
-            // Establecer placeholder inmediatamente para limpiar la vista
+            // Immediate placeholder to clear recycled state
             binding.ivAlbumCover.setImageResource(R.drawable.ic_album_placeholder)
 
             binding.tvAlbumName.text = album.name
             binding.tvArtistName.text = album.artist
 
-            // Usar ImageLoader optimizado para thumbnails
+            // Optimized thumbnail loading
             try {
                 val musicRepo = MusicRepository.getInstance(binding.root.context)
                 val (username, token, salt) = musicRepo.getAuthParams()
@@ -56,24 +62,34 @@ class AlbumHorizontalAdapter(
                 if (album.coverArt != null && musicRepo.serverUrl != null) {
                     val coverUrl = ImageLoader.buildCoverArtUrl(
                         musicRepo.serverUrl!!,
-                        album.coverArt!!,
+                        album.coverArt,
                         username,
                         token,
                         salt,
-                        200 // Tamaño optimizado para thumbnails
+                        200 // thumbnail size
                     )
 
                     ImageLoader.loadThumbnail(binding.root.context, binding.ivAlbumCover, coverUrl)
                 } else {
                     binding.ivAlbumCover.setImageResource(R.drawable.ic_album_placeholder)
                 }
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 binding.ivAlbumCover.setImageResource(R.drawable.ic_album_placeholder)
             }
 
             binding.root.setOnClickListener {
                 onAlbumClick(album)
             }
+        }
+    }
+
+    companion object {
+        private val DIFF = object : DiffUtil.ItemCallback<Album>() {
+            override fun areItemsTheSame(oldItem: Album, newItem: Album): Boolean =
+                oldItem.id == newItem.id
+
+            override fun areContentsTheSame(oldItem: Album, newItem: Album): Boolean =
+                oldItem == newItem
         }
     }
 }

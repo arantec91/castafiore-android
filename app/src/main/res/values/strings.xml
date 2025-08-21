@@ -125,6 +125,7 @@
 
     <!-- Similar Artists -->
     <string name="similar_artists_title">Artistas similares</string>
+    <string name="similar_to_label">Similares a</string>
 
     <!-- Playlist options bottom sheet -->
     <string name="edit_name">Editar nombre</string>

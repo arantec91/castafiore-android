@@ -196,9 +196,9 @@ class ArtistDetailFragment : Fragment() {
         }
 
         // Setup similar artists RecyclerView
-        similarAdapter = com.arantec.castafiore.ui.adapters.ArtistHorizontalAdapter { artist ->
-            navigateToArtistDetail(artist)
-        }
+        similarAdapter = com.arantec.castafiore.ui.adapters.ArtistHorizontalAdapter(
+            onArtistClick = { artist -> navigateToArtistDetail(artist) }
+        )
         binding.rvSimilarArtists.apply {
             adapter = similarAdapter
             layoutManager = LinearLayoutManager(context, LinearLayoutManager.HORIZONTAL, false)
