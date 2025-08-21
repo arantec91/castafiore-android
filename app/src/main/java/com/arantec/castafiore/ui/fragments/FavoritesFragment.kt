@@ -9,6 +9,7 @@ import android.os.IBinder
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.view.ViewTreeObserver
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.fragment.findNavController
@@ -181,6 +182,7 @@ class FavoritesFragment : Fragment() {
     }
 
     private fun loadFavorites() {
+        binding.loadingOverlay.visibility = View.VISIBLE
         binding.progressBar.visibility = View.VISIBLE
         binding.emptyLayout.visibility = View.GONE
         binding.rvSongs.visibility = View.GONE
@@ -188,38 +190,50 @@ class FavoritesFragment : Fragment() {
         viewLifecycleOwner.lifecycleScope.launch {
             musicRepository.getStarredSongs().fold(
                 onSuccess = { songs ->
-                    // Si la vista ya no está disponible, salir sin tocar UI
                     if (!isAdded || _binding == null) return@fold
 
                     favoriteSongs.clear()
                     favoriteSongs.addAll(songs)
                     songAdapter.updateSongs(favoriteSongs)
                     updateDownloadUIState()
-                    // notifyDataSetChanged removido: DiffUtil ya despacha cambios y evitar inconsistencias
 
-                    // Info header
                     binding.tvTitle.text = getString(R.string.favorite_songs_title)
                     binding.tvInfo.text = buildInfoText(favoriteSongs)
 
-                    binding.progressBar.visibility = View.GONE
                     if (favoriteSongs.isEmpty()) {
                         binding.emptyLayout.visibility = View.VISIBLE
                     } else {
                         binding.rvSongs.visibility = View.VISIBLE
                     }
 
-                    // Actualizar botón play según estado actual
                     isPlaying = musicService?.isPlaying() == true && isFavoritesQueuePlaying()
                     updatePlayButton()
+
+                    hideLoadingOverlayAfterNextDraw()
                 },
                 onFailure = {
                     if (!isAdded || _binding == null) return@fold
-                    binding.progressBar.visibility = View.GONE
                     binding.emptyLayout.visibility = View.VISIBLE
                     binding.tvEmpty.text = getString(R.string.error_loading_favorites)
+                    hideLoadingOverlayAfterNextDraw()
                 }
             )
         }
+    }
+
+    private fun hideLoadingOverlayAfterNextDraw() {
+        if (!isAdded || _binding == null) return
+        val root = binding.root
+        val listener = object : ViewTreeObserver.OnPreDrawListener {
+            override fun onPreDraw(): Boolean {
+                if (!isAdded || _binding == null) return true
+                root.viewTreeObserver.removeOnPreDrawListener(this)
+                binding.loadingOverlay.visibility = View.GONE
+                binding.progressBar.visibility = View.GONE
+                return true
+            }
+        }
+        root.viewTreeObserver.addOnPreDrawListener(listener)
     }
 
     private fun buildInfoText(list: List<Song>): String {
