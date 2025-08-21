@@ -12,6 +12,7 @@ import android.view.View
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import androidx.navigation.NavOptions
 import androidx.navigation.fragment.NavHostFragment
 import androidx.navigation.ui.setupWithNavController
 import androidx.navigation.findNavController
@@ -108,8 +109,39 @@ class MainActivity : AppCompatActivity() {
             .findFragmentById(R.id.nav_host_fragment) as NavHostFragment
         val navController = navHostFragment.navController
 
-        // Setup bottom navigation with nav controller
+        // Mantener sincronización visual (badges/selección) con NavigationUI
         binding.bottomNavigation.setupWithNavController(navController)
+
+        // Forzar navegación al fragmento correspondiente siempre, sin importar el actual
+        binding.bottomNavigation.setOnItemSelectedListener { item ->
+            val options = NavOptions.Builder()
+                // Volver al inicio del grafo para salir de detalles antes de cambiar de pestaña
+                .setPopUpTo(navController.graph.startDestinationId, false)
+                .setLaunchSingleTop(true)
+                .setRestoreState(true)
+                .build()
+
+            try {
+                if (navController.currentDestination?.id == item.itemId) {
+                    // Ya estamos en el destino: limpiar cualquier pila interna si aplica
+                    navController.popBackStack(item.itemId, false)
+                } else {
+                    navController.navigate(item.itemId, null, options)
+                }
+                true
+            } catch (e: IllegalArgumentException) {
+                // Si el destino no existe en el grafo
+                android.util.Log.e("MainActivity", "Destino no encontrado para itemId=${item.itemId}", e)
+                false
+            }
+        }
+
+        // Al re-seleccionar la misma pestaña, volver al root de esa sección
+        binding.bottomNavigation.setOnItemReselectedListener { item ->
+            try {
+                navController.popBackStack(item.itemId, false)
+            } catch (_: Exception) { }
+        }
     }
 
     private fun handleNavigationFromIntent() {
