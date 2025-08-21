@@ -150,14 +150,7 @@
                     android:orientation="horizontal"
                     android:gravity="center_vertical">
 
-                    <ImageView
-                        android:layout_width="20dp"
-                        android:layout_height="20dp"
-                        android:contentDescription="@string/album_icon"
-                        android:src="@drawable/ic_album_small"
-                        app:tint="#B3B3B3"
-                        android:layout_marginEnd="8dp" />
-
+                    <!-- Información del álbum -->
                     <TextView
                         android:id="@+id/tvAlbumInfo"
                         android:layout_width="wrap_content"
@@ -210,11 +203,12 @@
                         android:id="@+id/progressDownload"
                         android:layout_width="match_parent"
                         android:layout_height="match_parent"
+                        android:layout_gravity="center"
                         android:indeterminate="true"
                         android:visibility="gone"
-                        app:indicatorSize="24dp"
-                        app:indicatorInset="2dp"
-                        app:trackThickness="3dp"
+                        app:indicatorSize="20dp"
+                        app:indicatorInset="6dp"
+                        app:trackThickness="2dp"
                         app:indicatorColor="@color/primary" />
                 </FrameLayout>
 
