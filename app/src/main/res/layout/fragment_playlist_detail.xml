@@ -103,14 +103,6 @@
                     android:orientation="horizontal"
                     android:gravity="center_vertical">
 
-                    <ImageView
-                        android:layout_width="20dp"
-                        android:layout_height="20dp"
-                        android:src="@drawable/ic_music_note"
-                        app:tint="#B3B3B3"
-                        android:layout_marginEnd="8dp"
-                        android:contentDescription="@string/music_info_icon_desc" />
-
                     <TextView
                         android:id="@+id/tvInfo"
                         android:layout_width="wrap_content"
@@ -130,8 +122,8 @@
 
                 <FrameLayout
                     android:id="@+id/btnDownloadContainer"
-                    android:layout_width="40dp"
-                    android:layout_height="40dp"
+                    android:layout_width="32dp"
+                    android:layout_height="32dp"
                     app:layout_constraintStart_toStartOf="parent"
                     app:layout_constraintTop_toTopOf="parent"
                     app:layout_constraintBottom_toBottomOf="parent">
@@ -149,11 +141,12 @@
                         android:id="@+id/progressDownload"
                         android:layout_width="match_parent"
                         android:layout_height="match_parent"
+                        android:layout_gravity="center"
                         android:indeterminate="true"
                         android:visibility="gone"
-                        app:indicatorInset="2dp"
-                        app:indicatorSize="24dp"
-                        app:trackThickness="3dp"
+                        app:indicatorSize="20dp"
+                        app:indicatorInset="6dp"
+                        app:trackThickness="2dp"
                         app:indicatorColor="@color/primary" />
                 </FrameLayout>
 
@@ -161,7 +154,7 @@
                     android:id="@+id/btnMore"
                     android:layout_width="40dp"
                     android:layout_height="40dp"
-                    android:layout_marginStart="12dp"
+                    android:layout_marginStart="16dp"
                     android:background="?attr/selectableItemBackgroundBorderless"
                     android:contentDescription="@string/more_options"
                     android:src="@drawable/ic_more_vert"
@@ -192,8 +185,8 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:nestedScrollingEnabled="false"
-                android:paddingStart="4dp"
-                android:paddingEnd="4dp"
+                android:paddingStart="0dp"
+                android:paddingEnd="0dp"
                 tools:itemCount="10"
                 tools:listitem="@layout/item_song" />
 

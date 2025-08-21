@@ -256,8 +256,8 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:nestedScrollingEnabled="false"
-                    android:paddingStart="4dp"
-                    android:paddingEnd="4dp"
+                    android:paddingStart="0dp"
+                    android:paddingEnd="0dp"
                     tools:itemCount="10"
                     tools:listitem="@layout/item_song_album" />
 

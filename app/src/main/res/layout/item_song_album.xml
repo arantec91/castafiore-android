@@ -56,16 +56,4 @@
         android:contentDescription="Más opciones"
         app:tint="#B3B3B3" />
 
-    <!-- Duración -->
-    <TextView
-        android:id="@+id/tvDuration"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:textColor="#B3B3B3"
-        android:textSize="13sp"
-        android:fontFamily="sans-serif-condensed"
-        android:minWidth="40dp"
-        android:gravity="end"
-        tools:text="3:42" />
-
 </LinearLayout>

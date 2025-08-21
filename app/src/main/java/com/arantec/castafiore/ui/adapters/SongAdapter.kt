@@ -42,8 +42,6 @@ class SongAdapter(
 
         fun bind(song: Song, position: Int) {
             binding.apply {
-                // Ocultar el número de track
-                tvTrackNumber.visibility = android.view.View.GONE
 
                 // Mostrar/ocultar portada según configuración
                 if (!showCover) {
