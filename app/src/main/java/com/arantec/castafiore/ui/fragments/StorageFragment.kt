@@ -13,6 +13,7 @@ import com.arantec.castafiore.data.cache.CacheManager
 import com.arantec.castafiore.databinding.FragmentStorageBinding
 import com.arantec.castafiore.utils.ImageLoader
 import com.arantec.castafiore.utils.StatusBarUtils
+import com.arantec.castafiore.utils.snack
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -134,7 +135,7 @@ class StorageFragment : Fragment() {
     }
 
     private fun toast(msg: String) {
-        android.widget.Toast.makeText(requireContext(), msg, android.widget.Toast.LENGTH_SHORT).show()
+        snack(msg)
     }
 
     override fun onResume() {

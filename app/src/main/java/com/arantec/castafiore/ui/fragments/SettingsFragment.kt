@@ -14,6 +14,9 @@ import com.arantec.castafiore.databinding.FragmentSettingsBinding
 import com.arantec.castafiore.ui.activities.SetupActivity
 import com.arantec.castafiore.ui.adapters.SettingsAdapter
 import com.arantec.castafiore.utils.StatusBarUtils
+import com.arantec.castafiore.utils.SnackbarUtils
+import com.arantec.castafiore.utils.snack
+import com.google.android.material.snackbar.Snackbar
 
 class SettingsFragment : Fragment() {
 
@@ -140,11 +143,13 @@ class SettingsFragment : Fragment() {
     }
 
     private fun showMessage(message: String) {
-        android.widget.Toast.makeText(requireContext(), message, android.widget.Toast.LENGTH_SHORT).show()
+        // Replace Toast with custom Snackbar
+        snack(message, type = SnackbarUtils.Type.INFO, duration = Snackbar.LENGTH_SHORT)
     }
 
     private fun showError(message: String) {
-        android.widget.Toast.makeText(requireContext(), message, android.widget.Toast.LENGTH_LONG).show()
+        // Replace Toast with custom Snackbar for errors
+        snack(message, type = SnackbarUtils.Type.ERROR, duration = Snackbar.LENGTH_LONG)
     }
 
     override fun onResume() {

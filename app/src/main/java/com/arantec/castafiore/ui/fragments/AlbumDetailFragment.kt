@@ -39,6 +39,7 @@ import kotlin.random.Random
 import android.graphics.drawable.GradientDrawable
 import androidx.core.graphics.toColorInt
 import java.io.File
+import com.arantec.castafiore.utils.snack
 
 class AlbumDetailFragment : Fragment() {
 
@@ -739,56 +740,44 @@ class AlbumDetailFragment : Fragment() {
     private fun showSongOptions(song: Song) {
         val bottomSheet = com.arantec.castafiore.ui.dialogs.SongOptionsBottomSheet.newInstance(song, false)
             .setOnDownloadClickListener { selectedSong ->
-                // Implementar descarga de canción con el nuevo sistema
                 val downloadManager = com.arantec.castafiore.data.download.SongDownloadManager.getInstance(requireContext())
-
                 when {
                     downloadManager.isSongDownloaded(selectedSong.id) -> {
-                        android.widget.Toast.makeText(requireContext(), "La canción ya está descargada", android.widget.Toast.LENGTH_SHORT).show()
+                        snack("La canción ya está descargada")
                     }
                     downloadManager.isSongDownloading(selectedSong.id) -> {
-                        // Cancelar descarga en progreso
                         downloadManager.cancelDownload(selectedSong.id)
-                        android.widget.Toast.makeText(requireContext(), "Descarga cancelada: ${selectedSong.title}", android.widget.Toast.LENGTH_SHORT).show()
+                        snack("Descarga cancelada: ${selectedSong.title}")
                     }
                     else -> {
                         downloadManager.downloadSong(selectedSong)
-                        android.widget.Toast.makeText(requireContext(), "Descarga iniciada: ${selectedSong.title}", android.widget.Toast.LENGTH_SHORT).show()
+                        snack("Descarga iniciada: ${selectedSong.title}")
                     }
                 }
             }
             .setOnDeleteDownloadClickListener { selectedSong ->
-                // Implementar eliminación de descarga
                 val downloadManager = com.arantec.castafiore.data.download.SongDownloadManager.getInstance(requireContext())
-
                 if (downloadManager.isSongDownloaded(selectedSong.id)) {
-                    // Mostrar diálogo de confirmación
                     androidx.appcompat.app.AlertDialog.Builder(requireContext())
                         .setTitle("Eliminar descarga")
                         .setMessage("¿Estás seguro de que quieres eliminar la descarga de \"${selectedSong.title}\"?")
                         .setPositiveButton("Eliminar") { _, _ ->
                             val success = downloadManager.deleteSong(selectedSong.id)
-                            if (success) {
-                                android.widget.Toast.makeText(requireContext(), "Descarga eliminada: ${selectedSong.title}", android.widget.Toast.LENGTH_SHORT).show()
-                            } else {
-                                android.widget.Toast.makeText(requireContext(), "Error al eliminar la descarga", android.widget.Toast.LENGTH_SHORT).show()
-                            }
+                            if (success) snack("Descarga eliminada: ${selectedSong.title}") else snack("Error al eliminar la descarga")
                         }
                         .setNegativeButton("Cancelar", null)
                         .show()
                 } else {
-                    android.widget.Toast.makeText(requireContext(), "La canción no está descargada", android.widget.Toast.LENGTH_SHORT).show()
+                    snack("La canción no está descargada")
                 }
             }
             .setOnAddToQueueClickListener { selectedSong ->
-                // Agregar canción a la cola de reproducción
                 musicService?.addToQueue(selectedSong)
-                android.widget.Toast.makeText(requireContext(), "Agregado a la cola: ${selectedSong.title}", android.widget.Toast.LENGTH_SHORT).show()
+                snack("Agregado a la cola: ${selectedSong.title}")
             }
             .setOnPlayNextClickListener { selectedSong ->
-                // Agregar canción para reproducir siguiente
                 musicService?.playNext(selectedSong)
-                android.widget.Toast.makeText(requireContext(), "Se reproducirá siguiente: ${selectedSong.title}", android.widget.Toast.LENGTH_SHORT).show()
+                snack("Se reproducirá siguiente: ${selectedSong.title}")
             }
             .setOnAddToPlaylistClickListener { selectedSong ->
                 // Mostrar diálogo de selección de playlist
@@ -838,37 +827,28 @@ class AlbumDetailFragment : Fragment() {
      */
     private fun downloadAlbum(album: Album) {
         if (albumSongs.isEmpty()) {
-            android.widget.Toast.makeText(requireContext(), "No hay canciones para descargar", android.widget.Toast.LENGTH_SHORT).show()
+            snack("No hay canciones para descargar")
             return
         }
-
         val downloadManager = com.arantec.castafiore.data.download.SongDownloadManager.getInstance(requireContext())
-
-        // Verificar cuántas canciones ya están descargadas o descargándose
         val alreadyDownloaded = albumSongs.count { downloadManager.isSongDownloaded(it.id) }
         val currentlyDownloading = albumSongs.count { downloadManager.isSongDownloading(it.id) }
-        val toDownload = albumSongs.filter {
-            !downloadManager.isSongDownloaded(it.id) && !downloadManager.isSongDownloading(it.id)
-        }
-
+        val toDownload = albumSongs.filter { !downloadManager.isSongDownloaded(it.id) && !downloadManager.isSongDownloading(it.id) }
         when {
             alreadyDownloaded == albumSongs.size -> {
-                android.widget.Toast.makeText(requireContext(), "El álbum ya está completamente descargado", android.widget.Toast.LENGTH_SHORT).show()
+                snack("El álbum ya está completamente descargado")
             }
             toDownload.isEmpty() && currentlyDownloading > 0 -> {
-                android.widget.Toast.makeText(requireContext(), "El álbum se está descargando ($currentlyDownloading canciones pendientes)", android.widget.Toast.LENGTH_SHORT).show()
+                snack("El álbum se está descargando ($currentlyDownloading canciones pendientes)")
             }
             else -> {
-                // Iniciar descarga de las canciones pendientes
-                toDownload.forEach { song ->
-                    downloadManager.downloadSong(song)
+                toDownload.forEach { song -> downloadManager.downloadSong(song) }
+                val message = if (alreadyDownloaded > 0) {
+                    "Descargando ${toDownload.size} canciones restantes del álbum"
+                } else {
+                    "Descargando álbum completo (${toDownload.size} canciones)"
                 }
-
-                val message = when {
-                    alreadyDownloaded > 0 -> "Descargando ${toDownload.size} canciones restantes del álbum"
-                    else -> "Descargando álbum completo (${toDownload.size} canciones)"
-                }
-                android.widget.Toast.makeText(requireContext(), message, android.widget.Toast.LENGTH_LONG).show()
+                snack(message)
             }
         }
     }
@@ -878,17 +858,14 @@ class AlbumDetailFragment : Fragment() {
      */
     private fun addAlbumToQueue(album: Album) {
         if (albumSongs.isEmpty()) {
-            android.widget.Toast.makeText(requireContext(), "No hay canciones para agregar a la cola", android.widget.Toast.LENGTH_SHORT).show()
+            snack("No hay canciones para agregar a la cola")
             return
         }
-
         musicService?.let { service ->
-            albumSongs.forEach { song ->
-                service.addToQueue(song)
-            }
-            android.widget.Toast.makeText(requireContext(), "Álbum agregado a la cola (${albumSongs.size} canciones)", android.widget.Toast.LENGTH_SHORT).show()
+            albumSongs.forEach { song -> service.addToQueue(song) }
+            snack("Álbum agregado a la cola (${albumSongs.size} canciones)")
         } ?: run {
-            android.widget.Toast.makeText(requireContext(), "Servicio de música no disponible", android.widget.Toast.LENGTH_SHORT).show()
+            snack("Servicio de música no disponible")
         }
     }
 
@@ -902,49 +879,11 @@ class AlbumDetailFragment : Fragment() {
             putExtra(android.content.Intent.EXTRA_TEXT, shareText)
             type = "text/plain"
         }
-
         try {
             startActivity(android.content.Intent.createChooser(shareIntent, "Compartir álbum"))
         } catch (e: Exception) {
-            android.widget.Toast.makeText(requireContext(), "No se pudo compartir el álbum", android.widget.Toast.LENGTH_SHORT).show()
+            snack("No se pudo compartir el álbum")
         }
-    }
-
-    /**
-     * Muestra información detallada del álbum
-     */
-    private fun showAlbumInfo(album: Album) {
-        val infoMessage = buildString {
-            append("Álbum: ${album.name}\n")
-            append("Artista: ${album.artist}\n")
-            if (album.year != null) append("Año: ${album.year}\n")
-            append("Canciones: ${album.songCount}\n")
-            append("Duración: ${formatAlbumDuration(album.duration)}\n")
-            if (album.genre != null) append("Género: ${album.genre}\n")
-        }
-
-        androidx.appcompat.app.AlertDialog.Builder(requireContext())
-            .setTitle("Información del Álbum")
-            .setMessage(infoMessage)
-            .setPositiveButton("Cerrar") { dialog, _ -> dialog.dismiss() }
-            .show()
-    }
-
-    private fun formatAlbumDuration(seconds: Int): String {
-        val minutes = seconds / 60
-        val remainingSeconds = seconds % 60
-
-        return if (minutes > 0) {
-            "${minutes}m ${remainingSeconds}s"
-        } else {
-            "${remainingSeconds}s"
-        }
-    }
-
-    private fun formatSongDuration(seconds: Int): String {
-        val minutes = seconds / 60
-        val remainingSeconds = seconds % 60
-        return String.format("%d:%02d", minutes, remainingSeconds)
     }
 
     /**
@@ -952,11 +891,10 @@ class AlbumDetailFragment : Fragment() {
      */
     private fun navigateToArtist(artistId: String, artistName: String) {
         try {
-            // Usar Navigation Component en lugar de transacciones manuales
             val action = AlbumDetailFragmentDirections.actionAlbumDetailToArtistDetail(artistId, artistName)
             findNavController().navigate(action)
         } catch (e: Exception) {
-            android.widget.Toast.makeText(requireContext(), "Error al navegar al artista", android.widget.Toast.LENGTH_SHORT).show()
+            snack("Error al navegar al artista")
         }
     }
 
@@ -971,12 +909,7 @@ class AlbumDetailFragment : Fragment() {
 
             lifecycleScope.launch {
                 try {
-                    val result = if (isFavorited) {
-                        musicRepository.unstarAlbum(album.id)
-                    } else {
-                        musicRepository.starAlbum(album.id)
-                    }
-
+                    val result = if (isFavorited) musicRepository.unstarAlbum(album.id) else musicRepository.starAlbum(album.id)
                     result.fold(
                         onSuccess = {
                             // Toggle localmente
@@ -998,20 +931,12 @@ class AlbumDetailFragment : Fragment() {
                         },
                         onFailure = { error ->
                             binding.btnFavorite.isEnabled = true
-                            android.widget.Toast.makeText(
-                                requireContext(),
-                                "Error al actualizar favoritos: ${error.message}",
-                                android.widget.Toast.LENGTH_SHORT
-                            ).show()
+                            snack("Error al actualizar favoritos: ${error.message}")
                         }
                     )
                 } catch (e: Exception) {
                     binding.btnFavorite.isEnabled = true
-                    android.widget.Toast.makeText(
-                        requireContext(),
-                        "Error: ${e.message}",
-                        android.widget.Toast.LENGTH_SHORT
-                    ).show()
+                    snack("Error: ${e.message}")
                 }
             }
         }
@@ -1256,8 +1181,7 @@ class AlbumDetailFragment : Fragment() {
             java.io.File(dm.createDownloadPath(song)).exists()
         }
         if (downloadedSongs.isEmpty()) {
-            // Nada que eliminar
-            android.widget.Toast.makeText(requireContext(), "No hay descargas para eliminar", android.widget.Toast.LENGTH_SHORT).show()
+            snack("No hay descargas para eliminar")
             return
         }
 
@@ -1272,9 +1196,7 @@ class AlbumDetailFragment : Fragment() {
         androidx.appcompat.app.AlertDialog.Builder(requireContext())
             .setTitle(title)
             .setMessage(message)
-            .setPositiveButton("Eliminar") { _, _ ->
-                deleteAlbumDownloads(downloadedSongs)
-            }
+            .setPositiveButton("Eliminar") { _, _ -> deleteAlbumDownloads(downloadedSongs) }
             .setNegativeButton("Cancelar", null)
             .show()
     }
@@ -1310,6 +1232,40 @@ class AlbumDetailFragment : Fragment() {
             1 -> "Se eliminó 1 descarga"
             else -> "Se eliminaron $deleted descargas"
         }
-        android.widget.Toast.makeText(requireContext(), msg, android.widget.Toast.LENGTH_SHORT).show()
+        snack(msg)
+    }
+
+    // --- Helpers added to fix unresolved references ---
+    private fun formatAlbumDuration(totalSeconds: Int): String {
+        val hours = totalSeconds / 3600
+        val minutes = (totalSeconds % 3600) / 60
+        return if (hours > 0) {
+            "${hours} h ${minutes} min"
+        } else {
+            "${minutes} min"
+        }
+    }
+
+    private fun formatSongDuration(totalSeconds: Int): String {
+        val minutes = totalSeconds / 60
+        val seconds = totalSeconds % 60
+        return String.format("%d:%02d", minutes, seconds)
+    }
+
+    private fun showAlbumInfo(album: Album) {
+        val yearText = album.year?.toString() ?: getString(R.string.unknown_year)
+        val durationText = formatAlbumDuration(album.duration)
+        val message = buildString {
+            appendLine("Álbum: ${album.name}")
+            appendLine("Artista: ${album.artist}")
+            appendLine("Año: ${yearText}")
+            appendLine("Canciones: ${album.songCount}")
+            append("Duración: ${durationText}")
+        }
+        androidx.appcompat.app.AlertDialog.Builder(requireContext())
+            .setTitle("Información del álbum")
+            .setMessage(message)
+            .setPositiveButton("Cerrar", null)
+            .show()
     }
 }

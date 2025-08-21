@@ -11,7 +11,6 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.EditText
-import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
@@ -43,6 +42,7 @@ import com.bumptech.glide.request.transition.Transition
 import android.graphics.drawable.Drawable
 import com.arantec.castafiore.data.download.SongDownloadManager
 import java.io.File
+import com.arantec.castafiore.utils.snack
 
 class PlaylistDetailFragment : Fragment() {
 
@@ -143,7 +143,7 @@ class PlaylistDetailFragment : Fragment() {
 
     private fun downloadPlaylist() {
         if (playlistSongs.isEmpty()) {
-            Toast.makeText(requireContext(), "No hay canciones para descargar", Toast.LENGTH_SHORT).show()
+            snack("No hay canciones para descargar")
             return
         }
         val downloadManager = com.arantec.castafiore.data.download.SongDownloadManager.getInstance(requireContext())
@@ -152,10 +152,10 @@ class PlaylistDetailFragment : Fragment() {
         val toDownload = playlistSongs.filter { !downloadManager.isSongDownloaded(it.id) && !downloadManager.isSongDownloading(it.id) }
         when {
             alreadyDownloaded == playlistSongs.size -> {
-                Toast.makeText(requireContext(), "La playlist ya está completamente descargada", Toast.LENGTH_SHORT).show()
+                snack("La playlist ya está completamente descargada")
             }
             toDownload.isEmpty() && currentlyDownloading > 0 -> {
-                Toast.makeText(requireContext(), "La playlist se está descargando ($currentlyDownloading canciones pendientes)", Toast.LENGTH_SHORT).show()
+                snack("La playlist se está descargando ($currentlyDownloading canciones pendientes)")
             }
             else -> {
                 toDownload.forEach { song -> downloadManager.downloadSong(song) }
@@ -164,7 +164,7 @@ class PlaylistDetailFragment : Fragment() {
                 } else {
                     "Descargando playlist completa (${toDownload.size} canciones)"
                 }
-                Toast.makeText(requireContext(), message, Toast.LENGTH_LONG).show()
+                snack(message)
             }
         }
     }
@@ -200,9 +200,9 @@ class PlaylistDetailFragment : Fragment() {
                         val service = musicService
                         if (service != null) {
                             service.addToQueue(selectedSong)
-                            Toast.makeText(requireContext(), getString(R.string.added_to_queue, selectedSong.title), Toast.LENGTH_SHORT).show()
+                            snack(getString(R.string.added_to_queue, selectedSong.title))
                         } else {
-                            Toast.makeText(requireContext(), getString(R.string.music_service_unavailable), Toast.LENGTH_SHORT).show()
+                            snack(getString(R.string.music_service_unavailable))
                             bindMusicService()
                         }
                     }
@@ -210,9 +210,9 @@ class PlaylistDetailFragment : Fragment() {
                         val service = musicService
                         if (service != null) {
                             service.playNext(selectedSong)
-                            Toast.makeText(requireContext(), getString(R.string.will_play_next, selectedSong.title), Toast.LENGTH_SHORT).show()
+                            snack(getString(R.string.will_play_next, selectedSong.title))
                         } else {
-                            Toast.makeText(requireContext(), getString(R.string.music_service_unavailable), Toast.LENGTH_SHORT).show()
+                            snack(getString(R.string.music_service_unavailable))
                             bindMusicService()
                         }
                     }
@@ -231,16 +231,16 @@ class PlaylistDetailFragment : Fragment() {
                                         try {
                                             findNavController().navigate(R.id.albumDetailFragment, args)
                                         } catch (_: Exception) {
-                                            Toast.makeText(requireContext(), "No se pudo abrir el álbum", Toast.LENGTH_SHORT).show()
+                                            snack("No se pudo abrir el álbum")
                                         }
                                     },
                                     onFailure = {
-                                        Toast.makeText(requireContext(), "No se pudo abrir el álbum", Toast.LENGTH_SHORT).show()
+                                        snack("No se pudo abrir el álbum")
                                     }
                                 )
                             }
                         } else {
-                            Toast.makeText(requireContext(), "Álbum no disponible", Toast.LENGTH_SHORT).show()
+                            snack("Álbum no disponible")
                         }
                     }
                     .setOnViewArtistClickListener { selectedSong ->
@@ -253,10 +253,10 @@ class PlaylistDetailFragment : Fragment() {
                             try {
                                 findNavController().navigate(R.id.artistDetailFragment, args)
                             } catch (_: Exception) {
-                                Toast.makeText(requireContext(), "No se pudo abrir el artista", Toast.LENGTH_SHORT).show()
+                                snack("No se pudo abrir el artista")
                             }
                         } else {
-                            Toast.makeText(requireContext(), "Artista no disponible", Toast.LENGTH_SHORT).show()
+                            snack("Artista no disponible")
                         }
                     }
                     .setOnSongInfoClickListener { selectedSong ->
@@ -464,7 +464,7 @@ class PlaylistDetailFragment : Fragment() {
         val id = playlistId ?: return
         val index = playlistSongs.indexOfFirst { it.id == song.id }
         if (index == -1) {
-            Toast.makeText(requireContext(), getString(R.string.remove_from_playlist_error), Toast.LENGTH_SHORT).show()
+            snack(getString(R.string.remove_from_playlist_error))
             return
         }
         viewLifecycleOwner.lifecycleScope.launch {
@@ -478,10 +478,10 @@ class PlaylistDetailFragment : Fragment() {
                         binding.emptyLayout.visibility = View.VISIBLE
                         binding.rvSongs.visibility = View.GONE
                     }
-                    Toast.makeText(requireContext(), getString(R.string.removed_from_playlist), Toast.LENGTH_SHORT).show()
+                    snack(getString(R.string.removed_from_playlist))
                 },
                 onFailure = {
-                    Toast.makeText(requireContext(), getString(R.string.remove_from_playlist_error), Toast.LENGTH_SHORT).show()
+                    snack(getString(R.string.remove_from_playlist_error))
                 }
             )
         }
@@ -569,10 +569,10 @@ class PlaylistDetailFragment : Fragment() {
                             onSuccess = {
                                 binding.tvTitle.text = newName
                                 playlistName = newName
-                                Toast.makeText(requireContext(), getString(R.string.playlist_rename_success), Toast.LENGTH_SHORT).show()
+                                snack(getString(R.string.playlist_rename_success))
                             },
                             onFailure = {
-                                Toast.makeText(requireContext(), getString(R.string.playlist_rename_error), Toast.LENGTH_SHORT).show()
+                                snack(getString(R.string.playlist_rename_error))
                             }
                         )
                     }
@@ -637,11 +637,11 @@ class PlaylistDetailFragment : Fragment() {
                 viewLifecycleOwner.lifecycleScope.launch {
                     musicRepository.deletePlaylist(id).fold(
                         onSuccess = {
-                            Toast.makeText(requireContext(), getString(R.string.playlist_deleted_success), Toast.LENGTH_SHORT).show()
+                            snack(getString(R.string.playlist_deleted_success))
                             findNavController().popBackStack()
                         },
                         onFailure = {
-                            Toast.makeText(requireContext(), getString(R.string.playlist_delete_error), Toast.LENGTH_SHORT).show()
+                            snack(getString(R.string.playlist_delete_error))
                         }
                     )
                 }
@@ -764,7 +764,7 @@ class PlaylistDetailFragment : Fragment() {
         val dm = SongDownloadManager.getInstance(requireContext())
         val downloadedSongs = playlistSongs.filter { File(dm.createDownloadPath(it)).exists() }
         if (downloadedSongs.isEmpty()) {
-            Toast.makeText(requireContext(), "No hay descargas para eliminar", Toast.LENGTH_SHORT).show()
+            snack("No hay descargas para eliminar")
             return
         }
         val count = downloadedSongs.size
@@ -808,6 +808,6 @@ class PlaylistDetailFragment : Fragment() {
             1 -> "Se eliminó 1 descarga"
             else -> "Se eliminaron $deleted descargas"
         }
-        Toast.makeText(requireContext(), msg, Toast.LENGTH_SHORT).show()
+        snack(msg)
     }
 }

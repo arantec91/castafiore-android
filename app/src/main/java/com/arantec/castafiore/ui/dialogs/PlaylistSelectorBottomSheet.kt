@@ -5,19 +5,18 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.EditText
-import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
-import androidx.recyclerview.widget.RecyclerView
-import kotlinx.coroutines.launch
 import com.arantec.castafiore.R
 import com.arantec.castafiore.data.models.Playlist
 import com.arantec.castafiore.data.models.Song
 import com.arantec.castafiore.data.repository.MusicRepository
 import com.arantec.castafiore.databinding.BottomSheetPlaylistSelectorBinding
 import com.arantec.castafiore.ui.adapters.PlaylistSelectorAdapter
+import com.arantec.castafiore.utils.snack
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment
+import kotlinx.coroutines.launch
 
 class PlaylistSelectorBottomSheet : BottomSheetDialogFragment() {
 
@@ -138,14 +137,14 @@ class PlaylistSelectorBottomSheet : BottomSheetDialogFragment() {
                         binding.progressBar.visibility = View.GONE
                         binding.tvEmptyState.visibility = View.VISIBLE
                         binding.tvEmptyState.text = "Error al cargar playlists: ${error.message}"
-                        Toast.makeText(requireContext(), "Error al cargar playlists", Toast.LENGTH_SHORT).show()
+                        snack("Error al cargar playlists")
                     }
                 )
             } catch (e: Exception) {
                 binding.progressBar.visibility = View.GONE
                 binding.tvEmptyState.visibility = View.VISIBLE
                 binding.tvEmptyState.text = "Error: ${e.message}"
-                Toast.makeText(requireContext(), "Error: ${e.message}", Toast.LENGTH_SHORT).show()
+                snack("Error: ${e.message}")
             }
         }
     }
@@ -164,7 +163,7 @@ class PlaylistSelectorBottomSheet : BottomSheetDialogFragment() {
                 if (playlistName.isNotEmpty()) {
                     createPlaylist(playlistName)
                 } else {
-                    Toast.makeText(requireContext(), "Ingresa un nombre para la playlist", Toast.LENGTH_SHORT).show()
+                    snack("Ingresa un nombre para la playlist")
                 }
             }
             .setNegativeButton("Cancelar", null)
@@ -185,7 +184,7 @@ class PlaylistSelectorBottomSheet : BottomSheetDialogFragment() {
                         binding.tvEmptyState.visibility = View.GONE
                         binding.rvPlaylists.visibility = View.VISIBLE
 
-                        Toast.makeText(requireContext(), "Playlist creada: $name", Toast.LENGTH_SHORT).show()
+                        snack("Playlist creada: $name")
 
                         // Agregar automáticamente la canción a la nueva playlist
                         song?.let { currentSong ->
@@ -193,11 +192,11 @@ class PlaylistSelectorBottomSheet : BottomSheetDialogFragment() {
                         }
                     },
                     onFailure = { error ->
-                        Toast.makeText(requireContext(), "Error al crear playlist: ${error.message}", Toast.LENGTH_SHORT).show()
+                        snack("Error al crear playlist: ${error.message}")
                     }
                 )
             } catch (e: Exception) {
-                Toast.makeText(requireContext(), "Error: ${e.message}", Toast.LENGTH_SHORT).show()
+                snack("Error: ${e.message}")
             }
         }
     }
@@ -212,20 +211,12 @@ class PlaylistSelectorBottomSheet : BottomSheetDialogFragment() {
                         onSuccess = { songs ->
                             val alreadyInPlaylist = songs.any { it.id == currentSong.id }
                             if (alreadyInPlaylist) {
-                                Toast.makeText(
-                                    requireContext(),
-                                    "\"${currentSong.title}\" ya está en \"${playlist.name}\"",
-                                    Toast.LENGTH_SHORT
-                                ).show()
+                                snack("\"${currentSong.title}\" ya está en \"${playlist.name}\"")
                                 return@launch
                             }
                         },
                         onFailure = { error ->
-                            Toast.makeText(
-                                requireContext(),
-                                "No se pudo verificar duplicados: ${error.message}",
-                                Toast.LENGTH_SHORT
-                            ).show()
+                            snack("No se pudo verificar duplicados: ${error.message}")
                             return@launch
                         }
                     )
@@ -234,23 +225,15 @@ class PlaylistSelectorBottomSheet : BottomSheetDialogFragment() {
                     val result = musicRepository.addSongToPlaylist(playlist.id, currentSong.id)
                     result.fold(
                         onSuccess = {
-                            Toast.makeText(
-                                requireContext(),
-                                "\"${currentSong.title}\" agregada a \"${playlist.name}\"",
-                                Toast.LENGTH_SHORT
-                            ).show()
+                            snack("\"${currentSong.title}\" agregada a \"${playlist.name}\"")
                             dismiss()
                         },
                         onFailure = { error ->
-                            Toast.makeText(
-                                requireContext(),
-                                "Error al agregar canción: ${error.message}",
-                                Toast.LENGTH_SHORT
-                            ).show()
+                            snack("Error al agregar canción: ${error.message}")
                         }
                     )
                 } catch (e: Exception) {
-                    Toast.makeText(requireContext(), "Error: ${e.message}", Toast.LENGTH_SHORT).show()
+                    snack("Error: ${e.message}")
                 }
             }
         }

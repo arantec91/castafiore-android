@@ -42,6 +42,7 @@ import java.util.Locale
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.random.Random
+import com.arantec.castafiore.utils.snack
 
 class ArtistDetailFragment : Fragment() {
 
@@ -686,16 +687,16 @@ class ArtistDetailFragment : Fragment() {
 
                 when {
                     downloadManager.isSongDownloaded(selectedSong.id) -> {
-                        android.widget.Toast.makeText(requireContext(), "La canción ya está descargada", android.widget.Toast.LENGTH_SHORT).show()
+                        snack("La canción ya está descargada")
                     }
                     downloadManager.isSongDownloading(selectedSong.id) -> {
                         // Cancelar descarga en progreso
                         downloadManager.cancelDownload(selectedSong.id)
-                        android.widget.Toast.makeText(requireContext(), "Descarga cancelada: ${selectedSong.title}", android.widget.Toast.LENGTH_SHORT).show()
+                        snack("Descarga cancelada: ${selectedSong.title}")
                     }
                     else -> {
                         downloadManager.downloadSong(selectedSong)
-                        android.widget.Toast.makeText(requireContext(), "Descarga iniciada: ${selectedSong.title}", android.widget.Toast.LENGTH_SHORT).show()
+                        snack("Descarga iniciada: ${selectedSong.title}")
                     }
                 }
             }
@@ -710,27 +711,23 @@ class ArtistDetailFragment : Fragment() {
                         .setMessage("¿Estás seguro de que quieres eliminar la descarga de \"${selectedSong.title}\"?")
                         .setPositiveButton("Eliminar") { _, _ ->
                             val success = downloadManager.deleteSong(selectedSong.id)
-                            if (success) {
-                                android.widget.Toast.makeText(requireContext(), "Descarga eliminada: ${selectedSong.title}", android.widget.Toast.LENGTH_SHORT).show()
-                            } else {
-                                android.widget.Toast.makeText(requireContext(), "Error al eliminar la descarga", android.widget.Toast.LENGTH_SHORT).show()
-                            }
+                            if (success) snack("Descarga eliminada: ${selectedSong.title}") else snack("Error al eliminar la descarga")
                         }
                         .setNegativeButton("Cancelar", null)
                         .show()
                 } else {
-                    android.widget.Toast.makeText(requireContext(), "La canción no está descargada", android.widget.Toast.LENGTH_SHORT).show()
+                    snack("La canción no está descargada")
                 }
             }
             .setOnAddToQueueClickListener { selectedSong ->
                 // Agregar canción a la cola de reproducción
                 musicService?.addToQueue(selectedSong)
-                android.widget.Toast.makeText(requireContext(), "Agregado a la cola: ${selectedSong.title}", android.widget.Toast.LENGTH_SHORT).show()
+                snack("Agregado a la cola: ${selectedSong.title}")
             }
             .setOnPlayNextClickListener { selectedSong ->
                 // Agregar canción para reproducir siguiente
                 musicService?.playNext(selectedSong)
-                android.widget.Toast.makeText(requireContext(), "Se reproducirá siguiente: ${selectedSong.title}", android.widget.Toast.LENGTH_SHORT).show()
+                snack("Se reproducirá siguiente: ${selectedSong.title}")
             }
             .setOnAddToPlaylistClickListener { selectedSong ->
                 // Mostrar diálogo de selección de playlist
@@ -757,10 +754,10 @@ class ArtistDetailFragment : Fragment() {
                         val action = ArtistDetailFragmentDirections.actionArtistDetailToAlbumDetail(album)
                         findNavController().navigate(action)
                     } catch (_: Exception) {
-                        android.widget.Toast.makeText(requireContext(), "Error al navegar al ��lbum", android.widget.Toast.LENGTH_SHORT).show()
+                        snack("Error al navegar al álbum")
                     }
                 } ?: run {
-                    android.widget.Toast.makeText(requireContext(), "Información del álbum no disponible", android.widget.Toast.LENGTH_SHORT).show()
+                    snack("Información del álbum no disponible")
                 }
             }
             .setOnShareClickListener { selectedSong ->
@@ -889,11 +886,11 @@ class ArtistDetailFragment : Fragment() {
     }
 
     private fun showError(message: String) {
-        android.widget.Toast.makeText(requireContext(), message, android.widget.Toast.LENGTH_SHORT).show()
+        snack(message)
     }
 
     private fun showMessage(message: String) {
-        android.widget.Toast.makeText(requireContext(), message, android.widget.Toast.LENGTH_SHORT).show()
+        snack(message)
     }
 
     // Métodos auxiliares para el bottom sheet de opciones de canciones
@@ -909,7 +906,7 @@ class ArtistDetailFragment : Fragment() {
         try {
             startActivity(chooser)
         } catch (_: Exception) {
-            android.widget.Toast.makeText(requireContext(), "No se pudo compartir la canción", android.widget.Toast.LENGTH_SHORT).show()
+            snack("No se pudo compartir la canción")
         }
     }
 

@@ -20,6 +20,7 @@ import com.arantec.castafiore.databinding.FragmentFavoritesBinding
 import com.arantec.castafiore.service.MusicService
 import com.arantec.castafiore.ui.adapters.SongAdapter
 import com.arantec.castafiore.utils.StatusBarUtils
+import com.arantec.castafiore.utils.snack
 import kotlinx.coroutines.launch
 import com.bumptech.glide.Glide
 import java.util.Locale
@@ -331,7 +332,7 @@ class FavoritesFragment : Fragment() {
 
     private fun downloadFavorites() {
         if (favoriteSongs.isEmpty()) {
-            android.widget.Toast.makeText(requireContext(), "No hay canciones para descargar", android.widget.Toast.LENGTH_SHORT).show()
+            snack("No hay canciones para descargar")
             return
         }
         val dm = SongDownloadManager.getInstance(requireContext())
@@ -340,10 +341,10 @@ class FavoritesFragment : Fragment() {
         val toDownload = favoriteSongs.filter { !dm.isSongDownloaded(it.id) && !dm.isSongDownloading(it.id) }
         when {
             alreadyDownloaded == favoriteSongs.size -> {
-                android.widget.Toast.makeText(requireContext(), "Todas las favoritas ya están descargadas", android.widget.Toast.LENGTH_SHORT).show()
+                snack("Todas las favoritas ya están descargadas")
             }
             toDownload.isEmpty() && currentlyDownloading > 0 -> {
-                android.widget.Toast.makeText(requireContext(), "Descargando favoritas ($currentlyDownloading pendientes)", android.widget.Toast.LENGTH_SHORT).show()
+                snack("Descargando favoritas ($currentlyDownloading pendientes)")
             }
             else -> {
                 toDownload.forEach { song -> dm.downloadSong(song) }
@@ -352,7 +353,7 @@ class FavoritesFragment : Fragment() {
                 } else {
                     "Descargando favoritas (${toDownload.size} canciones)"
                 }
-                android.widget.Toast.makeText(requireContext(), message, android.widget.Toast.LENGTH_LONG).show()
+                snack(message)
             }
         }
     }
@@ -364,15 +365,15 @@ class FavoritesFragment : Fragment() {
                 val downloadManager = com.arantec.castafiore.data.download.SongDownloadManager.getInstance(requireContext())
                 when {
                     downloadManager.isSongDownloaded(selectedSong.id) -> {
-                        android.widget.Toast.makeText(requireContext(), getString(R.string.song_already_downloaded), android.widget.Toast.LENGTH_SHORT).show()
+                        snack(getString(R.string.song_already_downloaded))
                     }
                     downloadManager.isSongDownloading(selectedSong.id) -> {
                         downloadManager.cancelDownload(selectedSong.id)
-                        android.widget.Toast.makeText(requireContext(), getString(R.string.download_canceled, selectedSong.title), android.widget.Toast.LENGTH_SHORT).show()
+                        snack(getString(R.string.download_canceled, selectedSong.title))
                     }
                     else -> {
                         downloadManager.downloadSong(selectedSong)
-                        android.widget.Toast.makeText(requireContext(), getString(R.string.download_started, selectedSong.title), android.widget.Toast.LENGTH_SHORT).show()
+                        snack(getString(R.string.download_started, selectedSong.title))
                     }
                 }
             }
@@ -382,24 +383,24 @@ class FavoritesFragment : Fragment() {
                     val builder = androidx.appcompat.app.AlertDialog.Builder(requireContext())
                     builder.setTitle(R.string.delete_download)
                     builder.setMessage(getString(R.string.delete_download_confirm, selectedSong.title))
-                    builder.setPositiveButton(R.string.delete) { dialogInterface: android.content.DialogInterface, _: Int ->
+                    builder.setPositiveButton(R.string.delete) { _: android.content.DialogInterface, _: Int ->
                         val success = downloadManager.deleteSong(selectedSong.id)
                         val msg = if (success) R.string.download_deleted else R.string.download_delete_error
-                        android.widget.Toast.makeText(requireContext(), getString(msg), android.widget.Toast.LENGTH_SHORT).show()
+                        snack(getString(msg))
                     }
                     builder.setNegativeButton(R.string.cancel, null)
                     builder.show()
                 } else {
-                    android.widget.Toast.makeText(requireContext(), getString(R.string.song_not_downloaded), android.widget.Toast.LENGTH_SHORT).show()
+                    snack(getString(R.string.song_not_downloaded))
                 }
             }
             .setOnAddToQueueClickListener { selectedSong ->
                 val service = musicService
                 if (service != null) {
                     service.addToQueue(selectedSong)
-                    android.widget.Toast.makeText(requireContext(), getString(R.string.added_to_queue, selectedSong.title), android.widget.Toast.LENGTH_SHORT).show()
+                    snack(getString(R.string.added_to_queue, selectedSong.title))
                 } else {
-                    android.widget.Toast.makeText(requireContext(), getString(R.string.music_service_unavailable), android.widget.Toast.LENGTH_SHORT).show()
+                    snack(getString(R.string.music_service_unavailable))
                     bindMusicService()
                 }
             }
@@ -407,9 +408,9 @@ class FavoritesFragment : Fragment() {
                 val service = musicService
                 if (service != null) {
                     service.playNext(selectedSong)
-                    android.widget.Toast.makeText(requireContext(), getString(R.string.will_play_next, selectedSong.title), android.widget.Toast.LENGTH_SHORT).show()
+                    snack(getString(R.string.will_play_next, selectedSong.title))
                 } else {
-                    android.widget.Toast.makeText(requireContext(), getString(R.string.music_service_unavailable), android.widget.Toast.LENGTH_SHORT).show()
+                    snack(getString(R.string.music_service_unavailable))
                     bindMusicService()
                 }
             }
@@ -430,16 +431,16 @@ class FavoritesFragment : Fragment() {
                                 try {
                                     findNavController().navigate(R.id.albumDetailFragment, args)
                                 } catch (_: Exception) {
-                                    android.widget.Toast.makeText(requireContext(), "No se pudo abrir el álbum", android.widget.Toast.LENGTH_SHORT).show()
+                                    snack("No se pudo abrir el álbum")
                                 }
                             },
                             onFailure = {
-                                android.widget.Toast.makeText(requireContext(), "No se pudo abrir el álbum", android.widget.Toast.LENGTH_SHORT).show()
+                                snack("No se pudo abrir el álbum")
                             }
                         )
                     }
                 } else {
-                    android.widget.Toast.makeText(requireContext(), "Álbum no disponible", android.widget.Toast.LENGTH_SHORT).show()
+                    snack("Álbum no disponible")
                 }
             }
             .setOnViewArtistClickListener { selectedSong ->
@@ -452,10 +453,10 @@ class FavoritesFragment : Fragment() {
                     try {
                         findNavController().navigate(R.id.artistDetailFragment, args)
                     } catch (_: Exception) {
-                        android.widget.Toast.makeText(requireContext(), "No se pudo abrir el artista", android.widget.Toast.LENGTH_SHORT).show()
+                        snack("No se pudo abrir el artista")
                     }
                 } else {
-                    android.widget.Toast.makeText(requireContext(), "Artista no disponible", android.widget.Toast.LENGTH_SHORT).show()
+                    snack("Artista no disponible")
                 }
             }
             .setOnSongInfoClickListener { selectedSong ->
@@ -583,7 +584,7 @@ class FavoritesFragment : Fragment() {
         val dm = SongDownloadManager.getInstance(requireContext())
         val downloadedSongs = favoriteSongs.filter { File(dm.createDownloadPath(it)).exists() }
         if (downloadedSongs.isEmpty()) {
-            android.widget.Toast.makeText(requireContext(), "No hay descargas para eliminar", android.widget.Toast.LENGTH_SHORT).show()
+            snack("No hay descargas para eliminar")
             return
         }
         val count = downloadedSongs.size
@@ -628,6 +629,6 @@ class FavoritesFragment : Fragment() {
             1 -> "Se eliminó 1 descarga"
             else -> "Se eliminaron $deleted descargas"
         }
-        android.widget.Toast.makeText(requireContext(), msg, android.widget.Toast.LENGTH_SHORT).show()
+        snack(msg)
     }
 }

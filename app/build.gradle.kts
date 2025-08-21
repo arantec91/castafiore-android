@@ -73,6 +73,8 @@ dependencies {
     // Lifecycle KTX para ViewModel y LiveData
     implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.7.0")
     implementation("androidx.lifecycle:lifecycle-livedata-ktx:2.7.0")
+    // Added: Lifecycle runtime KTX for lifecycleScope and coroutine integration
+    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
 
     // Networking
     implementation("com.squareup.retrofit2:retrofit:2.9.0")
@@ -107,6 +109,9 @@ dependencies {
 
     // Media notifications (MediaStyle)
     implementation("androidx.media:media:1.7.0")
+
+    // Added: Kotlin Coroutines for Android (provides Dispatchers.Main, launch, etc.)
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

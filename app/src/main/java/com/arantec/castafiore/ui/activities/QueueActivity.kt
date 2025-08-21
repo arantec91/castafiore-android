@@ -25,6 +25,7 @@ import com.arantec.castafiore.ui.dialogs.SongOptionsBottomSheet
 import com.arantec.castafiore.ui.dialogs.PlaylistSelectorBottomSheet
 import androidx.core.view.WindowCompat
 import androidx.core.content.ContextCompat
+import com.arantec.castafiore.utils.snack
 
 class QueueActivity : AppCompatActivity() {
 
@@ -375,7 +376,7 @@ class QueueActivity : AppCompatActivity() {
             startActivity(intent)
             finish()
         } else {
-            android.widget.Toast.makeText(this, "Información del álbum no disponible", android.widget.Toast.LENGTH_SHORT).show()
+            snack("Información del álbum no disponible")
         }
     }
 
@@ -392,7 +393,7 @@ class QueueActivity : AppCompatActivity() {
             startActivity(intent)
             finish()
         } else {
-            android.widget.Toast.makeText(this, "Información del artista no disponible", android.widget.Toast.LENGTH_SHORT).show()
+            snack("Información del artista no disponible")
         }
     }
 

@@ -26,6 +26,7 @@ import com.arantec.castafiore.service.MusicService
 import com.arantec.castafiore.ui.dialogs.SongOptionsBottomSheet
 import com.arantec.castafiore.ui.dialogs.PlaylistSelectorBottomSheet
 import com.arantec.castafiore.utils.StatusBarUtils
+import com.arantec.castafiore.utils.snack
 import com.bumptech.glide.Glide
 import com.bumptech.glide.load.engine.GlideException
 import com.bumptech.glide.load.resource.drawable.DrawableTransitionOptions
@@ -651,7 +652,7 @@ class PlayerActivity : AppCompatActivity() {
     }
 
     private fun showMessage(message: String) {
-        android.widget.Toast.makeText(this, message, android.widget.Toast.LENGTH_SHORT).show()
+        snack(message)
     }
 
     private fun navigateToAlbum(song: Song) {
