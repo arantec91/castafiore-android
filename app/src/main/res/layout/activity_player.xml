@@ -24,7 +24,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
-            android:paddingHorizontal="24dp"
+            android:paddingHorizontal="16dp"
             android:paddingTop="16dp"
             android:paddingBottom="32dp">
 
@@ -165,7 +165,7 @@
                     android:layout_height="48dp"
                     android:background="?attr/selectableItemBackgroundBorderless"
                     android:contentDescription="Agregar a favoritos"
-                    android:src="@drawable/ic_favorite_border"
+                    android:src="@drawable/ic_favorite_border_36"
                     app:tint="@color/text_secondary"
                     android:layout_marginStart="16dp" />
 

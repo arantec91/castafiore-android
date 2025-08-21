@@ -601,7 +601,7 @@ class PlayerActivity : AppCompatActivity() {
     }
 
     private fun updateFavoriteButton() {
-        val iconRes = if (isFavorite) R.drawable.ic_favorite else R.drawable.ic_favorite_border
+        val iconRes = if (isFavorite) R.drawable.ic_favorite_36 else R.drawable.ic_favorite_border_36
         val tint = if (isFavorite) {
             getColor(R.color.primary)
         } else {
