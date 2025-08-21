@@ -4,9 +4,7 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
 import android.os.Build
-import androidx.core.app.NotificationCompat
 import androidx.work.*
-import com.arantec.castafiore.R
 import com.arantec.castafiore.data.models.Song
 import com.arantec.castafiore.data.repository.MusicRepository
 import kotlinx.coroutines.Dispatchers
@@ -16,7 +14,6 @@ import okio.buffer
 import okio.sink
 import java.io.File
 import java.io.IOException
-import android.graphics.BitmapFactory
 
 class SongDownloadWorker(
     context: Context,
@@ -28,7 +25,6 @@ class SongDownloadWorker(
     private val musicRepository = MusicRepository.getInstance(context)
 
     companion object {
-        private const val NOTIFICATION_ID = 1001
         private const val CHANNEL_ID = "download_channel"
     }
 
@@ -69,11 +65,8 @@ class SongDownloadWorker(
                 )
             }
 
-            // Mostrar notificación inicial
-            showDownloadNotification(songTitle, songArtist, 0)
-
-            // Realizar la descarga
-            val success = downloadFile(downloadUrl, downloadPath, songTitle, songArtist)
+            // Realizar la descarga (sin notificación de progreso)
+            val success = downloadFile(downloadUrl, downloadPath)
 
             if (success) {
                 // Intentar descargar la portada en segundo plano (si hay info)
@@ -88,8 +81,8 @@ class SongDownloadWorker(
                     }
                 } catch (_: Exception) { /* Ignorar errores de portada */ }
 
-                // Notificación de descarga completada
-                showCompletedNotification(songTitle, songArtist)
+                // Eliminado: no mostrar notificación de descarga completada
+                // showCompletedNotification(songTitle, songArtist)
 
                 Result.success(
                     Data.Builder()
@@ -114,9 +107,7 @@ class SongDownloadWorker(
 
     private suspend fun downloadFile(
         url: String,
-        destinationPath: String,
-        songTitle: String,
-        songArtist: String
+        destinationPath: String
     ): Boolean = withContext(Dispatchers.IO) {
         val client = OkHttpClient()
         val request = Request.Builder().url(url).build()
@@ -148,15 +139,13 @@ class SongDownloadWorker(
                 totalBytesRead += bytesRead
                 sink.emit()
 
-                // Actualizar progreso
+                // Actualizar progreso a WorkManager (sin notificación de sistema)
                 if (contentLength > 0) {
                     val progress = ((totalBytesRead * 100) / contentLength).toInt()
 
-                    // Solo actualizar si el progreso cambió significativamente
                     if (progress >= lastProgressUpdate + 5) {
                         lastProgressUpdate = progress
 
-                        // Actualizar WorkManager progress
                         setProgress(
                             Data.Builder()
                                 .putInt("progress", progress)
@@ -164,9 +153,6 @@ class SongDownloadWorker(
                                 .putLong("total_bytes", contentLength)
                                 .build()
                         )
-
-                        // Actualizar notificación
-                        showDownloadNotification(songTitle, songArtist, progress)
                     }
                 }
             }
@@ -176,7 +162,7 @@ class SongDownloadWorker(
             response.close()
 
             return@withContext true
-        } catch (e: IOException) {
+        } catch (_: IOException) {
             // Limpiar archivo parcial si hay error
             File(destinationPath).delete()
             return@withContext false
@@ -217,50 +203,5 @@ class SongDownloadWorker(
         }
     }
 
-    private fun showDownloadNotification(songTitle: String, artist: String, progress: Int) {
-        val notification = NotificationCompat.Builder(applicationContext, CHANNEL_ID)
-            .setContentTitle("Descargando música")
-            .setContentText("$songTitle - $artist")
-            .setSmallIcon(R.drawable.ic_download)
-            .setProgress(100, progress, progress == 0)
-            .setOngoing(true)
-            .setSilent(true)
-            .build()
-
-        notificationManager.notify(NOTIFICATION_ID, notification)
-    }
-
-    private fun showCompletedNotification(songTitle: String, artist: String) {
-        // Primero cancelar la notificación de descarga en progreso
-        notificationManager.cancel(NOTIFICATION_ID)
-
-        // Mostrar notificación de descarga completada (con ID diferente para evitar conflictos)
-        val notification = NotificationCompat.Builder(applicationContext, CHANNEL_ID)
-            .setContentTitle("Descarga completada")
-            .setContentText("$songTitle - $artist")
-            .setSmallIcon(R.drawable.ic_download) // Usar el mismo icono de descarga
-            .setAutoCancel(true) // Se elimina automáticamente cuando se toca
-            .setSilent(true)
-            .build()
-
-        // Usar un ID diferente para la notificación completada
-        notificationManager.notify(NOTIFICATION_ID + 1, notification)
-    }
-
-    private fun showErrorNotification(songTitle: String, artist: String, error: String) {
-        // Cancelar la notificación de descarga en progreso
-        notificationManager.cancel(NOTIFICATION_ID)
-
-        // Mostrar notificación de error
-        val notification = NotificationCompat.Builder(applicationContext, CHANNEL_ID)
-            .setContentTitle("Error en descarga")
-            .setContentText("$songTitle - $artist: $error")
-            .setSmallIcon(R.drawable.ic_download) // Usar el mismo icono de descarga
-            .setAutoCancel(true)
-            .setSilent(true)
-            .build()
-
-        // Usar un ID diferente para la notificación de error
-        notificationManager.notify(NOTIFICATION_ID + 2, notification)
-    }
+    // showCompletedNotification eliminado
 }
