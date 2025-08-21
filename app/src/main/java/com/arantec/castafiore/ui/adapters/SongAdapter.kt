@@ -32,22 +32,28 @@ class SongAdapter(
     }
 
     fun setPlayingSong(songId: String?) {
+        if (playingSongId == songId) return
+        val oldId = playingSongId
         playingSongId = songId
-        notifyDataSetChanged()
+        val oldIndex = oldId?.let { id -> songs.indexOfFirst { it.id == id } } ?: -1
+        val newIndex = songId?.let { id -> songs.indexOfFirst { it.id == id } } ?: -1
+        if (oldIndex >= 0) notifyItemChanged(oldIndex)
+        if (newIndex >= 0 && newIndex != oldIndex) notifyItemChanged(newIndex)
+        if (oldIndex < 0 && newIndex < 0) notifyDataSetChanged() // fallback if we can't find items
     }
 
     inner class SongViewHolder(
         private val binding: ItemSongBinding
     ) : RecyclerView.ViewHolder(binding.root) {
 
-        fun bind(song: Song, position: Int) {
+        fun bind(song: Song) {
             binding.apply {
 
                 // Mostrar/ocultar portada según configuración
                 if (!showCover) {
-                    ivSongCover.visibility = android.view.View.GONE
+                    ivSongCover.visibility = View.GONE
                 } else {
-                    ivSongCover.visibility = android.view.View.VISIBLE
+                    ivSongCover.visibility = View.VISIBLE
                     // Cargar portada de la canción (thumbnail)
                     try {
                         // Placeholder inmediato mientras se resuelve la URL
@@ -98,7 +104,10 @@ class SongAdapter(
 
                 // Click en la canción
                 root.setOnClickListener {
-                    onSongClick(song, position)
+                    val pos = bindingAdapterPosition
+                    if (pos != RecyclerView.NO_POSITION) {
+                        onSongClick(song, pos)
+                    }
                 }
 
                 // Click en el botón más opciones
@@ -137,7 +146,7 @@ class SongAdapter(
     }
 
     override fun onBindViewHolder(holder: SongViewHolder, position: Int) {
-        holder.bind(songs[position], position)
+        holder.bind(songs[position])
     }
 
     override fun getItemCount(): Int = songs.size

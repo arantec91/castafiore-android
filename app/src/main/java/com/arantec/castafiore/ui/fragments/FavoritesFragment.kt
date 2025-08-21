@@ -53,7 +53,7 @@ class FavoritesFragment : Fragment() {
 
     private val serviceConnection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
-            val binder = service as MusicService.MusicBinder
+            val binder = service as? MusicService.MusicBinder ?: return
             musicService = binder.getService()
             isBound = true
             setupMusicServiceListeners()
@@ -64,7 +64,9 @@ class FavoritesFragment : Fragment() {
             updatePlayButton()
             // Solo marcar canción si este contexto está activo
             val currentId = musicService?.getCurrentSong()?.id
-            songAdapter.setPlayingSong(if (inContext) currentId else null)
+            if (isAdded && _binding != null) {
+                songAdapter.setPlayingSong(if (inContext) currentId else null)
+            }
         }
 
         override fun onServiceDisconnected(name: ComponentName?) {
@@ -186,11 +188,14 @@ class FavoritesFragment : Fragment() {
         viewLifecycleOwner.lifecycleScope.launch {
             musicRepository.getStarredSongs().fold(
                 onSuccess = { songs ->
+                    // Si la vista ya no está disponible, salir sin tocar UI
+                    if (!isAdded || _binding == null) return@fold
+
                     favoriteSongs.clear()
                     favoriteSongs.addAll(songs)
                     songAdapter.updateSongs(favoriteSongs)
                     updateDownloadUIState()
-                    songAdapter.notifyDataSetChanged()
+                    // notifyDataSetChanged removido: DiffUtil ya despacha cambios y evitar inconsistencias
 
                     // Info header
                     binding.tvTitle.text = getString(R.string.favorite_songs_title)
@@ -208,6 +213,7 @@ class FavoritesFragment : Fragment() {
                     updatePlayButton()
                 },
                 onFailure = {
+                    if (!isAdded || _binding == null) return@fold
                     binding.progressBar.visibility = View.GONE
                     binding.emptyLayout.visibility = View.VISIBLE
                     binding.tvEmpty.text = getString(R.string.error_loading_favorites)

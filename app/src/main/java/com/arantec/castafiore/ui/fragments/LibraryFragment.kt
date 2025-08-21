@@ -205,7 +205,7 @@ class LibraryFragment : Fragment() {
     private fun loadInitialData() {
         showLoading(true)
 
-        lifecycleScope.launch {
+        viewLifecycleOwner.lifecycleScope.launch {
             try {
                 // Cargar datos por separado
                 loadPlaylists()
@@ -404,7 +404,7 @@ class LibraryFragment : Fragment() {
     }
 
     private fun filterDownloads() {
-        lifecycleScope.launch {
+        viewLifecycleOwner.lifecycleScope.launch {
             showLoading(true)
             try {
                 computeDownloadsIfNeeded(force = true)
@@ -525,21 +525,24 @@ class LibraryFragment : Fragment() {
 
     // Helper: show/hide Downloads chip based on whether there are downloaded items
     private fun updateDownloadsChipVisibility() {
-        lifecycleScope.launch {
+        viewLifecycleOwner.lifecycleScope.launch {
             try {
                 computeDownloadsIfNeeded(force = true)
                 val hasDownloads = downloads.isNotEmpty()
                 // Update adapter downloaded IDs for all filters
                 libraryAdapter.updateDownloadedIds(downloads.map { it.id }.toSet())
+                if (!isAdded || _binding == null) return@launch
                 binding.chipDownloads.visibility = if (hasDownloads) View.VISIBLE else View.GONE
 
                 // If current filter is downloads but none available, fallback to 'all'
                 if (!hasDownloads && currentFilter == "downloads") {
                     currentFilter = "all"
+                    if (!isAdded || _binding == null) return@launch
                     applyCheckedChipFromFilter()
                     filterContent()
                 }
             } catch (_: Exception) {
+                if (!isAdded || _binding == null) return@launch
                 // On error, hide downloads chip to avoid broken navigation
                 binding.chipDownloads.visibility = View.GONE
                 if (currentFilter == "downloads") {
@@ -598,22 +601,26 @@ class LibraryFragment : Fragment() {
     }
 
     private fun showLoading(show: Boolean) {
+        if (_binding == null) return
         binding.progressBar.visibility = if (show) View.VISIBLE else View.GONE
         binding.rvLibraryItems.visibility = if (show) View.GONE else View.VISIBLE
     }
 
     private fun showError(message: String) {
+        if (_binding == null) return
         binding.layoutEmpty.visibility = View.VISIBLE
         binding.rvLibraryItems.visibility = View.GONE
         // TODO: Mostrar mensaje de error específico
     }
 
     private fun showEmptyState() {
+        if (_binding == null) return
         binding.rvLibraryItems.visibility = View.GONE
         binding.layoutEmpty.visibility = View.VISIBLE
     }
 
     private fun hideEmptyState() {
+        if (_binding == null) return
         binding.layoutEmpty.visibility = View.GONE
         binding.rvLibraryItems.visibility = View.VISIBLE
     }
