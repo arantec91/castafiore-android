@@ -47,6 +47,9 @@ class LibraryFragment : Fragment() {
     private var downloadsComputed = false
     private var downloadedAlbumsCache = mutableMapOf<String, Boolean>()
     private var downloadedPlaylistsCache = mutableMapOf<String, Boolean>()
+    // Estado para evitar parpadeo y actualizaciones redundantes
+    private var lastDownloadsVisible: Boolean = false
+    private var lastDownloadedIds: Set<String> = emptySet()
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -216,8 +219,8 @@ class LibraryFragment : Fragment() {
                 buildAllItemsList()
                 filterContent()
 
-                // Actualizar visibilidad del chip de Descargados
-                updateDownloadsChipVisibility()
+                // Actualizar visibilidad del chip de Descargados (forzar primer cálculo)
+                updateDownloadsChipVisibility(force = true)
 
             } catch (e: Exception) {
                 showError("Error al cargar la biblioteca: ${e.message}")
@@ -400,6 +403,11 @@ class LibraryFragment : Fragment() {
         } else {
             hideEmptyState()
             libraryAdapter.updateItems(filteredItems)
+            // Scroll to top after applying the filter
+            binding.rvLibraryItems.post {
+                (binding.rvLibraryItems.layoutManager as? androidx.recyclerview.widget.LinearLayoutManager)
+                    ?.scrollToPositionWithOffset(0, 0)
+            }
         }
     }
 
@@ -407,15 +415,25 @@ class LibraryFragment : Fragment() {
         viewLifecycleOwner.lifecycleScope.launch {
             showLoading(true)
             try {
+                // Recalcular descargas al entrar explícitamente a esta vista
                 computeDownloadsIfNeeded(force = true)
-                // Inform adapter which items are downloaded
-                libraryAdapter.updateDownloadedIds(downloads.map { it.id }.toSet())
+                // Informar al adapter qué IDs están descargados solo si cambia
+                val newIds = downloads.map { it.id }.toSet()
+                if (newIds != lastDownloadedIds) {
+                    lastDownloadedIds = newIds
+                    libraryAdapter.updateDownloadedIds(newIds)
+                }
                 val filteredItems = downloads.toList()
                 if (filteredItems.isEmpty()) {
                     showEmptyState()
                 } else {
                     hideEmptyState()
                     libraryAdapter.updateItems(filteredItems)
+                    // Scroll to top after applying the filter
+                    binding.rvLibraryItems.post {
+                        (binding.rvLibraryItems.layoutManager as? androidx.recyclerview.widget.LinearLayoutManager)
+                            ?.scrollToPositionWithOffset(0, 0)
+                    }
                 }
             } catch (e: Exception) {
                 showError("Error al cargar descargados: ${e.message}")
@@ -524,15 +542,26 @@ class LibraryFragment : Fragment() {
     }
 
     // Helper: show/hide Downloads chip based on whether there are downloaded items
-    private fun updateDownloadsChipVisibility() {
+    private fun updateDownloadsChipVisibility(force: Boolean = false) {
         viewLifecycleOwner.lifecycleScope.launch {
             try {
-                computeDownloadsIfNeeded(force = true)
+                computeDownloadsIfNeeded(force = force)
                 val hasDownloads = downloads.isNotEmpty()
-                // Update adapter downloaded IDs for all filters
-                libraryAdapter.updateDownloadedIds(downloads.map { it.id }.toSet())
+                val newIds = downloads.map { it.id }.toSet()
+
+                // Update adapter downloaded IDs only if changed
+                if (newIds != lastDownloadedIds) {
+                    lastDownloadedIds = newIds
+                    libraryAdapter.updateDownloadedIds(newIds)
+                }
+
                 if (!isAdded || _binding == null) return@launch
-                binding.chipDownloads.visibility = if (hasDownloads) View.VISIBLE else View.GONE
+
+                // Only change visibility if state actually changed
+                if (hasDownloads != lastDownloadsVisible) {
+                    lastDownloadsVisible = hasDownloads
+                    binding.chipDownloads.visibility = if (hasDownloads) View.VISIBLE else View.GONE
+                }
 
                 // If current filter is downloads but none available, fallback to 'all'
                 if (!hasDownloads && currentFilter == "downloads") {
@@ -544,6 +573,7 @@ class LibraryFragment : Fragment() {
             } catch (_: Exception) {
                 if (!isAdded || _binding == null) return@launch
                 // On error, hide downloads chip to avoid broken navigation
+                lastDownloadsVisible = false
                 binding.chipDownloads.visibility = View.GONE
                 if (currentFilter == "downloads") {
                     currentFilter = "all"
@@ -641,8 +671,8 @@ class LibraryFragment : Fragment() {
             binding.scrollFilters.isNestedScrollingEnabled = true
             // Reaplicar colores de chips en caso de que el estado visual haya sido alterado
             applyCheckedChipFromFilter()
-            // Re-evaluar descargas por si cambiaron fuera de este fragmento
-            updateDownloadsChipVisibility()
+            // Re-evaluar descargas por si cambiaron fuera de este fragmento (sin forzar si ya está calculado)
+            updateDownloadsChipVisibility(force = false)
         }
     }
 

@@ -85,6 +85,7 @@
                 android:textColor="#FFFFFF"
                 android:textSize="14sp"
                 android:checkable="true"
+                android:visibility="gone"
                 app:chipCornerRadius="20dp"
                 app:chipMinHeight="40dp"
                 app:chipStartPadding="14dp"
