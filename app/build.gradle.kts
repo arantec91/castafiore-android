@@ -6,6 +6,17 @@ plugins {
     id("kotlin-kapt") // Requerido para el compilador de Glide
 }
 
+// Pin Material to a published version in case transitive dependencies request a newer, unpublished one
+val materialVersion = libs.versions.material.get()
+configurations.all {
+    resolutionStrategy.eachDependency {
+        if (requested.group == "com.google.android.material" && requested.name == "material") {
+            useVersion(materialVersion)
+            because("Pin Material to a published version")
+        }
+    }
+}
+
 android {
     namespace = "com.arantec.castafiore"
     compileSdk = 36
@@ -53,15 +64,23 @@ android {
 
 dependencies {
 
+    // Enforce Material version via constraints as a second line of defense
+    constraints {
+        implementation("com.google.android.material:material:$materialVersion") {
+            because("AndroidX Navigation may request a newer Material; enforce known published version")
+        }
+    }
+
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.appcompat)
     implementation(libs.material)
     implementation("androidx.activity:activity:1.8.2")
     implementation("androidx.constraintlayout:constraintlayout:2.1.4")
 
-    // Navigation Component
-    implementation("androidx.navigation:navigation-fragment-ktx:2.7.6")
-    implementation("androidx.navigation:navigation-ui-ktx:2.7.6")
+    // Navigation Component (use version catalog)
+    // Removed explicit 2.7.6 to avoid mixing versions
+    implementation(libs.androidx.navigation.fragment.ktx)
+    implementation(libs.androidx.navigation.ui.ktx)
 
     // SwipeRefreshLayout para pull-to-refresh
     implementation("androidx.swiperefreshlayout:swiperefreshlayout:1.1.0")
@@ -101,8 +120,6 @@ dependencies {
 
     // Fragment KTX
     implementation("androidx.fragment:fragment-ktx:1.6.2")
-    implementation(libs.androidx.navigation.fragment.ktx)
-    implementation(libs.androidx.navigation.ui.ktx)
 
     // Palette
     implementation("androidx.palette:palette-ktx:1.0.0")

@@ -83,6 +83,9 @@
         <action
             android:id="@+id/action_library_to_playlistDetail"
             app:destination="@id/playlistDetailFragment" />
+        <action
+            android:id="@+id/action_library_to_search"
+            app:destination="@id/searchFragment" />
     </fragment>
 
     <fragment

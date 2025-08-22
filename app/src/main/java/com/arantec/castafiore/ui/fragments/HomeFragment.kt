@@ -346,6 +346,9 @@ class HomeFragment : Fragment() {
                 )
             }
 
+            // Actualizar visibilidad de secciones opcionales según contenido
+            updateOptionalSectionsVisibility()
+
             // Ocultar el ProgressBar antes de mostrar secciones adicionales
             if (!isRefresh) {
                 showLoading(false)
@@ -608,19 +611,28 @@ class HomeFragment : Fragment() {
             binding.rvDiscover.visibility = View.GONE
             binding.rvSimilarArtists.visibility = View.GONE
         } else {
-            // Al finalizar loading, restaurar solo las secciones base;
-            // el header y lista de similares quedan según su propio loader
+            // Al finalizar loading, restaurar las secciones base visibles
             binding.tvRecentlyAddedTitle.visibility = View.VISIBLE
-            binding.tvRecentlyPlayedTitle.visibility = View.VISIBLE
-            binding.tvMostPlayedTitle.visibility = View.VISIBLE
             binding.tvDiscoverTitle.visibility = View.VISIBLE
 
             binding.rvRecentlyAdded.visibility = View.VISIBLE
-            binding.rvRecentlyPlayed.visibility = View.VISIBLE
-            binding.rvMostPlayed.visibility = View.VISIBLE
             binding.rvDiscover.visibility = View.VISIBLE
-            // No tocar: similarHeaderContainer, rvSimilarArtists
+
+            // Actualizar visibilidad de secciones opcionales según contenido
+            updateOptionalSectionsVisibility()
+            // No tocar: similarHeaderContainer, rvSimilarArtists (las maneja loadSimilarArtists)
         }
+    }
+
+    private fun updateOptionalSectionsVisibility() {
+        val hasRecent = recentlyPlayedAdapter.itemCount > 0
+        val hasMost = mostPlayedAdapter.itemCount > 0
+
+        binding.tvRecentlyPlayedTitle.visibility = if (hasRecent) View.VISIBLE else View.GONE
+        binding.rvRecentlyPlayed.visibility = if (hasRecent) View.VISIBLE else View.GONE
+
+        binding.tvMostPlayedTitle.visibility = if (hasMost) View.VISIBLE else View.GONE
+        binding.rvMostPlayed.visibility = if (hasMost) View.VISIBLE else View.GONE
     }
 
     private fun showError(message: String) {

@@ -28,7 +28,8 @@ data class Song(
         token: String,
         salt: String,
         maxBitRate: Int? = null,
-        format: String? = null
+        format: String? = null,
+        timeOffsetSeconds: Int? = null
     ): String {
         val base = StringBuilder()
             .append(serverUrl)
@@ -43,6 +44,7 @@ data class Song(
             .append("&v=1.16.1&c=Castafiore")
         if (maxBitRate != null) base.append("&maxBitRate=").append(maxBitRate)
         if (format != null) base.append("&format=").append(format)
+        if (timeOffsetSeconds != null && timeOffsetSeconds > 0) base.append("&timeOffset=").append(timeOffsetSeconds)
         return base.toString()
     }
 

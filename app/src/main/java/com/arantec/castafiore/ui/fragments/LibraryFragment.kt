@@ -205,8 +205,9 @@ class LibraryFragment : Fragment() {
             // TODO: Cambiar entre vista lista y cuadrícula
         }
 
-        binding.btnCreatePlaylist.setOnClickListener {
-            // TODO: Crear nueva playlist
+        binding.actionLibraryToSearch.setOnClickListener {
+            // Navegar al buscador
+            findNavController().navigate(R.id.action_library_to_search)
         }
     }
 

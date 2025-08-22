@@ -178,18 +178,14 @@
                 android:orientation="vertical"
                 android:layout_marginBottom="16dp">
 
-                <SeekBar
+                <!-- Reemplazado SeekBar por Material Slider -->
+                <com.google.android.material.slider.Slider
                     android:id="@+id/seekBarProgress"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginBottom="8dp"
-                    android:layout_marginHorizontal="0dp"
-                    android:paddingStart="0dp"
-                    android:paddingEnd="0dp"
-                    android:thumbOffset="0dp"
-                    android:progressTint="@color/primary"
-                    android:thumbTint="@color/primary"
-                    android:progressBackgroundTint="@color/text_secondary" />
+                    android:layout_marginBottom="4dp"
+                    android:paddingHorizontal="0dp"
+                    app:thumbRadius="6dp"/>
 
                 <LinearLayout
                     android:layout_width="match_parent"

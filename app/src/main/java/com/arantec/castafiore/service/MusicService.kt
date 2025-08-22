@@ -52,6 +52,8 @@ class MusicService : Service() {
     private var prefetchedSimilar: List<Song>? = null
     // Track shuffle state centrally in the service
     private var isShuffleEnabled: Boolean = false
+    // Track base time offset (ms) when restarting transcoded stream at a specific point
+    private var baseOffsetMs: Long = 0L
 
     // Scrobble tracking
     private var scrobbleSentForCurrent = false
@@ -161,6 +163,8 @@ class MusicService : Service() {
                 }
                 // Actualizar canción actual y metadatos
                 currentSong = playlist.getOrNull(currentIndex)
+                // Reiniciar offset base en transiciones
+                baseOffsetMs = 0L
                 // Registrar en recientes (offline history) solo en transición automática
                 if (reason == com.google.android.exoplayer2.Player.MEDIA_ITEM_TRANSITION_REASON_AUTO) {
                     currentSong?.let {
@@ -282,6 +286,8 @@ class MusicService : Service() {
                 .setCustomCacheKey(cacheKey)
         }
         val mediaItem = mediaItemBuilder.build()
+        // Reset base offset on new song
+        baseOffsetMs = 0L
         exoPlayer?.setMediaItem(mediaItem)
         // Also enqueue the next item so the player can prepare it in advance
         enqueueNextMediaItem()
@@ -329,6 +335,7 @@ class MusicService : Service() {
     fun stop() {
         isPlaying = false
         currentPosition = 0L
+        baseOffsetMs = 0L
         updatePlaybackState()
         notifyPlaybackStateChanged(false)
         exoPlayer?.stop()
@@ -354,6 +361,8 @@ class MusicService : Service() {
             
             // Al saltar a la siguiente, marcamos reproducción activa antes de preparar
             isPlaying = true
+            // Reset offset for new song
+            baseOffsetMs = 0L
             // Preparar y reproducir la nueva canción
             startNewSong()
             updatePlaybackState()
@@ -370,6 +379,8 @@ class MusicService : Service() {
             
             // Al retroceder, marcamos reproducción activa antes de preparar
             isPlaying = true
+            // Reset offset for new song
+            baseOffsetMs = 0L
             // Preparar y reproducir la nueva canción
             startNewSong()
             updatePlaybackState()
@@ -379,9 +390,45 @@ class MusicService : Service() {
     }
 
     fun seekTo(position: Long) {
+        val song = currentSong
+        val player = exoPlayer
+        if (song == null || player == null) return
         currentPosition = position
+        val dm = com.arantec.castafiore.data.download.SongDownloadManager.getInstance(this)
+        val localPath = try { dm.createDownloadPath(song) } catch (_: Exception) { null }
+        val localFile = if (!localPath.isNullOrEmpty()) java.io.File(localPath) else null
+        val highQuality = musicRepository.highQualityEnabled
+
+        if (localFile != null && localFile.exists()) {
+            // Local file is fully seekable
+            player.seekTo(position)
+            updatePlaybackState()
+            return
+        }
+        if (highQuality) {
+            // Original stream: server should support range; ExoPlayer can seek
+            player.seekTo(position)
+            updatePlaybackState()
+            return
+        }
+        // Basic quality (transcoded): restart stream at given offset using Subsonic/Navidrome timeOffset
+        val serverUrl = musicRepository.serverUrl ?: return
+        val (username, token, salt) = musicRepository.getAuthParams()
+        val offsetSec = (position / 1000L).toInt().coerceAtLeast(0)
+        val streamUrl = song.getStreamUrl(serverUrl, username, token, salt, maxBitRate = 128, format = "mp3", timeOffsetSeconds = offsetSec)
+        val cacheKey = "song_${song.id}_128_offset_$offsetSec"
+        val newItem = MediaItem.Builder()
+            .setUri(streamUrl)
+            .setCustomCacheKey(cacheKey)
+            .build()
+        val wasPlaying = isPlaying && player.playWhenReady
+        // Track base offset so UI/state reflect absolute position within the song
+        baseOffsetMs = (offsetSec * 1000).toLong()
+        player.setMediaItem(newItem, /*startPositionMs*/ 0)
+        enqueueNextMediaItem()
+        player.prepare()
+        player.playWhenReady = wasPlaying
         updatePlaybackState()
-        exoPlayer?.seekTo(position)
     }
 
     fun playQueue(songs: List<Song>, startIndex: Int = 0, source: PlaybackSource? = null) {
@@ -410,6 +457,7 @@ class MusicService : Service() {
         notifySongChanged(currentSong)
 
         // Ensure ExoPlayer starts from the selected/current item and queues the next
+        baseOffsetMs = 0L
         startNewSong()
         isPlaying = true
         updatePlaybackState()
@@ -429,6 +477,7 @@ class MusicService : Service() {
         notifyQueueChanged(playlist.toList())
 
         // Usar startNewSong para asegurar que se prepare correctamente
+        baseOffsetMs = 0L
         startNewSong()
         isPlaying = true
         updatePlaybackState()
@@ -595,7 +644,7 @@ class MusicService : Service() {
     // Getters para el estado actual
     fun getCurrentSong(): Song? = currentSong
     fun isPlaying(): Boolean = isPlaying
-    fun getCurrentPosition(): Long = exoPlayer?.currentPosition ?: 0L
+    fun getCurrentPosition(): Long = baseOffsetMs + (exoPlayer?.currentPosition ?: 0L)
     fun getDuration(): Long = exoPlayer?.duration ?: 0L
     fun getQueue(): List<Song> = playlist.toList()
     fun getCurrentIndex(): Int = currentIndex
@@ -653,9 +702,9 @@ class MusicService : Service() {
     }
 
     private fun updatePlaybackState() {
-        val position = exoPlayer?.currentPosition ?: currentPosition
+        val position = getCurrentPosition()
         currentPosition = position
-        val buffered = exoPlayer?.bufferedPosition ?: 0L
+        val buffered = (exoPlayer?.bufferedPosition ?: 0L) + baseOffsetMs
         val state = if (isPlaying) PlaybackStateCompat.STATE_PLAYING else PlaybackStateCompat.STATE_PAUSED
         val speed = if (isPlaying) 1.0f else 0.0f
 
@@ -893,7 +942,7 @@ class MusicService : Service() {
     private fun maybeScrobbleByProgress() {
         if (scrobbleSentForCurrent) return
         val durationMs = exoPlayer?.duration ?: 0L
-        val positionMs = exoPlayer?.currentPosition ?: 0L
+        val positionMs = getCurrentPosition()
         if (durationMs <= 0L) return
         val halfMs = durationMs / 2
         val fourMinMs = 240_000L

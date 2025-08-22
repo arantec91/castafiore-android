@@ -200,14 +200,14 @@
             android:layout_height="64dp"
             android:layout_marginBottom="16dp"
             android:alpha="0.6"
-            android:src="@drawable/ic_library_music"
+            android:src="@drawable/ic_favorite"
             app:tint="#B3B3B3" />
 
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginBottom="8dp"
-            android:text="Tu biblioteca está vacía"
+            android:text="No tienes favoritos"
             android:textColor="#FFFFFF"
             android:textSize="18sp"
             android:textStyle="bold" />
@@ -215,19 +215,21 @@
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
+            android:gravity="center"
+            android:textAlignment="center"
             android:text="Explora música, artistas y playlists para empezar a llenar tu biblioteca."
             android:textColor="#B3B3B3"
             android:textSize="14sp" />
 
-        <Button
-            android:id="@+id/btnCreatePlaylist"
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/action_library_to_search"
+            style="?attr/materialButtonOutlinedStyle"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="16dp"
-            android:backgroundTint="#1DB954"
-            android:text="Crear playlist"
-            android:textColor="#000000" />
-
+            android:text="Buscar música"
+            android:textAllCaps="false"
+            app:cornerRadius="24dp" />
     </LinearLayout>
 
     <!-- Progress bar -->

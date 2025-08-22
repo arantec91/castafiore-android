@@ -11,7 +11,6 @@ import android.os.IBinder
 import android.os.Looper
 import android.view.View
 import android.view.WindowInsets
-import android.widget.SeekBar
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.edit
 import androidx.core.graphics.toColorInt
@@ -38,6 +37,7 @@ import android.graphics.drawable.ColorDrawable
 import android.graphics.Color
 import java.util.Locale
 import kotlinx.coroutines.launch
+import com.google.android.material.slider.Slider
 
 class PlayerActivity : AppCompatActivity() {
 
@@ -137,6 +137,21 @@ class PlayerActivity : AppCompatActivity() {
     }
 
     private fun setupClickListeners() {
+        // Configuración del Slider (Material) programáticamente
+        binding.seekBarProgress.apply {
+            valueFrom = 0f
+            valueTo = 100f
+            stepSize = 0f
+            value = 0f
+            // Removed setLabelBehavior to avoid unresolved constant issues; keep default behavior
+            val primary = getColor(R.color.primary)
+            val secondary = getColor(R.color.text_secondary)
+            thumbTintList = android.content.res.ColorStateList.valueOf(primary)
+            trackActiveTintList = android.content.res.ColorStateList.valueOf(primary)
+            trackInactiveTintList = android.content.res.ColorStateList.valueOf(secondary)
+            haloTintList = android.content.res.ColorStateList.valueOf(primary)
+        }
+
         binding.btnBack.setOnClickListener {
             finish()
         }
@@ -227,26 +242,22 @@ class PlayerActivity : AppCompatActivity() {
             } ?: showMessage("No hay canción reproduciéndose")
         }
 
-        // SeekBar listener para el progreso
-        binding.seekBarProgress.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-            override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
-                if (fromUser) {
-                    val duration = currentSong?.duration ?: 0
-                    val position = (progress * duration / 100).toLong()
-                    binding.tvCurrentTime.text = formatTime(position)
-                }
+        // Slider listeners para el progreso (reemplaza SeekBar)
+        binding.seekBarProgress.addOnChangeListener { _: Slider, value: Float, fromUser: Boolean ->
+            if (fromUser) {
+                val duration = currentSong?.duration ?: 0
+                val positionSeconds = ((value / 100f) * duration).toLong()
+                binding.tvCurrentTime.text = formatTime(positionSeconds)
             }
-
-            override fun onStartTrackingTouch(seekBar: SeekBar?) {
+        }
+        binding.seekBarProgress.addOnSliderTouchListener(object : Slider.OnSliderTouchListener {
+            override fun onStartTrackingTouch(slider: Slider) {
                 stopProgressUpdates()
             }
-
-            override fun onStopTrackingTouch(seekBar: SeekBar?) {
-                seekBar?.let {
-                    val duration = currentSong?.duration ?: 0
-                    val position = (it.progress * duration / 100).toLong()
-                    musicService?.seekTo(position * 1000) // ExoPlayer usa milisegundos
-                }
+            override fun onStopTrackingTouch(slider: Slider) {
+                val duration = currentSong?.duration ?: 0
+                val positionSeconds = ((slider.value / 100f) * duration).toLong()
+                musicService?.seekTo(positionSeconds * 1000) // ExoPlayer usa milisegundos
                 startProgressUpdates()
             }
         })
@@ -332,8 +343,8 @@ class PlayerActivity : AppCompatActivity() {
         // No establecer tvPlayingFrom aquí; se gestiona por updatePlayingFrom()
         binding.tvTotalTime.text = formatTime(song.duration.toLong())
 
-        // Actualizar el máximo del SeekBar
-        binding.seekBarProgress.max = 100 // Usamos porcentajes para mejor control
+        // Inicializar Slider de progreso a 0%
+        binding.seekBarProgress.value = 0f
     }
 
     private fun loadAlbumArt(song: Song) {
@@ -619,7 +630,7 @@ class PlayerActivity : AppCompatActivity() {
 
             if (duration > 0) {
                 val progress = ((currentPosition / 1000) * 100 / duration).toInt()
-                binding.seekBarProgress.progress = progress
+                binding.seekBarProgress.value = progress.toFloat()
                 binding.tvCurrentTime.text = formatTime(currentPosition / 1000)
             }
         }
