@@ -183,8 +183,12 @@
                     android:id="@+id/seekBarProgress"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
+                    android:layout_marginStart="-16dp"
+                    android:layout_marginEnd="-16dp"
                     android:layout_marginBottom="4dp"
                     android:paddingHorizontal="0dp"
+                    app:thumbHeight="0dp"
+                    app:haloRadius="8dp"
                     app:thumbRadius="6dp"/>
 
                 <LinearLayout
