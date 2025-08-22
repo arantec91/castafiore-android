@@ -35,7 +35,7 @@
             android:scaleType="centerCrop"
             android:background="@drawable/rounded_corner_8dp"
             android:contentDescription="@string/song_cover"
-            tools:src="@drawable/ic_music_note" />
+            tools:src="@drawable/ic_album_placeholder" />
 
         <LinearLayout
             android:layout_width="0dp"
@@ -101,7 +101,7 @@
                 android:layout_width="24dp"
                 android:layout_height="24dp"
                 android:layout_marginEnd="16dp"
-                android:src="@drawable/ic_queue_music"
+                android:src="@drawable/ic_add_queue"
                 app:tint="#FFFFFF"
                 android:contentDescription="@string/add_to_queue" />
 
@@ -131,7 +131,7 @@
                 android:layout_width="24dp"
                 android:layout_height="24dp"
                 android:layout_marginEnd="16dp"
-                android:src="@drawable/ic_skip_next"
+                android:src="@drawable/ic_add_next"
                 app:tint="#FFFFFF"
                 android:contentDescription="@string/play_next" />
 

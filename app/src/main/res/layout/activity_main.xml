@@ -91,7 +91,7 @@
             android:layout_height="40dp"
             android:layout_marginStart="4dp"
             android:background="?attr/selectableItemBackgroundBorderless"
-            android:src="@drawable/ic_skip_next"
+            android:src="@drawable/ic_skip_next_mini"
             app:tint="#FFFFFF"
             android:layout_gravity="center_vertical"
             android:contentDescription="@string/next" />

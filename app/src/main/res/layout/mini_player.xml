@@ -85,12 +85,12 @@
 
     <ImageButton
         android:id="@+id/btnMiniNext"
-        android:layout_width="36dp"
-        android:layout_height="36dp"
+        android:layout_width="16dp"
+        android:layout_height="16dp"
         android:layout_marginStart="8dp"
         android:background="?attr/selectableItemBackgroundBorderless"
         android:contentDescription="@string/next"
-        android:src="@drawable/ic_skip_next"
+        android:src="@drawable/ic_skip_next_mini"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintTop_toTopOf="parent"

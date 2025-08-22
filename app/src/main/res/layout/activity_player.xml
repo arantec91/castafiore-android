@@ -303,7 +303,7 @@
                     android:layout_height="48dp"
                     android:background="?attr/selectableItemBackgroundBorderless"
                     android:contentDescription="Letras"
-                    android:src="@drawable/ic_music_note"
+                    android:src="@drawable/ic_lyrics"
                     app:tint="@color/text_secondary" />
 
                 <!-- Spacer to push queue to the opposite side -->

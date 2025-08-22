@@ -134,7 +134,7 @@
             android:layout_height="24dp"
             android:layout_marginEnd="16dp"
             android:contentDescription="@null"
-            android:src="@drawable/ic_queue_music"
+            android:src="@drawable/ic_add_queue"
             app:tint="@color/text_primary" />
 
         <TextView
