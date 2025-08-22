@@ -17,6 +17,8 @@ import com.arantec.castafiore.ui.adapters.PlaylistSelectorAdapter
 import com.arantec.castafiore.utils.snack
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment
 import kotlinx.coroutines.launch
+import com.arantec.castafiore.data.download.SongDownloadManager
+import java.io.File
 
 class PlaylistSelectorBottomSheet : BottomSheetDialogFragment() {
 
@@ -205,6 +207,9 @@ class PlaylistSelectorBottomSheet : BottomSheetDialogFragment() {
         song?.let { currentSong ->
             lifecycleScope.launch {
                 try {
+                    val dm = SongDownloadManager.getInstance(requireContext())
+                    var wasFullyDownloaded = false
+
                     // Primero, evitar duplicados: verificar si la canción ya está en la playlist
                     val existingSongsResult = musicRepository.getPlaylistSongs(playlist.id)
                     existingSongsResult.fold(
@@ -214,6 +219,8 @@ class PlaylistSelectorBottomSheet : BottomSheetDialogFragment() {
                                 snack("\"${currentSong.title}\" ya está en \"${playlist.name}\"")
                                 return@launch
                             }
+                            // Determinar si la playlist estaba completamente descargada ANTES de agregar la canción
+                            wasFullyDownloaded = songs.isNotEmpty() && songs.all { File(dm.createDownloadPath(it)).exists() }
                         },
                         onFailure = { error ->
                             snack("No se pudo verificar duplicados: ${error.message}")
@@ -226,6 +233,10 @@ class PlaylistSelectorBottomSheet : BottomSheetDialogFragment() {
                     result.fold(
                         onSuccess = {
                             snack("\"${currentSong.title}\" agregada a \"${playlist.name}\"")
+                            // Si la playlist estaba completamente descargada, descargar la nueva canción automáticamente
+                            if (wasFullyDownloaded && !dm.isSongDownloaded(currentSong.id) && !dm.isSongDownloading(currentSong.id)) {
+                                dm.downloadSong(currentSong)
+                            }
                             dismiss()
                         },
                         onFailure = { error ->

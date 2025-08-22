@@ -92,6 +92,11 @@ class LibraryFragment : Fragment() {
             layoutManager = LinearLayoutManager(requireContext())
             adapter = libraryAdapter
         }
+
+        // Asegurar que el adapter nuevo conozca los IDs descargados ya calculados
+        if (lastDownloadedIds.isNotEmpty()) {
+            libraryAdapter.updateDownloadedIds(lastDownloadedIds)
+        }
     }
 
     private fun setupFilters() {
@@ -549,19 +554,15 @@ class LibraryFragment : Fragment() {
                 val hasDownloads = downloads.isNotEmpty()
                 val newIds = downloads.map { it.id }.toSet()
 
-                // Update adapter downloaded IDs only if changed
-                if (newIds != lastDownloadedIds) {
-                    lastDownloadedIds = newIds
-                    libraryAdapter.updateDownloadedIds(newIds)
-                }
+                // Siempre informar al adapter (el adapter puede ser nuevo tras recrear la vista)
+                libraryAdapter.updateDownloadedIds(newIds)
+                lastDownloadedIds = newIds
 
                 if (!isAdded || _binding == null) return@launch
 
-                // Only change visibility if state actually changed
-                if (hasDownloads != lastDownloadsVisible) {
-                    lastDownloadsVisible = hasDownloads
-                    binding.chipDownloads.visibility = if (hasDownloads) View.VISIBLE else View.GONE
-                }
+                // Reaplicar visibilidad siempre, ya que la vista pudo recrearse
+                binding.chipDownloads.visibility = if (hasDownloads) View.VISIBLE else View.GONE
+                lastDownloadsVisible = hasDownloads
 
                 // If current filter is downloads but none available, fallback to 'all'
                 if (!hasDownloads && currentFilter == "downloads") {

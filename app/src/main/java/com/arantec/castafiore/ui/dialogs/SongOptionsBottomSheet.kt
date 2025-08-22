@@ -15,6 +15,8 @@ import com.arantec.castafiore.data.repository.MusicRepository
 import com.arantec.castafiore.databinding.BottomSheetSongOptionsBinding
 import com.bumptech.glide.Glide
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment
+import com.arantec.castafiore.data.download.SongDownloadManager
+import java.io.File
 
 class SongOptionsBottomSheet : BottomSheetDialogFragment() {
 
@@ -221,6 +223,14 @@ class SongOptionsBottomSheet : BottomSheetDialogFragment() {
         // Implementar lógica real de favoritos para canciones conectada con la API de Navidrome
         viewLifecycleOwner.lifecycleScope.launch {
             try {
+                // Si vamos a marcar como favorito, verificar si las favoritas actuales están completamente descargadas
+                var favoritesFullyDownloadedBefore = false
+                if (!isSongFavorited) {
+                    favoritesFullyDownloadedBefore = withContext(Dispatchers.IO) {
+                        areFavoritesFullyDownloaded()
+                    }
+                }
+
                 val result = withContext(Dispatchers.IO) {
                     if (isSongFavorited) {
                         musicRepository.unstarSong(song.id)
@@ -233,6 +243,10 @@ class SongOptionsBottomSheet : BottomSheetDialogFragment() {
                     onSuccess = {
                         isSongFavorited = !isSongFavorited
                         updateFavoriteButton()
+                        // Si acabamos de agregar a favoritos y las favoritas estaban descargadas, descargar esta canción
+                        if (isSongFavorited && favoritesFullyDownloadedBefore) {
+                            downloadIfNeeded(song)
+                        }
                     },
                     onFailure = { error ->
                         Toast.makeText(
@@ -250,6 +264,33 @@ class SongOptionsBottomSheet : BottomSheetDialogFragment() {
                 ).show()
             }
         }
+    }
+
+    // Verifica si TODAS las canciones favoritas actuales están descargadas (antes de agregar una nueva)
+    private suspend fun areFavoritesFullyDownloaded(): Boolean {
+        return try {
+            val dm = SongDownloadManager.getInstance(requireContext())
+            val result = musicRepository.getStarredSongs()
+            result.fold(
+                onSuccess = { songs ->
+                    if (songs.isEmpty()) return@fold false
+                    songs.all { File(dm.createDownloadPath(it)).exists() }
+                },
+                onFailure = { false }
+            )
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    // Descarga la canción si aún no está descargada ni en descarga
+    private fun downloadIfNeeded(song: Song) {
+        try {
+            val dm = SongDownloadManager.getInstance(requireContext())
+            if (!dm.isSongDownloaded(song.id) && !dm.isSongDownloading(song.id)) {
+                dm.downloadSong(song)
+            }
+        } catch (_: Exception) { /* no-op */ }
     }
 
     private fun checkSongFavoriteStatus() {
