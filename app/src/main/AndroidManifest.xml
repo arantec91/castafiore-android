@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:tools="http://schemas.android.com/tools">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <!-- Permisos necesarios para la aplicación -->
     <uses-permission android:name="android.permission.INTERNET" />
@@ -24,7 +23,8 @@
         <activity
             android:name=".ui.activities.SplashActivity"
             android:exported="true"
-            android:theme="@style/Theme.Castafiore">
+            android:theme="@style/Theme.Castafiore"
+            android:screenOrientation="portrait">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -35,13 +35,15 @@
         <activity
             android:name=".ui.activities.SetupActivity"
             android:exported="false"
-            android:theme="@style/Theme.Castafiore" />
+            android:theme="@style/Theme.Castafiore"
+            android:screenOrientation="portrait" />
 
         <!-- Actividad principal -->
         <activity
             android:name=".ui.activities.MainActivity"
             android:exported="false"
-            android:theme="@style/Theme.Castafiore" />
+            android:theme="@style/Theme.Castafiore"
+            android:screenOrientation="portrait" />
 
         <!-- Actividad del reproductor (pantalla completa) -->
         <activity

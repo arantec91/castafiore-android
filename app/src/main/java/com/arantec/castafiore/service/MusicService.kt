@@ -4,9 +4,12 @@ import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.graphics.Bitmap
+import android.media.AudioManager
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.media.session.MediaButtonReceiver
@@ -59,6 +62,15 @@ class MusicService : Service() {
     private var scrobbleSentForCurrent = false
     private var trackStartTimeMillis: Long = 0L
 
+    // Receiver to pause when audio becomes noisy (e.g., headphones unplugged)
+    private val noisyReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action == AudioManager.ACTION_AUDIO_BECOMING_NOISY) {
+                pause()
+            }
+        }
+    }
+
     // Enum para los modos de repetición
     enum class RepeatMode {
         OFF, ALL, ONE
@@ -98,6 +110,9 @@ class MusicService : Service() {
             setCallback(mediaSessionCallback)
             isActive = true
         }
+
+        // Register receiver for becoming noisy (headphones unplug)
+        registerReceiver(noisyReceiver, IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY))
 
         // Disable lazy preparation so upcoming items can be prepared
         val mediaSourceFactory = DefaultMediaSourceFactory(PlayerCache.cacheDataSourceFactory)
@@ -187,6 +202,14 @@ class MusicService : Service() {
                 // Enqueue próximo track para preparación anticipada
                 enqueueNextMediaItem()
             }
+            override fun onIsPlayingChanged(isPlaying: Boolean) {
+                // Mantener sincronizado el estado interno ante cambios por audio focus (llamadas, notificaciones) u otros
+                this@MusicService.isPlaying = isPlaying
+                updatePlaybackState()
+                notifyPlaybackStateChanged(isPlaying)
+                showOrUpdateNotification()
+                if (isPlaying) startProgressUpdates() else stopProgressUpdates()
+            }
         })
 
         updatePlaybackState()
@@ -202,6 +225,7 @@ class MusicService : Service() {
     }
 
     override fun onDestroy() {
+        try { unregisterReceiver(noisyReceiver) } catch (_: Exception) {}
         exoPlayer?.release()
         exoPlayer = null
         mediaSession.release()
