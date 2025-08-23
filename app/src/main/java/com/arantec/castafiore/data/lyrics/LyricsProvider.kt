@@ -1,6 +1,8 @@
 package com.arantec.castafiore.data.lyrics
 
+import android.content.Context
 import android.util.LruCache
+import com.arantec.castafiore.data.cache.LyricsCacheStore
 import com.arantec.castafiore.data.models.Song
 import com.arantec.castafiore.data.network.LrcLibClient
 import com.arantec.castafiore.data.network.LrcLibItem
@@ -12,6 +14,26 @@ import android.util.Log
 class LyricsProvider {
     private val cache = LruCache<String, List<LyricsLine>>(64)
 
+    // Context-aware version that also checks/persists to disk cache
+    suspend fun getSyncedLyrics(context: Context, song: Song): Result<List<LyricsLine>> = withContext(Dispatchers.IO) {
+        // Memory cache first
+        cache.get(song.id)?.let { return@withContext Result.success(it) }
+        // Disk cache next
+        try {
+            LyricsCacheStore.getInstance(context).get(song.id)?.let { cached ->
+                cache.put(song.id, cached)
+                return@withContext Result.success(cached)
+            }
+        } catch (_: Exception) { }
+        // Fallback to network/provider
+        val fetched = getSyncedLyrics(song)
+        if (fetched.isSuccess) {
+            try { LyricsCacheStore.getInstance(context).put(song.id, fetched.getOrNull().orEmpty()) } catch (_: Exception) { }
+        }
+        fetched
+    }
+
+    // Backwards-compatible version (memory cache + network only)
     suspend fun getSyncedLyrics(song: Song): Result<List<LyricsLine>> = withContext(Dispatchers.IO) {
         cache.get(song.id)?.let { return@withContext Result.success(it) }
         try {
@@ -93,6 +115,12 @@ class LyricsProvider {
             Log.e("LRCLIB", "Error fetching/parsing lyrics: ${e.message}", e)
             Result.failure(e)
         }
+    }
+
+    // Fire-and-forget prefetch that warms memory+disk cache
+    suspend fun prefetch(context: Context, song: Song?) {
+        if (song == null) return
+        try { getSyncedLyrics(context, song) } catch (_: Exception) { }
     }
 
     // Choose the best item with synced lyrics, preferring closest duration within small tolerance

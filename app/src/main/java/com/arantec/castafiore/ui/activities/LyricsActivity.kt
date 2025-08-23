@@ -180,7 +180,7 @@ class LyricsActivity : AppCompatActivity() {
         updateHeader(song)
         if (song == null) {
             binding.tvStatus.apply { text = getString(R.string.no_song); visibility = android.view.View.VISIBLE }
-            adapter.setLines(emptyList<com.arantec.castafiore.data.lyrics.LyricsLine>())
+            adapter.setLines(emptyList<LyricsLine>())
             autoScrollEnabled = false
             return
         }
@@ -189,7 +189,7 @@ class LyricsActivity : AppCompatActivity() {
         binding.progress.visibility = android.view.View.VISIBLE
         loadJob?.cancel()
         loadJob = CoroutineScope(Dispatchers.Main).launch {
-            val result = LyricsProvider.getInstance().getSyncedLyrics(song)
+            val result = LyricsProvider.getInstance().getSyncedLyrics(applicationContext, song)
             if (result.isSuccess) {
                 val lines = result.getOrNull().orEmpty()
                 adapter.setLines(lines)
@@ -202,7 +202,7 @@ class LyricsActivity : AppCompatActivity() {
                 val idx = adapter.getActiveIndex()
                 if (idx >= 0) smoothScrollActiveToCenterIfNeeded(idx)
             } else {
-                adapter.setLines(emptyList<com.arantec.castafiore.data.lyrics.LyricsLine>())
+                adapter.setLines(emptyList<LyricsLine>())
                 binding.tvStatus.text = getString(R.string.no_lyrics)
                 binding.tvStatus.visibility = android.view.View.VISIBLE
                 autoScrollEnabled = false

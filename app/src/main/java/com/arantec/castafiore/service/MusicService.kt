@@ -36,6 +36,7 @@ import kotlinx.coroutines.delay
 import com.arantec.castafiore.ui.activities.PlayerActivity
 import com.google.android.exoplayer2.source.DefaultMediaSourceFactory
 import com.google.android.exoplayer2.audio.AudioAttributes
+import com.arantec.castafiore.data.lyrics.LyricsProvider
 
 class MusicService : Service() {
 
@@ -199,6 +200,15 @@ class MusicService : Service() {
                 if (repeatMode == RepeatMode.OFF && musicRepository.continueWithSimilarEnabled) {
                     prefetchSimilarForCurrentSong()
                 }
+                // Prefetch de letras para la canción actual y la siguiente
+                CoroutineScope(Dispatchers.IO).launch {
+                    try {
+                        val now = currentSong
+                        LyricsProvider.getInstance().prefetch(this@MusicService, now)
+                        val next = playlist.getOrNull(currentIndex + 1)
+                        LyricsProvider.getInstance().prefetch(this@MusicService, next)
+                    } catch (_: Exception) { }
+                }
                 // Enqueue próximo track para preparación anticipada
                 enqueueNextMediaItem()
             }
@@ -321,6 +331,14 @@ class MusicService : Service() {
         scrobbleSentForCurrent = false
         trackStartTimeMillis = System.currentTimeMillis()
         reportNowPlayingSafe(song)
+        // Prefetch letras para la actual y la siguiente
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                LyricsProvider.getInstance().prefetch(this@MusicService, song)
+                val next = playlist.getOrNull(currentIndex + 1)
+                LyricsProvider.getInstance().prefetch(this@MusicService, next)
+            } catch (_: Exception) { }
+        }
         // Registrar también cuando la reproducción inicia manualmente
         try {
             com.arantec.castafiore.data.cache.RecentPlaysStore.getInstance(this).add(song)
