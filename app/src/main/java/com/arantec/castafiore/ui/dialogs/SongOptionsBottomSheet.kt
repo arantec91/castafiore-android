@@ -1,21 +1,27 @@
 package com.arantec.castafiore.ui.dialogs
 
+import android.content.ComponentName
+import android.content.Context
+import android.content.Intent
+import android.content.ServiceConnection
 import android.os.Bundle
+import android.os.IBinder
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Toast
 import androidx.lifecycle.lifecycleScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import com.arantec.castafiore.R
+import com.arantec.castafiore.data.download.SongDownloadManager
 import com.arantec.castafiore.data.models.Song
 import com.arantec.castafiore.data.repository.MusicRepository
 import com.arantec.castafiore.databinding.BottomSheetSongOptionsBinding
 import com.bumptech.glide.Glide
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment
-import com.arantec.castafiore.data.download.SongDownloadManager
+import com.arantec.castafiore.service.MusicService
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
 
 class SongOptionsBottomSheet : BottomSheetDialogFragment() {
@@ -40,6 +46,26 @@ class SongOptionsBottomSheet : BottomSheetDialogFragment() {
     private var onShareClick: ((Song) -> Unit)? = null
     private var onSongInfoClick: ((Song) -> Unit)? = null
     private var onRemoveFromPlaylistClick: ((Song) -> Unit)? = null // Nuevo callback: eliminar de playlist
+    private var onSongRadioClick: ((Song, List<Song>) -> Unit)? = null // Nuevo callback: radio de canción
+
+    private var musicService: MusicService? = null
+    private var isBound: Boolean = false
+    private var pendingAction: (() -> Unit)? = null
+
+    private val serviceConnection = object : ServiceConnection {
+        override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
+            val binder = service as MusicService.MusicBinder
+            musicService = binder.getService()
+            isBound = true
+            pendingAction?.invoke()
+            pendingAction = null
+        }
+
+        override fun onServiceDisconnected(name: ComponentName?) {
+            isBound = false
+            musicService = null
+        }
+    }
 
     companion object {
         private const val ARG_SONG = "song"
@@ -99,6 +125,11 @@ class SongOptionsBottomSheet : BottomSheetDialogFragment() {
     override fun onDestroyView() {
         super.onDestroyView()
         _binding = null
+        if (isBound) {
+            try { requireContext().unbindService(serviceConnection) } catch (_: Exception) {}
+            isBound = false
+            musicService = null
+        }
     }
 
     private fun setupUI() {
@@ -167,6 +198,15 @@ class SongOptionsBottomSheet : BottomSheetDialogFragment() {
         }
     }
 
+    private fun bindMusicService() {
+        try {
+            val intent = Intent(requireContext(), MusicService::class.java)
+            requireContext().bindService(intent, serviceConnection, Context.BIND_AUTO_CREATE)
+        } catch (_: Exception) {
+            // ignore
+        }
+    }
+
     private fun setupClickListeners() {
         song?.let { currentSong ->
 
@@ -215,6 +255,59 @@ class SongOptionsBottomSheet : BottomSheetDialogFragment() {
             binding.optionSongInfo.setOnClickListener {
                 onSongInfoClick?.invoke(currentSong)
                 dismiss()
+            }
+
+            // Radio de la canción
+            binding.optionSongRadio.setOnClickListener {
+                // UI: show spinner and disable option to avoid double taps
+                binding.progressSongRadio.visibility = View.VISIBLE
+                binding.optionSongRadio.isEnabled = false
+                binding.iconSongRadio.alpha = 0.5f
+
+                viewLifecycleOwner.lifecycleScope.launch {
+                    val result = withContext(Dispatchers.IO) {
+                        musicRepository.getSimilarSongs(currentSong.id)
+                    }
+                    result.fold(
+                        onSuccess = { similarSongs ->
+                            val filtered = similarSongs.filter { it.id != currentSong.id }
+                            val queue = listOf(currentSong) + filtered
+                            if (queue.size > 1) {
+                                val playAction: () -> Unit = {
+                                    musicService?.playQueue(
+                                        queue,
+                                        0,
+                                        MusicService.PlaybackSource(
+                                            MusicService.SourceType.SONGS,
+                                            null,
+                                            "Radio"
+                                        )
+                                    )
+                                }
+                                if (isBound && musicService != null) {
+                                    playAction()
+                                } else {
+                                    pendingAction = playAction
+                                    bindMusicService()
+                                }
+                                dismiss()
+                            } else {
+                                Toast.makeText(requireContext(), getString(R.string.error_loading_favorites), Toast.LENGTH_SHORT).show()
+                                // Restore UI when keeping the sheet open
+                                binding.progressSongRadio.visibility = View.GONE
+                                binding.optionSongRadio.isEnabled = true
+                                binding.iconSongRadio.alpha = 1f
+                            }
+                        },
+                        onFailure = { e ->
+                            Toast.makeText(requireContext(), "Error al cargar radio: ${e.message}", Toast.LENGTH_SHORT).show()
+                            // Restore UI on error
+                            binding.progressSongRadio.visibility = View.GONE
+                            binding.optionSongRadio.isEnabled = true
+                            binding.iconSongRadio.alpha = 1f
+                        }
+                    )
+                }
             }
         }
     }
@@ -371,6 +464,12 @@ class SongOptionsBottomSheet : BottomSheetDialogFragment() {
     // Nuevo setter: eliminar de playlist
     fun setOnRemoveFromPlaylistClickListener(listener: (Song) -> Unit): SongOptionsBottomSheet {
         onRemoveFromPlaylistClick = listener
+        return this
+    }
+
+    // Nuevo setter: radio de canción
+    fun setOnSongRadioClickListener(listener: (Song, List<Song>) -> Unit): SongOptionsBottomSheet {
+        onSongRadioClick = listener
         return this
     }
 

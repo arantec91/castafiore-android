@@ -24,6 +24,7 @@
     <string name="pause">DETENER</string>
     <string name="next">Siguiente</string>
     <string name="previous">Anterior</string>
+    <string name="song_radio">Radio de la canción</string>
 
     <!-- Favoritos -->
     <string name="favorite_songs_title">Canciones favoritas</string>

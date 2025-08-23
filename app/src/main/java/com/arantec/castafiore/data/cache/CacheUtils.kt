@@ -76,6 +76,9 @@ object CacheKeys {
 
     // Clave para artistas similares (versionada para evitar entradas antiguas vacías)
     fun similarArtists(artistId: String) = "similar_artists_v2_$artistId"
+
+    // Clave para canciones similares (versionada para evitar entradas antiguas vacías)
+    fun similarSongs(songId: String, size: Int) = "similar_songs_v1_${songId}_${size}"
 }
 
 /**

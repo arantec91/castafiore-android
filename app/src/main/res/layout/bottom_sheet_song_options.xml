@@ -205,6 +205,47 @@
 
         </LinearLayout>
 
+        <!-- Radio de la canción -->
+        <LinearLayout
+            android:id="@+id/optionSongRadio"
+            android:layout_width="match_parent"
+            android:layout_height="56dp"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingHorizontal="20dp"
+            android:background="?attr/selectableItemBackground"
+            android:clickable="true"
+            android:focusable="true">
+
+            <ImageView
+                android:id="@+id/iconSongRadio"
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:layout_marginEnd="16dp"
+                android:src="@drawable/ic_song_radio"
+                app:tint="#FFFFFF"
+                android:contentDescription="@string/song_radio" />
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/song_radio"
+                android:textColor="#FFFFFF"
+                android:textSize="16sp" />
+
+            <ProgressBar
+                android:id="@+id/progressSongRadio"
+                style="@android:style/Widget.DeviceDefault.ProgressBar.Small"
+                android:layout_width="20dp"
+                android:layout_height="20dp"
+                android:visibility="gone"
+                android:indeterminate="true"
+                android:indeterminateTintMode="src_in"
+                android:indeterminateTint="#FFFFFF" />
+
+        </LinearLayout>
+
         <!-- Ver álbum -->
         <LinearLayout
             android:id="@+id/optionViewAlbum"

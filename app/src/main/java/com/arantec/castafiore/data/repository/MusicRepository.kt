@@ -1001,28 +1001,33 @@ class MusicRepository private constructor(private val context: Context) {
     }
 
     suspend fun getSimilarSongs(baseSongId: String, size: Int = 15): Result<List<Song>> {
-        return try {
-            val (username, token, salt) = getAuthParams()
-            val response = NavidromeClient.getApiService().getSimilarSongs(
-                username = username,
-                token = token,
-                salt = salt,
-                version = "1.16.1",
-                client = "Castafiore",
-                id = baseSongId,
-                size = size
-            )
+        return cacheManager.getSongs(
+            key = CacheKeys.similarSongs(baseSongId, size),
+            type = CacheTypes.SONG_LIST_TYPE
+        ) {
+            try {
+                val (username, token, salt) = getAuthParams()
+                val response = NavidromeClient.getApiService().getSimilarSongs(
+                    username = username,
+                    token = token,
+                    salt = salt,
+                    version = "1.16.1",
+                    client = "Castafiore",
+                    id = baseSongId,
+                    size = size
+                )
 
-            if (response.isSuccessful) {
-                response.body()?.let { similarResponse ->
-                    val songs = similarResponse.subsonicResponse.similarSongs?.song ?: emptyList()
-                    Result.success(songs)
-                } ?: Result.failure(Exception("Empty response"))
-            } else {
-                Result.failure(Exception("HTTP Error: ${response.code()} - ${response.message()}"))
+                if (response.isSuccessful) {
+                    response.body()?.let { similarResponse ->
+                        val songs = similarResponse.subsonicResponse.similarSongs?.song ?: emptyList()
+                        Result.success(songs)
+                    } ?: Result.failure(Exception("Empty response"))
+                } else {
+                    Result.failure(Exception("HTTP Error: ${response.code()} - ${response.message()}"))
+                }
+            } catch (e: Exception) {
+                Result.failure(e)
             }
-        } catch (e: Exception) {
-            Result.failure(e)
         }
     }
 
