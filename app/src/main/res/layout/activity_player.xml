@@ -247,8 +247,7 @@
                     android:layout_marginHorizontal="16dp"
                     android:background="?attr/selectableItemBackgroundBorderless"
                     android:contentDescription="Anterior"
-                    android:src="@drawable/ic_skip_next"
-                    android:rotation="180"
+                    android:src="@drawable/ic_skip_previous"
                     app:tint="@color/text_primary" />
 
                 <!-- Play/Pause (botón principal) -->

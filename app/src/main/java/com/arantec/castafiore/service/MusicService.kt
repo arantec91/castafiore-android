@@ -86,6 +86,11 @@ class MusicService : Service() {
         private const val MEDIA_SESSION_TAG = "CastafioreMediaSession"
         private const val NOTIFICATION_CHANNEL_ID = "playback_channel"
         private const val NOTIFICATION_ID = 2001
+        // Explicit actions for notification controls (immutable PendingIntents)
+        private const val ACTION_TOGGLE = "com.arantec.castafiore.action.TOGGLE_PLAY_PAUSE"
+        private const val ACTION_NEXT = "com.arantec.castafiore.action.NEXT"
+        private const val ACTION_PREV = "com.arantec.castafiore.action.PREV"
+        private const val ACTION_STOP = "com.arantec.castafiore.action.STOP"
     }
 
     inner class MusicBinder : Binder() {
@@ -246,6 +251,26 @@ class MusicService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        // Handle our explicit notification actions first (ensures stability on Android 12+)
+        when (intent?.action) {
+            ACTION_TOGGLE -> {
+                togglePlayPause()
+                return START_NOT_STICKY
+            }
+            ACTION_NEXT -> {
+                next()
+                return START_NOT_STICKY
+            }
+            ACTION_PREV -> {
+                previous()
+                return START_NOT_STICKY
+            }
+            ACTION_STOP -> {
+                stop()
+                return START_NOT_STICKY
+            }
+        }
+        // Fallback: handle media button intents (hardware/headset controls)
         MediaButtonReceiver.handleIntent(mediaSession, intent)
         return START_NOT_STICKY
     }
@@ -557,6 +582,16 @@ class MusicService : Service() {
         )
     }
 
+    private fun pendingService(action: String, requestCode: Int): PendingIntent {
+        val intent = Intent(this, MusicService::class.java).apply { this.action = action }
+        return PendingIntent.getService(
+            this,
+            requestCode,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+    }
+
     private fun buildBaseNotification(largeIcon: Bitmap? = null): NotificationCompat.Builder {
         val song = currentSong
         val title = song?.title ?: getString(R.string.app_name)
@@ -565,26 +600,18 @@ class MusicService : Service() {
         val playPauseAction = NotificationCompat.Action(
             if (isPlaying) R.drawable.ic_pause else R.drawable.ic_play,
             if (isPlaying) getString(R.string.pause) else getString(R.string.play),
-            MediaButtonReceiver.buildMediaButtonPendingIntent(
-                this,
-                PlaybackStateCompat.ACTION_PLAY_PAUSE
-            )
+            // Use explicit immutable PendingIntent to avoid Android 12+ mutability crashes
+            pendingService(ACTION_TOGGLE, /*requestCode*/ 100)
         )
         val prevAction = NotificationCompat.Action(
-            R.drawable.ic_arrow_back,
+            R.drawable.ic_skip_previous,
             getString(R.string.previous),
-            MediaButtonReceiver.buildMediaButtonPendingIntent(
-                this,
-                PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS
-            )
+            pendingService(ACTION_PREV, /*requestCode*/ 101)
         )
         val nextAction = NotificationCompat.Action(
             R.drawable.ic_skip_next,
             getString(R.string.next),
-            MediaButtonReceiver.buildMediaButtonPendingIntent(
-                this,
-                PlaybackStateCompat.ACTION_SKIP_TO_NEXT
-            )
+            pendingService(ACTION_NEXT, /*requestCode*/ 102)
         )
 
         val style = MediaStyle()
