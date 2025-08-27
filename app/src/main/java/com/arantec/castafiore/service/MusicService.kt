@@ -604,12 +604,12 @@ class MusicService : Service() {
             pendingService(ACTION_TOGGLE, /*requestCode*/ 100)
         )
         val prevAction = NotificationCompat.Action(
-            R.drawable.ic_skip_previous,
+            R.drawable.ic_prev,
             getString(R.string.previous),
             pendingService(ACTION_PREV, /*requestCode*/ 101)
         )
         val nextAction = NotificationCompat.Action(
-            R.drawable.ic_skip_next,
+            R.drawable.ic_next,
             getString(R.string.next),
             pendingService(ACTION_NEXT, /*requestCode*/ 102)
         )

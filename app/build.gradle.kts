@@ -25,8 +25,8 @@ android {
         applicationId = "com.arantec.castafiore"
         minSdk = 31
         targetSdk = 36
-        versionCode = 6
-        versionName = "4.0.3"
+        versionCode = 13
+        versionName = "4.0.4"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
