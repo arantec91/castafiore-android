@@ -33,6 +33,13 @@ class SetupActivity : AppCompatActivity() {
         // Load saved values (only username)
         binding.etUsername.setText(musicRepository.username ?: "")
 
+        // Mostrar mensaje de credenciales caducadas si aplica
+        intent.getStringExtra("expired_message")?.let { msg ->
+            if (msg.isNotBlank()) {
+                showStatus(msg, true)
+            }
+        }
+
         binding.btnConnect.text = getString(R.string.login)
         binding.btnConnect.setOnClickListener {
             testConnection()

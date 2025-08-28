@@ -4,6 +4,7 @@ import android.content.Intent
 import android.os.Bundle
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
+import com.arantec.castafiore.data.network.NavidromeClient
 import com.arantec.castafiore.data.repository.MusicRepository
 import com.arantec.castafiore.databinding.ActivitySplashBinding
 import com.arantec.castafiore.utils.StatusBarUtils
@@ -34,12 +35,79 @@ class SplashActivity : AppCompatActivity() {
 
     private fun checkUserSession() {
         if (musicRepository.isConfigured()) {
-            // Usuario ya tiene configuración guardada, ir directamente a MainActivity
-            navigateToMain()
+            // Validar credenciales contra el servidor de forma rápida
+            lifecycleScope.launch {
+                try {
+                    val server = musicRepository.serverUrl
+                    if (!server.isNullOrEmpty()) {
+                        NavidromeClient.initialize(server)
+                        val (user, token, salt) = musicRepository.getAuthParams()
+                        val response = NavidromeClient.getApiService().ping(
+                            username = user,
+                            token = token,
+                            salt = salt,
+                            version = "1.16.1",
+                            client = "Castafiore"
+                        )
+
+                        if (response.isSuccessful) {
+                            val body = response.body()
+                            val status = body?.subsonicResponse?.status
+                            if (status == "ok") {
+                                navigateToMain()
+                                return@launch
+                            } else {
+                                val code = body?.subsonicResponse?.error?.code
+                                if (code == 40 || code == 50) {
+                                    // Credenciales inválidas o usuario sin permiso
+                                    handleExpiredCredentials()
+                                    return@launch
+                                } else {
+                                    // Otros errores del servidor: no bloquear inicio
+                                    navigateToMain()
+                                    return@launch
+                                }
+                            }
+                        } else {
+                            // HTTP inválido: 401/403 indican credenciales expiradas/eliminadas
+                            val httpCode = response.code()
+                            if (httpCode == 401 || httpCode == 403) {
+                                handleExpiredCredentials()
+                                return@launch
+                            } else {
+                                // Otros códigos: continuar a Main (posible caída temporal)
+                                navigateToMain()
+                                return@launch
+                            }
+                        }
+                    } else {
+                        // Sin servidor guardado aunque esté configurado: ir a Setup
+                        navigateToSetup()
+                        return@launch
+                    }
+                } catch (_: Exception) {
+                    // Errores de red u otros: permitir entrada a Main para modo offline
+                    navigateToMain()
+                    return@launch
+                }
+            }
         } else {
             // Usuario no tiene configuración, ir a SetupActivity
             navigateToSetup()
         }
+    }
+
+    private fun handleExpiredCredentials() {
+        // Limpiar credenciales guardadas y navegar a Setup con mensaje
+        musicRepository.username = null
+        musicRepository.password = null
+        musicRepository.serverUrl = null
+
+        val intent = Intent(this, SetupActivity::class.java)
+        intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+        intent.putExtra("expired_message", "Tus credenciales han caducado, ponte en contacto con el administrador.")
+        startActivity(intent)
+        finish()
     }
 
     private fun navigateToMain() {
