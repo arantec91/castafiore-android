@@ -122,8 +122,10 @@ class PlaylistSelectorBottomSheet : BottomSheetDialogFragment() {
                 val result = musicRepository.getPlaylists()
                 result.fold(
                     onSuccess = { playlistList ->
+                        // Filtrar playlists públicas: solo mostrar privadas
+                        val privatePlaylists = playlistList.filter { !it.public }
                         playlists.clear()
-                        playlists.addAll(playlistList)
+                        playlists.addAll(privatePlaylists)
                         playlistAdapter.updatePlaylists(playlists)
 
                         binding.progressBar.visibility = View.GONE
@@ -178,19 +180,21 @@ class PlaylistSelectorBottomSheet : BottomSheetDialogFragment() {
                 val result = musicRepository.createPlaylist(name)
                 result.fold(
                     onSuccess = { newPlaylist ->
-                        // Agregar la nueva playlist a la lista y actualizar el adapter
-                        playlists.add(0, newPlaylist)
-                        playlistAdapter.updatePlaylists(playlists)
+                        // Agregar la nueva playlist a la lista y actualizar el adapter solo si no es pública
+                        if (!newPlaylist.public) {
+                            playlists.add(0, newPlaylist)
+                            playlistAdapter.updatePlaylists(playlists)
 
-                        // Actualizar visibilidad
-                        binding.tvEmptyState.visibility = View.GONE
-                        binding.rvPlaylists.visibility = View.VISIBLE
+                            // Actualizar visibilidad
+                            binding.tvEmptyState.visibility = View.GONE
+                            binding.rvPlaylists.visibility = View.VISIBLE
 
-                        snack("Playlist creada: $name")
+                            snack("Playlist creada: $name")
 
-                        // Agregar automáticamente la canción a la nueva playlist
-                        song?.let { currentSong ->
-                            addSongToPlaylist(newPlaylist)
+                            // Agregar automáticamente la canción a la nueva playlist
+                            song?.let { currentSong ->
+                                addSongToPlaylist(newPlaylist)
+                            }
                         }
                     },
                     onFailure = { error ->

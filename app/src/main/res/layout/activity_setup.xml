@@ -28,8 +28,8 @@
 
         <ImageView
             android:id="@+id/ivLogo"
-            android:layout_width="32dp"
-            android:layout_height="32dp"
+            android:layout_width="50dp"
+            android:layout_height="50dp"
             android:src="@drawable/foreground_icon"
             android:contentDescription="@string/app_name" />
 
@@ -40,7 +40,7 @@
             android:layout_marginStart="1dp"
             android:text="@string/castafiore_music"
             android:textColor="@color/text_on_primary"
-            android:textSize="12sp"
+            android:textSize="18sp"
             android:textStyle="bold" />
 
     </LinearLayout>

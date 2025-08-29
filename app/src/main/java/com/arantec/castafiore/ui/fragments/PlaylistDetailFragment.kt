@@ -265,10 +265,12 @@ class PlaylistDetailFragment : Fragment() {
                     .setOnSongInfoClickListener { selectedSong ->
                         showSongInfo(selectedSong)
                     }
-                    .setOnRemoveFromPlaylistClickListener { selectedSong ->
-                        // Eliminar la canción de la playlist directamente
+                // Mostrar "Quitar de la playlist" solo si la playlist NO es pública
+                if (playlistInfo?.public == false) {
+                    bottomSheet.setOnRemoveFromPlaylistClickListener { selectedSong ->
                         confirmRemoveSong(selectedSong)
                     }
+                }
                 bottomSheet.show(childFragmentManager, "SongOptionsBottomSheet")
             }
         )
