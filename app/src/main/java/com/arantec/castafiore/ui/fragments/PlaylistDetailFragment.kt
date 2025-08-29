@@ -28,6 +28,7 @@ import com.arantec.castafiore.utils.StatusBarUtils
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
 import com.bumptech.glide.Glide
 import java.util.Locale
 import kotlin.random.Random
@@ -278,6 +279,7 @@ class PlaylistDetailFragment : Fragment() {
             layoutManager = LinearLayoutManager(context)
             adapter = songAdapter
             isNestedScrollingEnabled = false
+            setHasFixedSize(true) // Optimize initial layout and reduce jank on enter
         }
     }
 
@@ -326,8 +328,12 @@ class PlaylistDetailFragment : Fragment() {
         viewLifecycleOwner.lifecycleScope.launch {
             val id = playlistId ?: return@launch
 
-            // Info básica de la playlist (nombre, cover, etc.)
-            musicRepository.getPlaylistInfo(id).onSuccess { info ->
+            // Fetch info and songs concurrently off the main thread
+            val infoDeferred = async(Dispatchers.IO) { musicRepository.getPlaylistInfo(id) }
+            val songsDeferred = async(Dispatchers.IO) { musicRepository.getPlaylistSongs(id) }
+
+            // Apply playlist info as soon as it’s available
+            infoDeferred.await().onSuccess { info ->
                 playlistInfo = info
                 binding.tvTitle.text = info.name
 
@@ -370,14 +376,13 @@ class PlaylistDetailFragment : Fragment() {
                 }
             }
 
-            // Canciones
-            musicRepository.getPlaylistSongs(id).fold(
+            // Then apply songs result
+            songsDeferred.await().fold(
                 onSuccess = { songs ->
                     playlistSongs.clear()
                     playlistSongs.addAll(songs)
                     songAdapter.updateSongs(playlistSongs)
                     updateDownloadUIState()
-                    songAdapter.notifyDataSetChanged()
 
                     // Info
                     binding.tvInfo.text = buildInfoText(playlistSongs)

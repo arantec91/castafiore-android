@@ -275,6 +275,18 @@ class SongDownloadManager private constructor(private val context: Context) {
     }
 
     /**
+     * NUEVO: Crea la ruta de portada usando artista y álbum (sin objeto Song).
+     * Útil para pantallas que solo conocen esos datos.
+     */
+    fun createAlbumCoverPath(artist: String, album: String): String {
+        val musicDir = File(context.getExternalFilesDir(Environment.DIRECTORY_PICTURES), "Castafiore/Covers")
+        val artistDir = File(musicDir, sanitizeFileName(artist))
+        val albumDir = File(artistDir, sanitizeFileName(album))
+        albumDir.mkdirs()
+        return File(albumDir, "cover.jpg").absolutePath
+    }
+
+    /**
      * Obtiene la URL de descarga de la canción
      */
     fun getSongDownloadUrl(song: Song): String {

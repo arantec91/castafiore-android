@@ -54,27 +54,35 @@ class SongAdapter(
                     ivSongCover.visibility = View.GONE
                 } else {
                     ivSongCover.visibility = View.VISIBLE
-                    // Cargar portada de la canción (thumbnail)
+                    // Cargar portada de la canción (thumbnail) con preferencia por local
                     try {
-                        // Placeholder inmediato mientras se resuelve la URL
+                        // Placeholder inmediato
                         ivSongCover.setImageResource(R.drawable.ic_music_note)
 
-                        val repo = MusicRepository.getInstance(root.context)
-                        val server = repo.serverUrl
-                        val coverId = song.coverArt
-                        if (!server.isNullOrEmpty() && !coverId.isNullOrEmpty()) {
-                            val (username, token, salt) = repo.getAuthParams()
-                            val coverUrl = ImageLoader.buildCoverArtUrl(
-                                server,
-                                coverId,
-                                username,
-                                token,
-                                salt,
-                                200 // tamaño optimizado para lista
-                            )
-                            ImageLoader.loadThumbnail(root.context, ivSongCover, coverUrl)
+                        // 1) Local-first: si existe una portada descargada para el álbum
+                        val dm = SongDownloadManager.getInstance(root.context)
+                        val localPath = try { dm.createCoverPath(song) } catch (_: Exception) { null }
+                        if (!localPath.isNullOrEmpty() && File(localPath).exists()) {
+                            ImageLoader.loadLocalThumbnail(root.context, ivSongCover, localPath)
                         } else {
-                            ivSongCover.setImageResource(R.drawable.ic_music_note)
+                            // 2) Fallback a URL remota; ImageLoader manejará modo offline usando solo caché
+                            val repo = MusicRepository.getInstance(root.context)
+                            val server = repo.serverUrl
+                            val coverId = song.coverArt ?: song.albumId
+                            if (!server.isNullOrEmpty() && !coverId.isNullOrEmpty()) {
+                                val (username, token, salt) = repo.getAuthParams()
+                                val coverUrl = ImageLoader.buildCoverArtUrl(
+                                    server,
+                                    coverId,
+                                    username,
+                                    token,
+                                    salt,
+                                    200 // tamaño optimizado para lista
+                                )
+                                ImageLoader.loadThumbnail(root.context, ivSongCover, coverUrl)
+                            } else {
+                                ivSongCover.setImageResource(R.drawable.ic_music_note)
+                            }
                         }
                     } catch (_: Exception) {
                         ivSongCover.setImageResource(R.drawable.ic_music_note)

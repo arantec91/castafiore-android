@@ -577,6 +577,24 @@ class AlbumDetailFragment : Fragment() {
     }
 
     private fun loadAlbumCover(album: Album) {
+        try {
+            // Intentar portada local primero
+            val dm = com.arantec.castafiore.data.download.SongDownloadManager.getInstance(requireContext())
+            val localPath = dm.createAlbumCoverPath(album.artist, album.name)
+            val localFile = java.io.File(localPath)
+            if (localFile.exists()) {
+                // Cargar desde archivo local con fade-in y aplicar palette
+                val bitmap = android.graphics.BitmapFactory.decodeFile(localPath)
+                if (bitmap != null) {
+                    binding.ivAlbumCoverLarge.alpha = 0f
+                    binding.ivAlbumCoverLarge.setImageBitmap(bitmap)
+                    binding.ivAlbumCoverLarge.animate().alpha(1f).setDuration(250).start()
+                    applyDynamicAppBarGradientFromBitmap(bitmap)
+                    return
+                }
+            }
+        } catch (_: Exception) { /* ignorar y seguir con remoto */ }
+
         if (album.coverArt != null && musicRepository.serverUrl != null) {
             try {
                 val (username, token, salt) = musicRepository.getAuthParams()
@@ -586,20 +604,17 @@ class AlbumDetailFragment : Fragment() {
                     username,
                     token,
                     salt,
-                    500 // Tamaño más grande para la imagen principal
+                    500
                 )
 
-                // Usar ImageLoader optimizado para la imagen del álbum
                 ImageLoader.loadAlbumCoverForFragment(
                     this,
                     coverUrl,
                     onSuccess = { bitmap ->
                         if (isAdded && _binding != null) {
-                            // Aplicar un fade-in suave al establecer la imagen
                             binding.ivAlbumCoverLarge.alpha = 0f
                             binding.ivAlbumCoverLarge.setImageBitmap(bitmap)
                             binding.ivAlbumCoverLarge.animate().alpha(1f).setDuration(250).start()
-                            // Aplicar degradado dinámico basado en la Palette del cover
                             applyDynamicAppBarGradientFromBitmap(bitmap)
                         }
                     },
@@ -611,7 +626,7 @@ class AlbumDetailFragment : Fragment() {
                         }
                     }
                 )
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 if (isAdded && _binding != null) {
                     binding.ivAlbumCoverLarge.alpha = 1f
                     binding.ivAlbumCoverLarge.setImageResource(R.drawable.ic_album_placeholder)

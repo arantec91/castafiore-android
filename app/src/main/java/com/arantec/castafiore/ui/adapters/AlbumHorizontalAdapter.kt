@@ -54,24 +54,33 @@ class AlbumHorizontalAdapter(
             binding.tvAlbumName.text = album.name
             binding.tvArtistName.text = album.artist
 
-            // Optimized thumbnail loading
+            // Optimized thumbnail loading with local-first and offline-safe behavior
             try {
-                val musicRepo = MusicRepository.getInstance(binding.root.context)
-                val (username, token, salt) = musicRepo.getAuthParams()
-
-                if (album.coverArt != null && musicRepo.serverUrl != null) {
-                    val coverUrl = ImageLoader.buildCoverArtUrl(
-                        musicRepo.serverUrl!!,
-                        album.coverArt,
-                        username,
-                        token,
-                        salt,
-                        200 // thumbnail size
-                    )
-
-                    ImageLoader.loadThumbnail(binding.root.context, binding.ivAlbumCover, coverUrl)
+                // 1) Try local cover first (if songs from this album were downloaded)
+                val dm = com.arantec.castafiore.data.download.SongDownloadManager.getInstance(binding.root.context)
+                val localPath = dm.createAlbumCoverPath(album.artist, album.name)
+                val localFile = java.io.File(localPath)
+                if (localFile.exists()) {
+                    ImageLoader.loadLocalThumbnail(binding.root.context, binding.ivAlbumCover, localPath)
                 } else {
-                    binding.ivAlbumCover.setImageResource(R.drawable.ic_album_placeholder)
+                    // 2) Fallback to server URL (will use cache-only when offline)
+                    val musicRepo = MusicRepository.getInstance(binding.root.context)
+                    val (username, token, salt) = musicRepo.getAuthParams()
+
+                    if (album.coverArt != null && musicRepo.serverUrl != null) {
+                        val coverUrl = ImageLoader.buildCoverArtUrl(
+                            musicRepo.serverUrl!!,
+                            album.coverArt,
+                            username,
+                            token,
+                            salt,
+                            200 // thumbnail size
+                        )
+
+                        ImageLoader.loadThumbnail(binding.root.context, binding.ivAlbumCover, coverUrl)
+                    } else {
+                        binding.ivAlbumCover.setImageResource(R.drawable.ic_album_placeholder)
+                    }
                 }
             } catch (_: Exception) {
                 binding.ivAlbumCover.setImageResource(R.drawable.ic_album_placeholder)

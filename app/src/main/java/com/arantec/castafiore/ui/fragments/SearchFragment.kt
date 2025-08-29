@@ -216,14 +216,20 @@ class SearchFragment : Fragment() {
     }
 
     private fun navigateToPlaylistDetail(playlist: Playlist) {
-        val args = Bundle().apply {
-            putString("playlistId", playlist.id)
-            putString("playlistName", playlist.name)
-        }
-        try {
-            findNavController().navigate(R.id.playlistDetailFragment, args)
-        } catch (_: Exception) {
-            Toast.makeText(requireContext(), "No se pudo abrir la playlist", Toast.LENGTH_SHORT).show()
+        val action = SearchFragmentDirections.actionSearchToPlaylistDetail(
+            playlist.id,
+            playlist.name
+        )
+        // Freeze scrolling before navigating to avoid visual stutter
+        binding.rvPublicPlaylists.isNestedScrollingEnabled = false
+        binding.root.post {
+            try {
+                findNavController().navigate(action)
+            } catch (_: Exception) {
+                // Restore if navigation fails
+                binding.rvPublicPlaylists.isNestedScrollingEnabled = true
+                Toast.makeText(requireContext(), "No se pudo abrir la playlist", Toast.LENGTH_SHORT).show()
+            }
         }
     }
 

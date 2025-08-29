@@ -6,20 +6,14 @@ import android.graphics.drawable.Drawable
 import android.widget.ImageView
 import androidx.fragment.app.Fragment
 import com.bumptech.glide.Glide
-import com.bumptech.glide.RequestBuilder
-import com.bumptech.glide.load.DataSource
 import com.bumptech.glide.load.engine.DiskCacheStrategy
-import com.bumptech.glide.load.engine.GlideException
-import com.bumptech.glide.load.resource.bitmap.CenterCrop
-import com.bumptech.glide.load.resource.bitmap.RoundedCorners
-import com.bumptech.glide.load.resource.drawable.DrawableTransitionOptions
 import com.bumptech.glide.load.resource.bitmap.BitmapTransitionOptions
-import com.bumptech.glide.request.RequestListener
+import com.bumptech.glide.load.resource.drawable.DrawableTransitionOptions
 import com.bumptech.glide.request.RequestOptions
 import com.bumptech.glide.request.target.CustomTarget
-import com.bumptech.glide.request.target.Target
 import com.bumptech.glide.request.transition.Transition
 import com.arantec.castafiore.R
+import java.io.File
 
 /**
  * Clase utilitaria para manejar la carga optimizada de imágenes con Glide
@@ -30,8 +24,8 @@ object ImageLoader {
      * Opciones de caché optimizado para imágenes de música
      */
     private val musicImageOptions = RequestOptions()
-        .diskCacheStrategy(DiskCacheStrategy.ALL) // Cachear tanto la imagen original como las transformadas
-        .skipMemoryCache(false) // Usar caché de memoria
+        .diskCacheStrategy(DiskCacheStrategy.ALL)
+        .skipMemoryCache(false)
         .placeholder(R.drawable.ic_album_placeholder)
         .error(R.drawable.ic_album_placeholder)
 
@@ -62,7 +56,30 @@ object ImageLoader {
         .skipMemoryCache(false)
         .placeholder(R.drawable.ic_music_note)
         .error(R.drawable.ic_music_note)
-        .override(200, 200) // Tamaño optimizado para thumbnails
+        .override(200, 200)
+
+    /**
+     * Carga una imagen local (File path) con opciones de thumbnail
+     */
+    fun loadLocalThumbnail(context: Context, imageView: ImageView, filePath: String) {
+        Glide.with(context)
+            .load(File(filePath))
+            .apply(thumbnailOptions)
+            .transition(DrawableTransitionOptions.withCrossFade(200))
+            .into(imageView)
+    }
+
+    /**
+     * Carga una imagen local (File path) como portada de álbum
+     */
+    fun loadLocalAlbumCover(context: Context, imageView: ImageView, filePath: String) {
+        Glide.with(context)
+            .asBitmap()
+            .load(File(filePath))
+            .apply(albumImageOptions)
+            .transition(BitmapTransitionOptions.withCrossFade(250))
+            .into(imageView)
+    }
 
     /**
      * Carga una imagen de álbum con transición suave
@@ -80,10 +97,12 @@ object ImageLoader {
             return
         }
 
+        val opts = albumImageOptions.clone().onlyRetrieveFromCache(!NetworkUtils.isNetworkAvailable(context))
+
         Glide.with(context)
             .asBitmap()
             .load(url)
-            .apply(albumImageOptions)
+            .apply(opts)
             .transition(BitmapTransitionOptions.withCrossFade(250))
             .into(imageView)
     }
@@ -102,10 +121,13 @@ object ImageLoader {
             return
         }
 
+        val ctx = fragment.context
+        val opts = if (ctx != null) albumImageOptions.clone().onlyRetrieveFromCache(!NetworkUtils.isNetworkAvailable(ctx)) else albumImageOptions
+
         Glide.with(fragment)
             .asBitmap()
             .load(url)
-            .apply(albumImageOptions)
+            .apply(opts)
             .into(object : CustomTarget<Bitmap>() {
                 override fun onResourceReady(resource: Bitmap, transition: Transition<in Bitmap>?) {
                     onSuccess(resource)
@@ -129,9 +151,11 @@ object ImageLoader {
         imageView: ImageView,
         url: String?
     ) {
+        val opts = artistImageOptions.clone().onlyRetrieveFromCache(!NetworkUtils.isNetworkAvailable(context))
+
         Glide.with(context)
             .load(url)
-            .apply(artistImageOptions)
+            .apply(opts)
             .transition(DrawableTransitionOptions.withCrossFade(250))
             .into(imageView)
     }
@@ -144,9 +168,12 @@ object ImageLoader {
         imageView: ImageView,
         url: String?
     ) {
+        val ctx = fragment.context
+        val opts = if (ctx != null) artistImageOptions.clone().onlyRetrieveFromCache(!NetworkUtils.isNetworkAvailable(ctx)) else artistImageOptions
+
         Glide.with(fragment)
             .load(url)
-            .apply(artistImageOptions)
+            .apply(opts)
             .transition(DrawableTransitionOptions.withCrossFade(250))
             .into(imageView)
     }
@@ -159,9 +186,10 @@ object ImageLoader {
         imageView: ImageView,
         url: String?
     ) {
+        val opts = thumbnailOptions.clone().onlyRetrieveFromCache(!NetworkUtils.isNetworkAvailable(context))
         Glide.with(imageView)
             .load(url)
-            .apply(thumbnailOptions)
+            .apply(opts)
             .transition(DrawableTransitionOptions.withCrossFade(200))
             .into(imageView)
     }
@@ -174,11 +202,13 @@ object ImageLoader {
         imageView: ImageView,
         url: String?
     ) {
-        if (!fragment.isAdded) return // Verificación de seguridad
+        if (!fragment.isAdded) return
+        val ctx = fragment.context
+        val opts = if (ctx != null) thumbnailOptions.clone().onlyRetrieveFromCache(!NetworkUtils.isNetworkAvailable(ctx)) else thumbnailOptions
 
         Glide.with(fragment)
             .load(url)
-            .apply(thumbnailOptions)
+            .apply(opts)
             .transition(DrawableTransitionOptions.withCrossFade(200))
             .into(imageView)
     }
@@ -189,40 +219,28 @@ object ImageLoader {
     fun preloadImage(context: Context, url: String?) {
         if (url.isNullOrEmpty()) return
 
+        val opts = musicImageOptions.clone().onlyRetrieveFromCache(false)
         Glide.with(context)
             .load(url)
-            .apply(musicImageOptions)
+            .apply(opts)
             .preload()
     }
 
-    /**
-     * Limpia el caché de memoria cuando sea necesario
-     */
     fun clearMemoryCache(context: Context) {
         Glide.get(context).clearMemory()
     }
 
-    /**
-     * Limpia el caché de disco (debe ejecutarse en background thread)
-     */
     suspend fun clearDiskCache(context: Context) {
         kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
             Glide.get(context).clearDiskCache()
         }
     }
 
-    /**
-     * Configura Glide para usar un tamaño de caché de memoria más grande
-     */
     fun configureGlideCache(context: Context) {
-        // Esta configuración se debe hacer en el Application class o GlideModule
-        val memoryCacheSize = 1024 * 1024 * 50 // 50MB
-        val diskCacheSize = 1024 * 1024 * 250L // 250MB
+        val memoryCacheSize = 1024 * 1024 * 50
+        val diskCacheSize = 1024 * 1024 * 250L
     }
 
-    /**
-     * Construye URL de cover art con parámetros de autenticación
-     */
     fun buildCoverArtUrl(
         serverUrl: String,
         albumId: String,
@@ -234,9 +252,6 @@ object ImageLoader {
         return "$serverUrl/rest/getCoverArt.view?id=$albumId&u=$username&t=$token&s=$salt&v=1.16.1&c=Castafiore&size=$size"
     }
 
-    /**
-     * Construye URL de imagen de artista
-     */
     fun buildArtistImageUrl(
         serverUrl: String,
         artistId: String,

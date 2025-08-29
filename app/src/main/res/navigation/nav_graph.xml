@@ -29,6 +29,9 @@
         <action
             android:id="@+id/action_search_to_artistDetail"
             app:destination="@id/artistDetailFragment" />
+        <action
+            android:id="@+id/action_search_to_playlistDetail"
+            app:destination="@id/playlistDetailFragment" />
     </fragment>
 
     <fragment

@@ -47,6 +47,9 @@ class MainActivity : AppCompatActivity() {
             musicService?.addSongChangeListener { song ->
                 updateMiniPlayer(song)
             }
+
+            // Ensure mini player UI is populated even if song didn't change
+            updateMiniPlayer(musicService?.getCurrentSong())
         }
 
         override fun onServiceDisconnected(name: ComponentName?) {
@@ -302,14 +305,15 @@ class MainActivity : AppCompatActivity() {
                 }
                 if (!usedLocal) {
                     val (username, token, salt) = musicRepository.getAuthParams()
-                    val coverUrl = song.albumId?.let { albumId ->
+                    val coverId = song.coverArt ?: song.albumId
+                    val coverUrl = coverId?.let { id ->
                         ImageLoader.buildCoverArtUrl(
                             musicRepository.serverUrl!!,
-                            albumId,
+                            id,
                             username,
                             token,
                             salt,
-                            150 // Tamaño pequeño para mini player
+                            500 // match PlayerActivity size to share cache offline
                         )
                     }
                     ImageLoader.loadThumbnail(this, binding.ivAlbumArt, coverUrl)
@@ -320,6 +324,15 @@ class MainActivity : AppCompatActivity() {
             }
         } else {
             binding.playerContainer.visibility = View.GONE
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // When returning from PlayerActivity, refresh mini player artwork/state
+        if (isBound) {
+            updateMiniPlayer(musicService?.getCurrentSong())
+            musicService?.let { updatePlayPauseButton(it.isPlaying()) }
         }
     }
 

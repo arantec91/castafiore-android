@@ -656,6 +656,10 @@ class MusicService : Service() {
 
     private var isInForegroundNotification: Boolean = false
 
+    // Cache de carátula para evitar parpadeos al actualizar la notificación
+    private var lastArtworkSongId: String? = null
+    private var lastArtworkBitmap: Bitmap? = null
+
     private fun showOrUpdateNotification() {
         // Throttle excessive updates (except when we must enter FGS immediately)
         val now = SystemClock.uptimeMillis()
@@ -676,8 +680,11 @@ class MusicService : Service() {
         val nm = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
         val song = currentSong
 
-        // Build a minimal notification immediately (no artwork) to satisfy FGS time limit
-        val minimalNotification = buildBaseNotification(null).build()
+        // Usar carátula en caché si existe para evitar desaparecer el icono (parpadeo)
+        val initialArt: Bitmap? = lastArtworkBitmap
+
+        // Construir notificación inmediata (con carátula cacheada si la hay) para cumplir límite de FGS
+        val immediateNotification = buildBaseNotification(initialArt).build()
 
         if (wantsForeground) {
             if (!isInForegroundNotification) {
@@ -685,32 +692,32 @@ class MusicService : Service() {
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                         startForeground(
                             NOTIFICATION_ID,
-                            minimalNotification,
+                            immediateNotification,
                             ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
                         )
                     } else {
-                        startForeground(NOTIFICATION_ID, minimalNotification)
+                        startForeground(NOTIFICATION_ID, immediateNotification)
                     }
                     isInForegroundNotification = true
                 } catch (_: Throwable) {
                     // Fallback: just post the notification; avoid crashing
-                    nm.notify(NOTIFICATION_ID, minimalNotification)
+                    nm.notify(NOTIFICATION_ID, immediateNotification)
                 }
             } else {
-                // Already in foreground: update minimal first
-                nm.notify(NOTIFICATION_ID, minimalNotification)
+                // Already in foreground: update inmediata primero
+                nm.notify(NOTIFICATION_ID, immediateNotification)
             }
         } else {
             // Not playing or playWhenReady=false: show as non-foreground and stop FGS if needed
-            nm.notify(NOTIFICATION_ID, minimalNotification)
+            nm.notify(NOTIFICATION_ID, immediateNotification)
             try { stopForeground(false) } catch (_: Exception) {}
             isInForegroundNotification = false
         }
 
-        // If we have a song, asynchronously load artwork and update the notification content
+        // Si hay canción, cargar carátula async y actualizar sólo si hay nueva imagen y sigue siendo la misma canción
         if (song != null) {
             CoroutineScope(Dispatchers.IO).launch {
-                // Prefer local cover if exists
+                // Primero intentar carátula local
                 val dm = com.arantec.castafiore.data.download.SongDownloadManager.getInstance(this@MusicService)
                 val coverPath = try { dm.createCoverPath(song) } catch (_: Exception) { null }
                 var bitmap: android.graphics.Bitmap? = null
@@ -735,12 +742,23 @@ class MusicService : Service() {
                 }
 
                 withContext(Dispatchers.Main) {
+                    // Evitar sobrescribir si la canción actual cambió
+                    val current = currentSong
+                    if (current == null || current.id != song.id) return@withContext
+
                     // Coalesce artwork updates too
                     val now2 = SystemClock.uptimeMillis()
                     if (now2 - lastNotifPostedAt < 150L) {
                         lastNotifPostedAt = now2
                     }
-                    val updated = buildBaseNotification(bitmap).build()
+
+                    // Si obtuvimos nueva imagen, actualizar caché y notificación; si no, mantener la previa
+                    if (bitmap != null) {
+                        lastArtworkBitmap = bitmap
+                        lastArtworkSongId = song.id
+                    }
+                    val artToUse = lastArtworkBitmap
+                    val updated = buildBaseNotification(artToUse).build()
                     nm.notify(NOTIFICATION_ID, updated)
                 }
             }
