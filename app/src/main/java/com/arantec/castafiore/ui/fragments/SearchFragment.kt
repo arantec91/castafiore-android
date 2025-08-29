@@ -9,7 +9,6 @@ import android.text.TextWatcher
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.view.animation.AccelerateDecelerateInterpolator
 import android.view.inputmethod.EditorInfo
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
@@ -20,13 +19,16 @@ import androidx.fragment.app.viewModels
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.fragment.findNavController
 import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.GridLayoutManager
 import com.arantec.castafiore.R
 import com.arantec.castafiore.data.models.Album
 import com.arantec.castafiore.data.models.Artist
 import com.arantec.castafiore.data.models.Song
+import com.arantec.castafiore.data.models.Playlist
 import com.arantec.castafiore.data.repository.MusicRepository
 import com.arantec.castafiore.databinding.FragmentSearchBinding
 import com.arantec.castafiore.ui.adapters.SearchResultsAdapter
+import com.arantec.castafiore.ui.adapters.PublicPlaylistsGridAdapter
 import com.arantec.castafiore.ui.viewmodels.SearchViewModel
 import com.google.android.material.snackbar.Snackbar
 import kotlinx.coroutines.Job
@@ -49,7 +51,6 @@ class SearchFragment : Fragment() {
 
     companion object {
         private const val SEARCH_DELAY_MS = 350L
-        private const val ANIMATION_DURATION = 250L
     }
 
     private var _binding: FragmentSearchBinding? = null
@@ -58,6 +59,7 @@ class SearchFragment : Fragment() {
     private lateinit var musicRepository: MusicRepository
     private lateinit var searchAdapter: SearchResultsAdapter
     private val viewModel: SearchViewModel by viewModels()
+    private lateinit var publicPlaylistsAdapter: PublicPlaylistsGridAdapter
 
     // Estado de búsqueda
     private var searchJob: Job? = null
@@ -107,6 +109,7 @@ class SearchFragment : Fragment() {
 
         setupUI()
         setupRecycler()
+        setupPublicPlaylistsGrid()
         setupSearchFunctionality()
 
         // Restaurar resultados si existen en ViewModel para evitar parpadeo
@@ -127,13 +130,16 @@ class SearchFragment : Fragment() {
             binding.etSearch.setText(cachedQuery)
             binding.etSearch.setSelection(cachedQuery.length)
             suppressTextWatcher = false
+            // En modo resultados, ocultar grid
+            binding.rvPublicPlaylists.isGone = true
         } else {
             if (cachedQuery.isNotBlank()) {
                 // Si hay query pero no items, disparar búsqueda sin mostrar estado vacío
                 showLoading(true)
                 performSearch(cachedQuery)
             } else {
-                showEmptyState()
+                // Mostrar grid de playlists públicas en lugar del estado vacío
+                loadPublicPlaylistsIfNeeded()
             }
         }
     }
@@ -198,6 +204,29 @@ class SearchFragment : Fragment() {
         }
     }
 
+    private fun setupPublicPlaylistsGrid() {
+        publicPlaylistsAdapter = PublicPlaylistsGridAdapter { playlist ->
+            navigateToPlaylistDetail(playlist)
+        }
+        binding.rvPublicPlaylists.apply {
+            layoutManager = GridLayoutManager(requireContext(), 2)
+            adapter = publicPlaylistsAdapter
+            setHasFixedSize(true)
+        }
+    }
+
+    private fun navigateToPlaylistDetail(playlist: Playlist) {
+        val args = Bundle().apply {
+            putString("playlistId", playlist.id)
+            putString("playlistName", playlist.name)
+        }
+        try {
+            findNavController().navigate(R.id.playlistDetailFragment, args)
+        } catch (_: Exception) {
+            Toast.makeText(requireContext(), "No se pudo abrir la playlist", Toast.LENGTH_SHORT).show()
+        }
+    }
+
     private fun handleAlbumNavigation(album: Album) {
         // Congelar el RecyclerView antes de navegar para evitar efectos visuales
         binding.rvSearchResults.isNestedScrollingEnabled = false
@@ -207,7 +236,7 @@ class SearchFragment : Fragment() {
             try {
                 val action = SearchFragmentDirections.actionSearchToAlbumDetail(album)
                 findNavController().navigate(action)
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 // Restaurar scroll si hay error
                 binding.rvSearchResults.isNestedScrollingEnabled = true
             }
@@ -223,7 +252,7 @@ class SearchFragment : Fragment() {
             try {
                 val action = SearchFragmentDirections.actionSearchToArtistDetail(artist.id, artist.name)
                 findNavController().navigate(action)
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 // Restaurar scroll si hay error
                 binding.rvSearchResults.isNestedScrollingEnabled = true
             }
@@ -271,9 +300,10 @@ class SearchFragment : Fragment() {
         searchJob?.cancel()
 
         if (query.isBlank()) {
-            // Volver a estado vacío/historial
-            showEmptyState()
-            searchAdapter.submitData(emptyList<SearchResultsAdapter.Item>())
+            // Mostrar grid de playlists públicas
+            binding.rvSearchResults.isGone = true
+            binding.errorState.isGone = true
+            loadPublicPlaylistsIfNeeded()
             return
         }
 
@@ -284,6 +314,54 @@ class SearchFragment : Fragment() {
                 performSearch(query)
             }
         }
+    }
+
+    private fun loadPublicPlaylistsIfNeeded() {
+        if (!musicRepository.isConfigured()) {
+            // Sin configuración, mostrar estado vacío
+            showEmptyState()
+            return
+        }
+        val cached = viewModel.publicPlaylists.value.orEmpty()
+        if (cached.isNotEmpty()) {
+            showPublicPlaylists(cached)
+            return
+        }
+        // Mostrar grid vacío mientras carga
+        binding.rvPublicPlaylists.isVisible = true
+        binding.rvSearchResults.isGone = true
+        binding.loadingState.isGone = true
+        binding.errorState.isGone = true
+        binding.emptyState.isGone = true
+
+        lifecycleScope.launch {
+            val result = musicRepository.getPlaylists()
+            result.onSuccess { playlists ->
+                val publics = playlists.filter { it.public }
+                viewModel.publicPlaylists.value = publics
+                if (currentSearchQuery.isBlank()) {
+                    showPublicPlaylists(publics)
+                }
+            }.onFailure {
+                // Si falla, mostrar estado vacío
+                if (currentSearchQuery.isBlank()) {
+                    showEmptyState()
+                }
+            }
+        }
+    }
+
+    private fun showPublicPlaylists(list: List<Playlist>) {
+        if (list.isEmpty()) {
+            showEmptyState()
+            return
+        }
+        publicPlaylistsAdapter.setItems(list)
+        binding.rvPublicPlaylists.isVisible = true
+        binding.rvSearchResults.isGone = true
+        binding.loadingState.isGone = true
+        binding.errorState.isGone = true
+        binding.emptyState.isGone = true
     }
 
     private fun performSearch(query: String) {
@@ -435,6 +513,7 @@ class SearchFragment : Fragment() {
         if (show) {
             // Al mostrar loading, ocultar todo lo demás
             binding.rvSearchResults.isGone = true
+            binding.rvPublicPlaylists.isGone = true
             binding.emptyState.isGone = true
             binding.errorState.isGone = true
         }
@@ -446,11 +525,13 @@ class SearchFragment : Fragment() {
         binding.emptyState.isVisible = true
         binding.loadingState.isGone = true
         binding.rvSearchResults.isGone = true
+        binding.rvPublicPlaylists.isGone = true
         binding.errorState.isGone = true
     }
 
     private fun showResults() {
         binding.rvSearchResults.isVisible = true
+        binding.rvPublicPlaylists.isGone = true
         binding.emptyState.isGone = true
         binding.loadingState.isGone = true
         binding.errorState.isGone = true
@@ -461,6 +542,7 @@ class SearchFragment : Fragment() {
         binding.tvErrorTitle.text = title
         binding.tvErrorMessage.text = message
         binding.errorState.isVisible = true
+        binding.rvPublicPlaylists.isGone = true
         binding.emptyState.isGone = true
         binding.loadingState.isGone = true
         binding.rvSearchResults.isGone = true

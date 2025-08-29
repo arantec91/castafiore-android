@@ -254,8 +254,11 @@ class LibraryFragment : Fragment() {
             // Luego cargar las playlists de la API
             val result = musicRepository.getPlaylists()
             result.onSuccess { playlistsFromApi ->
-                playlistsFromApi.forEach { playlist ->
-                    val subtitle = "${playlist.songCount ?: 0} canciones"
+                val dm = SongDownloadManager.getInstance(requireContext())
+
+                // 1) Playlists privadas (siempre)
+                playlistsFromApi.filter { !it.public }.forEach { playlist ->
+                    val subtitle = "${playlist.songCount} canciones"
 
                     // Construir URL de imagen si la playlist tiene coverArt
                     var imageUrl: String? = null
@@ -283,10 +286,46 @@ class LibraryFragment : Fragment() {
                     // Agregar al mapa de playlists
                     playlistsMap[playlist.id] = playlist
                 }
+
+                // 2) Playlists públicas descargadas: incluir también en listas principales
+                playlistsFromApi.filter { it.public }.forEach { playlist ->
+                    // Comprobar si está completamente descargada
+                    var fullyDownloaded = false
+                    try {
+                        musicRepository.getPlaylistSongs(playlist.id).onSuccess { songs ->
+                            fullyDownloaded = songs.isNotEmpty() && songs.all { song ->
+                                val path = dm.createDownloadPath(song)
+                                File(path).exists()
+                            }
+                        }
+                    } catch (_: Exception) { /* ignore */ }
+
+                    if (fullyDownloaded) {
+                        // Evitar duplicados si por alguna razón ya existe
+                        if (playlists.none { it.id == playlist.id }) {
+                            var imageUrl: String? = null
+                            if (playlist.coverArt != null && musicRepository.serverUrl != null) {
+                                val (u, t, s) = musicRepository.getAuthParams()
+                                imageUrl = playlist.getCoverArtUrl(musicRepository.serverUrl!!, u, t, s, 200)
+                            }
+                            val subtitle = if (playlist.songCount > 0) "Playlist • ${playlist.songCount} canciones" else "Playlist"
+                            playlists.add(
+                                LibraryItem(
+                                    id = playlist.id,
+                                    title = playlist.name,
+                                    subtitle = subtitle,
+                                    imageUrl = imageUrl,
+                                    type = LibraryItemType.PLAYLIST
+                                )
+                            )
+                            // Nota: no añadimos al playlistsMap para distinguir privadas vs públicas; navegación hace fallback
+                        }
+                    }
+                }
             }.onFailure {
                 // Si falla la API, al menos tenemos "Canciones que te gustan"
             }
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             // En caso de error, solo mantener "Canciones que te gustan"
             playlists.clear()
             playlists.add(
@@ -334,7 +373,7 @@ class LibraryFragment : Fragment() {
             }.onFailure {
                 albums.clear()
             }
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             albums.clear()
         }
     }
@@ -376,7 +415,7 @@ class LibraryFragment : Fragment() {
             }.onFailure {
                 artists.clear()
             }
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             artists.clear()
         }
     }
@@ -411,7 +450,7 @@ class LibraryFragment : Fragment() {
             libraryAdapter.updateItems(filteredItems)
             // Scroll to top after applying the filter
             binding.rvLibraryItems.post {
-                (binding.rvLibraryItems.layoutManager as? androidx.recyclerview.widget.LinearLayoutManager)
+                (binding.rvLibraryItems.layoutManager as? LinearLayoutManager)
                     ?.scrollToPositionWithOffset(0, 0)
             }
         }
@@ -437,7 +476,7 @@ class LibraryFragment : Fragment() {
                     libraryAdapter.updateItems(filteredItems)
                     // Scroll to top after applying the filter
                     binding.rvLibraryItems.post {
-                        (binding.rvLibraryItems.layoutManager as? androidx.recyclerview.widget.LinearLayoutManager)
+                        (binding.rvLibraryItems.layoutManager as? LinearLayoutManager)
                             ?.scrollToPositionWithOffset(0, 0)
                     }
                 }
@@ -460,41 +499,58 @@ class LibraryFragment : Fragment() {
 
         val dm = SongDownloadManager.getInstance(requireContext())
 
-        // Agregar Playlists descargadas (excluyendo 'liked_songs')
-        for (pl in playlistsMap.values) {
-            if (pl.id == "liked_songs") continue
-            val cached = downloadedPlaylistsCache[pl.id]
-            val isDownloaded = if (cached != null) {
-                cached
-            } else {
-                var fullyDownloaded = false
-                musicRepository.getPlaylistSongs(pl.id).onSuccess { songs ->
-                    fullyDownloaded = songs.isNotEmpty() && songs.all { song ->
-                        val path = dm.createDownloadPath(song)
-                        File(path).exists()
+        // Agregar Playlists descargadas (incluyendo públicas) y excluyendo 'liked_songs'
+        try {
+            val allPlaylists = musicRepository.getPlaylists().getOrNull().orEmpty()
+            for (pl in allPlaylists) {
+                // 'liked_songs' is a synthetic item, not part of API; skip by safety check
+                if (pl.id == "liked_songs") continue
+
+                val cached = downloadedPlaylistsCache[pl.id]
+                val isDownloaded = if (cached != null) {
+                    cached
+                } else {
+                    var fullyDownloaded = false
+                    musicRepository.getPlaylistSongs(pl.id).onSuccess { songs ->
+                        fullyDownloaded = songs.isNotEmpty() && songs.all { song ->
+                            val path = dm.createDownloadPath(song)
+                            File(path).exists()
+                        }
+                    }
+                    downloadedPlaylistsCache[pl.id] = fullyDownloaded
+                    fullyDownloaded
+                }
+
+                if (isDownloaded) {
+                    // Try to reuse prepared LibraryItem from 'playlists' list (private ones)
+                    val existing = playlists.find { it.id == pl.id }
+                    if (existing != null) {
+                        downloads.add(existing)
+                    } else {
+                        // Build a minimal LibraryItem for public playlists
+                        val subtitle = if (pl.songCount > 0) "Playlist • ${pl.songCount} canciones" else "Playlist"
+                        var imageUrl: String? = null
+                        try {
+                            if (pl.coverArt != null && musicRepository.serverUrl != null) {
+                                val (u, t, s) = musicRepository.getAuthParams()
+                                imageUrl = pl.getCoverArtUrl(musicRepository.serverUrl!!, u, t, s, 200)
+                            }
+                        } catch (_: Exception) { /* ignore */ }
+
+                        downloads.add(
+                            LibraryItem(
+                                id = pl.id,
+                                title = pl.name,
+                                subtitle = subtitle,
+                                imageUrl = imageUrl,
+                                type = LibraryItemType.PLAYLIST
+                            )
+                        )
                     }
                 }
-                downloadedPlaylistsCache[pl.id] = fullyDownloaded
-                fullyDownloaded
             }
-
-            if (isDownloaded) {
-                // Buscar el LibraryItem ya preparado para la playlist
-                playlists.find { it.id == pl.id }?.let { item ->
-                    downloads.add(item)
-                } ?: run {
-                    // Fallback simple
-                    downloads.add(
-                        LibraryItem(
-                            id = pl.id,
-                            title = pl.name,
-                            subtitle = "Playlist",
-                            imageUrl = null,
-                            type = LibraryItemType.PLAYLIST
-                        )
-                    )
-                }
-            }
+        } catch (_: Exception) {
+            // ignore playlist download computation errors; keep others
         }
 
         // Agregar Álbumes descargados
@@ -603,6 +659,13 @@ class LibraryFragment : Fragment() {
                             putString("playlistName", playlist.name)
                         }
                         findNavController().navigate(R.id.action_library_to_playlistDetail, bundle)
+                    } else {
+                        // Fallback: downloaded public playlist not present in playlists list
+                        val bundle = Bundle().apply {
+                            putString("playlistId", item.id)
+                            putString("playlistName", item.title)
+                        }
+                        findNavController().navigate(R.id.action_library_to_playlistDetail, bundle)
                     }
                 }
                 LibraryItemType.ARTIST -> {
@@ -638,6 +701,7 @@ class LibraryFragment : Fragment() {
         binding.rvLibraryItems.visibility = if (show) View.GONE else View.VISIBLE
     }
 
+    @Suppress("UNUSED_PARAMETER")
     private fun showError(message: String) {
         if (_binding == null) return
         binding.layoutEmpty.visibility = View.VISIBLE

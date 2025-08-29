@@ -109,6 +109,9 @@ class PlaylistDetailFragment : Fragment() {
             return
         }
 
+        // Hide More by default; will be shown only if playlist is not public
+        binding.btnMore.visibility = View.GONE
+
         setupToolbar()
         setupRecyclerView()
         setupFab()
@@ -325,6 +328,10 @@ class PlaylistDetailFragment : Fragment() {
             musicRepository.getPlaylistInfo(id).onSuccess { info ->
                 playlistInfo = info
                 binding.tvTitle.text = info.name
+
+                // Show or hide More depending on public status
+                binding.btnMore.visibility = if (info.public) View.GONE else View.VISIBLE
+
                 // Cover art - Cargar tanto para mostrar como para extraer Palette
                 val (username, token, salt) = musicRepository.getAuthParams()
                 val coverUrl = info.getCoverArtUrl(
