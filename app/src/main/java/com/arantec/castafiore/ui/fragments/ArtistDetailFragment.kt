@@ -40,9 +40,9 @@ import com.bumptech.glide.request.transition.Transition
 import android.graphics.drawable.Drawable
 import java.util.Locale
 import kotlin.math.max
-import kotlin.math.min
 import kotlin.random.Random
 import com.arantec.castafiore.utils.snack
+import androidx.core.content.ContextCompat
 
 class ArtistDetailFragment : Fragment() {
 
@@ -224,7 +224,7 @@ class ArtistDetailFragment : Fragment() {
     private fun loadArtistData() {
         showLoading(true)
 
-        lifecycleScope.launch {
+        viewLifecycleOwner.lifecycleScope.launch {
             try {
                 // Cargar información del artista
                 loadArtistInfo()
@@ -259,6 +259,7 @@ class ArtistDetailFragment : Fragment() {
         )
 
         withContext(Dispatchers.Main) {
+            if (!isAdded || _binding == null) return@withContext
             binding.tvArtistName.text = artist?.name
             // No establecer título en toolbar/collapsingToolbar ya que titleEnabled="false"
 
@@ -280,6 +281,7 @@ class ArtistDetailFragment : Fragment() {
                 }
 
                 withContext(Dispatchers.Main) {
+                    if (!isAdded || _binding == null) return@withContext
                     // Mostrar TODOS los álbumes, no solo los primeros 10
                     albumAdapter.updateAlbums(albums)
                     updateArtistInfo()
@@ -287,6 +289,7 @@ class ArtistDetailFragment : Fragment() {
             },
             onFailure = {
                 withContext(Dispatchers.Main) {
+                    if (!isAdded || _binding == null) return@withContext
                     showError("Error al cargar álbumes")
                 }
             }
@@ -303,11 +306,13 @@ class ArtistDetailFragment : Fragment() {
             onSuccess = { songs ->
                 topSongs = songs
                 withContext(Dispatchers.Main) {
+                    if (!isAdded || _binding == null) return@withContext
                     updateSongsListUI()
                 }
             },
             onFailure = { error ->
                 withContext(Dispatchers.Main) {
+                    if (!isAdded || _binding == null) return@withContext
                     showError("Error al cargar canciones populares: ${error.message}")
                 }
             }
@@ -323,6 +328,7 @@ class ArtistDetailFragment : Fragment() {
             onSuccess = { list ->
                 similarArtists = list
                 withContext(Dispatchers.Main) {
+                    if (!isAdded || _binding == null) return@withContext
                     if (list.isNotEmpty()) {
                         binding.similarArtistsSection.visibility = View.VISIBLE
                         similarAdapter.submit(list)
@@ -333,6 +339,7 @@ class ArtistDetailFragment : Fragment() {
             },
             onFailure = {
                 withContext(Dispatchers.Main) {
+                    if (!isAdded || _binding == null) return@withContext
                     binding.similarArtistsSection.visibility = View.GONE
                 }
             }
@@ -507,6 +514,7 @@ class ArtistDetailFragment : Fragment() {
         // Aplicar el color estático predeterminado al fondo y status bar
         val staticColor = "#121212".toColorInt()
 
+        if (!isAdded || _binding == null) return
         binding.gradientBackground.setBackgroundColor(staticColor)
         binding.collapsingToolbar.setContentScrimColor(staticColor)
         binding.collapsingToolbar.setStatusBarScrimColor(staticColor)
@@ -525,7 +533,8 @@ class ArtistDetailFragment : Fragment() {
     }
 
     private fun checkFollowStatus() {
-        lifecycleScope.launch {
+        // Launch on viewLifecycleOwner scope so it's cancelled when the view is destroyed
+        viewLifecycleOwner.lifecycleScope.launch {
             try {
                 val result = withContext(Dispatchers.IO) {
                     musicRepository.isArtistStarred(artistId ?: "")
@@ -534,41 +543,41 @@ class ArtistDetailFragment : Fragment() {
                 result.fold(
                     onSuccess = { starred ->
                         isFollowing = starred
-                        // Asegurar visibilidad/uso tras la verificación
-                        binding.btnFollow.visibility = View.VISIBLE
-                        binding.btnFollow.isEnabled = true
-                        updateFollowButton()
+                        // Only touch UI if the view still exists
+                        val hasView = isAdded && _binding != null
+                        if (hasView) {
+                            _binding?.btnFollow?.visibility = View.VISIBLE
+                            _binding?.btnFollow?.isEnabled = true
+                            updateFollowButton()
+                        }
                     },
                     onFailure = {
                         isFollowing = false
-                        binding.btnFollow.visibility = View.VISIBLE
-                        binding.btnFollow.isEnabled = true
-                        updateFollowButton()
+                        val hasView = isAdded && _binding != null
+                        if (hasView) {
+                            _binding?.btnFollow?.visibility = View.VISIBLE
+                            _binding?.btnFollow?.isEnabled = true
+                            updateFollowButton()
+                        }
                     }
                 )
             } catch (_: Exception) {
                 isFollowing = false
-                binding.btnFollow.visibility = View.VISIBLE
-                binding.btnFollow.isEnabled = true
-                updateFollowButton()
+                val hasView = isAdded && _binding != null
+                if (hasView) {
+                    _binding?.btnFollow?.visibility = View.VISIBLE
+                    _binding?.btnFollow?.isEnabled = true
+                    updateFollowButton()
+                }
             }
-        }
-    }
-
-    private fun updateFollowButton() {
-        if (isFollowing) {
-            binding.btnFollow.setImageResource(R.drawable.ic_favorite)
-            binding.btnFollow.setColorFilter("#FF2D55".toColorInt()) // Color principal
-        } else {
-            binding.btnFollow.setImageResource(R.drawable.ic_favorite_border)
-            binding.btnFollow.setColorFilter("#B3FFFFFF".toColorInt()) // Color texto secundario
         }
     }
 
     private fun toggleFollowArtist() {
         // Deshabilitar mientras se procesa para evitar taps repetidos y parpadeo
         binding.btnFollow.isEnabled = false
-        lifecycleScope.launch {
+        // Launch on viewLifecycleOwner scope so it cancels when the view is destroyed
+        viewLifecycleOwner.lifecycleScope.launch {
             try {
                 val result = withContext(Dispatchers.IO) {
                     if (isFollowing) {
@@ -581,19 +590,34 @@ class ArtistDetailFragment : Fragment() {
                 result.fold(
                     onSuccess = {
                         isFollowing = !isFollowing
-                        updateFollowButton()
-                        binding.btnFollow.isEnabled = true
+                        if (_binding != null) {
+                            updateFollowButton()
+                            _binding?.btnFollow?.isEnabled = true
+                        }
                     },
                     onFailure = {
-                        binding.btnFollow.isEnabled = true
-                        showError("Error al actualizar el estado de seguimiento")
+                        if (_binding != null) {
+                            _binding?.btnFollow?.isEnabled = true
+                            showError("Error al actualizar el estado de seguimiento")
+                        }
                     }
                 )
             } catch (_: Exception) {
-                binding.btnFollow.isEnabled = true
-                showError("Error al actualizar el estado de seguimiento")
+                if (_binding != null) {
+                    _binding?.btnFollow?.isEnabled = true
+                    showError("Error al actualizar el estado de seguimiento")
+                }
             }
         }
+    }
+
+    // Ensure the service is started in foreground-capable mode before playback
+    private fun startServiceForPlayback() {
+        try {
+            val ctx = requireContext()
+            val intent = Intent(ctx, MusicService::class.java)
+            ContextCompat.startForegroundService(ctx, intent)
+        } catch (_: Exception) { /* ignore */ }
     }
 
     private fun playArtistTopSongs() {
@@ -601,6 +625,9 @@ class ArtistDetailFragment : Fragment() {
             showMessage("No hay canciones disponibles")
             return
         }
+
+        // Ensure service is started as FGS before any playback actions (Android 8.0+)
+        startServiceForPlayback()
 
         if (!isBound || musicService == null) {
             bindMusicService()
@@ -640,6 +667,9 @@ class ArtistDetailFragment : Fragment() {
     }
 
     private fun playSong(song: Song) {
+        // Ensure service is started as FGS before any playback actions
+        startServiceForPlayback()
+
         if (!isBound || musicService == null) {
             bindMusicService()
             return
@@ -1037,5 +1067,17 @@ class ArtistDetailFragment : Fragment() {
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
         outState.putBoolean("songsExpanded", isSongsExpanded)
+    }
+
+    private fun updateFollowButton() {
+        // Guard against destroyed view
+        if (!isAdded || _binding == null) return
+        if (isFollowing) {
+            _binding?.btnFollow?.setImageResource(R.drawable.ic_favorite)
+            _binding?.btnFollow?.setColorFilter("#FF2D55".toColorInt()) // Color principal
+        } else {
+            _binding?.btnFollow?.setImageResource(R.drawable.ic_favorite_border)
+            _binding?.btnFollow?.setColorFilter("#B3FFFFFF".toColorInt()) // Color texto secundario
+        }
     }
 }

@@ -153,4 +153,5 @@
     <string name="storage_delete_error">No se pudieron eliminar todas las descargas</string>
     <string name="storage_clear_cache_success">Caché borrada</string>
     <string name="storage_clear_cache_error">Error al borrar caché</string>
+    <string name="castafiore_music">Castafiore Music</string>
 </resources>

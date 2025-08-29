@@ -1,16 +1,19 @@
 package com.arantec.castafiore.ui.activities
 
 import android.content.Intent
+import android.os.Build
 import android.os.Bundle
 import android.view.View
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import androidx.core.view.WindowCompat
 import androidx.lifecycle.lifecycleScope
 import com.arantec.castafiore.R
 import com.arantec.castafiore.data.network.NavidromeClient
 import com.arantec.castafiore.data.repository.MusicRepository
 import com.arantec.castafiore.databinding.ActivitySetupBinding
 import com.arantec.castafiore.utils.StatusBarUtils
+import android.view.WindowInsetsController
 import kotlinx.coroutines.launch
 
 class SetupActivity : AppCompatActivity() {
@@ -22,11 +25,51 @@ class SetupActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // Force system bar colors and disable edge-to-edge on Android 14+
+        if (Build.VERSION.SDK_INT >= 34) {
+            window.addFlags(android.view.WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS)
+            window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS)
+            window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_TRANSLUCENT_NAVIGATION)
+
+            val darkColor = ContextCompat.getColor(this, R.color.background_primary)
+            window.statusBarColor = darkColor
+            window.navigationBarColor = darkColor
+
+            // Prevent content from drawing under system bars
+            WindowCompat.setDecorFitsSystemWindows(window, true)
+        }
+
         binding = ActivitySetupBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
         // Ensure consistent status bar color
         StatusBarUtils.setStatusBarColor(this)
+        // Ensure content does not draw under the status bar (adds top padding on API 34+)
+        StatusBarUtils.applyStatusBarTopPadding(binding.root)
+
+        // Post-enforcement for stubborn devices (API 34+)
+        if (Build.VERSION.SDK_INT >= 34) {
+            binding.root.post {
+                val darkColor = ContextCompat.getColor(this, R.color.background_primary)
+                window.statusBarColor = darkColor
+                window.navigationBarColor = darkColor
+
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                    window.insetsController?.setSystemBarsAppearance(
+                        0,
+                        WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS or
+                                WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS
+                    )
+                } else {
+                    var flags = window.decorView.systemUiVisibility
+                    flags = flags and View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR.inv()
+                    window.decorView.systemUiVisibility = flags
+                }
+
+                window.decorView.setBackgroundColor(darkColor)
+            }
+        }
 
         musicRepository = MusicRepository.getInstance(this)
 

@@ -30,10 +30,11 @@
         <item name="android:textColorSecondary">@color/dark_on_surface_variant</item>
 
         <!-- Barra de estado y navegación - MODO OSCURO -->
-        <item name="android:statusBarColor">@color/dark_background</item>
-        <item name="android:navigationBarColor">@color/dark_background</item>
+        <item name="android:statusBarColor">@color/background_primary</item>
+        <item name="android:navigationBarColor">@color/background_primary</item>
         <item name="android:windowLightStatusBar">false</item>
         <item name="android:windowLightNavigationBar" tools:targetApi="27">false</item>
+        <item name="android:windowDrawsSystemBarBackgrounds">true</item>
 
         <!-- Outline para modo oscuro -->
         <item name="colorOutline">@color/dark_outline</item>

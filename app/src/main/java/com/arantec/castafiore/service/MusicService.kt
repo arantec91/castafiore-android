@@ -37,6 +37,9 @@ import com.arantec.castafiore.ui.activities.PlayerActivity
 import com.google.android.exoplayer2.source.DefaultMediaSourceFactory
 import com.google.android.exoplayer2.audio.AudioAttributes
 import com.arantec.castafiore.data.lyrics.LyricsProvider
+import android.os.Handler
+import android.os.Looper
+import android.os.SystemClock
 
 class MusicService : Service() {
 
@@ -397,6 +400,7 @@ class MusicService : Service() {
         exoPlayer?.pause()
         showOrUpdateNotification()
         stopProgressUpdates()
+        // Leaving FGS is handled inside showOrUpdateNotification; ensure flag resets
     }
 
     fun stop() {
@@ -406,7 +410,8 @@ class MusicService : Service() {
         updatePlaybackState()
         notifyPlaybackStateChanged(false)
         exoPlayer?.stop()
-        stopForeground(true)
+        try { stopForeground(true) } catch (_: Exception) {}
+        isInForegroundNotification = false
         (getSystemService(NOTIFICATION_SERVICE) as NotificationManager).cancel(NOTIFICATION_ID)
         stopSelf()
         stopProgressUpdates()
@@ -584,12 +589,22 @@ class MusicService : Service() {
 
     private fun pendingService(action: String, requestCode: Int): PendingIntent {
         val intent = Intent(this, MusicService::class.java).apply { this.action = action }
-        return PendingIntent.getService(
-            this,
-            requestCode,
-            intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            // Ensure a foreground-start when launched from notification actions (Android 12+ compliant)
+            PendingIntent.getForegroundService(
+                this,
+                requestCode,
+                intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+        } else {
+            PendingIntent.getService(
+                this,
+                requestCode,
+                intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+        }
     }
 
     private fun buildBaseNotification(largeIcon: Bitmap? = null): NotificationCompat.Builder {
@@ -597,10 +612,12 @@ class MusicService : Service() {
         val title = song?.title ?: getString(R.string.app_name)
         val artist = song?.artist ?: ""
 
+        // Decide UI state based on playWhenReady so buffering still shows Pause
+        val showingPause = exoPlayer?.playWhenReady == true
+
         val playPauseAction = NotificationCompat.Action(
-            if (isPlaying) R.drawable.ic_pause else R.drawable.ic_play,
-            if (isPlaying) getString(R.string.pause) else getString(R.string.play),
-            // Use explicit immutable PendingIntent to avoid Android 12+ mutability crashes
+            if (showingPause) R.drawable.ic_pause else R.drawable.ic_play,
+            if (showingPause) getString(R.string.pause) else getString(R.string.play),
             pendingService(ACTION_TOGGLE, /*requestCode*/ 100)
         )
         val prevAction = NotificationCompat.Action(
@@ -637,15 +654,63 @@ class MusicService : Service() {
         return builder
     }
 
-    private fun showOrUpdateNotification() {
-        val nm = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
-        val isForeground = isPlaying
+    private var isInForegroundNotification: Boolean = false
 
-        // Cargar carátula en background y actualizar notificación
+    private fun showOrUpdateNotification() {
+        // Throttle excessive updates (except when we must enter FGS immediately)
+        val now = SystemClock.uptimeMillis()
+        val wantsForeground = exoPlayer?.playWhenReady == true
+        val enteringFg = wantsForeground && !isInForegroundNotification
+        if (!enteringFg && now - lastNotifPostedAt < 200L) {
+            if (!pendingNotifUpdate) {
+                pendingNotifUpdate = true
+                mainHandler.postDelayed({
+                    pendingNotifUpdate = false
+                    showOrUpdateNotification()
+                }, 200L)
+            }
+            return
+        }
+        lastNotifPostedAt = now
+
+        val nm = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
         val song = currentSong
+
+        // Build a minimal notification immediately (no artwork) to satisfy FGS time limit
+        val minimalNotification = buildBaseNotification(null).build()
+
+        if (wantsForeground) {
+            if (!isInForegroundNotification) {
+                try {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                        startForeground(
+                            NOTIFICATION_ID,
+                            minimalNotification,
+                            ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
+                        )
+                    } else {
+                        startForeground(NOTIFICATION_ID, minimalNotification)
+                    }
+                    isInForegroundNotification = true
+                } catch (_: Throwable) {
+                    // Fallback: just post the notification; avoid crashing
+                    nm.notify(NOTIFICATION_ID, minimalNotification)
+                }
+            } else {
+                // Already in foreground: update minimal first
+                nm.notify(NOTIFICATION_ID, minimalNotification)
+            }
+        } else {
+            // Not playing or playWhenReady=false: show as non-foreground and stop FGS if needed
+            nm.notify(NOTIFICATION_ID, minimalNotification)
+            try { stopForeground(false) } catch (_: Exception) {}
+            isInForegroundNotification = false
+        }
+
+        // If we have a song, asynchronously load artwork and update the notification content
         if (song != null) {
             CoroutineScope(Dispatchers.IO).launch {
-                // Preferir portada local si existe
+                // Prefer local cover if exists
                 val dm = com.arantec.castafiore.data.download.SongDownloadManager.getInstance(this@MusicService)
                 val coverPath = try { dm.createCoverPath(song) } catch (_: Exception) { null }
                 var bitmap: android.graphics.Bitmap? = null
@@ -670,31 +735,14 @@ class MusicService : Service() {
                 }
 
                 withContext(Dispatchers.Main) {
-                    val notification = buildBaseNotification(bitmap).build()
-                    if (isForeground) {
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                            startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK)
-                        } else {
-                            startForeground(NOTIFICATION_ID, notification)
-                        }
-                    } else {
-                        nm.notify(NOTIFICATION_ID, notification)
-                        // Mantener notificación visible pero quitar foreground si está pausado
-                        stopForeground(false)
+                    // Coalesce artwork updates too
+                    val now2 = SystemClock.uptimeMillis()
+                    if (now2 - lastNotifPostedAt < 150L) {
+                        lastNotifPostedAt = now2
                     }
+                    val updated = buildBaseNotification(bitmap).build()
+                    nm.notify(NOTIFICATION_ID, updated)
                 }
-            }
-        } else {
-            val notification = buildBaseNotification(null).build()
-            if (isForeground) {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK)
-                } else {
-                    startForeground(NOTIFICATION_ID, notification)
-                }
-            } else {
-                nm.notify(NOTIFICATION_ID, notification)
-                stopForeground(false)
             }
         }
     }
@@ -1045,6 +1093,11 @@ class MusicService : Service() {
     enum class SourceType { ALBUM, ARTIST, PLAYLIST, FAVORITES, SONGS, UNKNOWN }
 
     private var playbackSource: PlaybackSource? = null
+
+    // Notification update throttling state
+    private val mainHandler = android.os.Handler(Looper.getMainLooper())
+    private var lastNotifPostedAt: Long = 0L
+    private var pendingNotifUpdate: Boolean = false
 
     // Helper: add only the immediate next song as a queued MediaItem
     private fun enqueueNextMediaItem() {
