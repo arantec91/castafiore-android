@@ -48,7 +48,7 @@
         <activity
             android:name=".ui.activities.PlayerActivity"
             android:exported="false"
-            android:theme="@style/Theme.Castafiore"
+            android:theme="@style/Theme.Castafiore.Player"
             android:launchMode="singleTask"
             android:screenOrientation="portrait" />
 

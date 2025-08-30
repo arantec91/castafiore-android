@@ -141,4 +141,17 @@
         <item name="android:textColorPrimary">@color/text_primary</item>
         <item name="android:textColorSecondary">@color/text_secondary</item>
     </style>
+
+    <!-- Animaciones de ventana específicas para PlayerActivity -->
+    <style name="Animation.Castafiore.Player" parent="@android:style/Animation.Activity">
+        <item name="android:activityOpenEnterAnimation">@anim/slide_in_up</item>
+        <item name="android:activityOpenExitAnimation">@anim/hold</item>
+        <item name="android:activityCloseEnterAnimation">@anim/hold</item>
+        <item name="android:activityCloseExitAnimation">@anim/slide_out_down</item>
+    </style>
+
+    <!-- Tema específico para PlayerActivity con animaciones de entrada/salida -->
+    <style name="Theme.Castafiore.Player" parent="Theme.Castafiore">
+        <item name="android:windowAnimationStyle">@style/Animation.Castafiore.Player</item>
+    </style>
 </resources>
