@@ -11,8 +11,7 @@
         android:id="@+id/appBarLayout"
         android:layout_width="match_parent"
         android:layout_height="400dp"
-        android:fitsSystemWindows="true"
-        android:background="#121212"
+        android:background="@color/dark_background"
         app:elevation="4dp">
 
         <com.google.android.material.appbar.CollapsingToolbarLayout
@@ -21,11 +20,9 @@
             android:layout_height="match_parent"
             app:contentScrim="#121212"
             app:statusBarScrim="#121212"
-            app:layout_scrollFlags="scroll|exitUntilCollapsed"
-            app:expandedTitleMarginStart="16dp"
-            app:expandedTitleMarginEnd="16dp"
-            app:titleEnabled="false"
             app:scrimAnimationDuration="200"
+            app:layout_scrollFlags="scroll|exitUntilCollapsed"
+            app:titleEnabled="false"
             app:expandedTitleGravity="bottom">
 
             <androidx.constraintlayout.widget.ConstraintLayout
@@ -35,7 +32,7 @@
                 app:layout_collapseMode="parallax"
                 app:layout_collapseParallaxMultiplier="0.8">
 
-                <!-- Fondo dinámico detrás de la imagen del artista -->
+                <!-- Fondo dinámico detrás de la imagen del artista (se conserva) -->
                 <View
                     android:id="@+id/gradientBackground"
                     android:layout_width="match_parent"
@@ -43,51 +40,66 @@
                     android:background="#121212"
                     android:elevation="0dp" />
 
-                <!-- Imagen del artista debajo de la Toolbar -->
+                <!-- Overlay superior para legibilidad del toolbar -->
+                <View
+                    android:id="@+id/headerTopScrim"
+                    android:layout_width="match_parent"
+                    android:layout_height="120dp"
+                    android:background="@drawable/gradient_header_top"
+                    app:layout_constraintTop_toTopOf="parent" />
+
+                <!-- Imagen del artista centrada tipo avatar circular -->
                 <ImageView
                     android:id="@+id/ivArtistImage"
-                    android:layout_width="@dimen/artist_image_size"
-                    android:layout_height="@dimen/artist_image_size"
+                    android:layout_width="280dp"
+                    android:layout_height="280dp"
                     android:scaleType="centerCrop"
                     android:clipToOutline="true"
+                    android:outlineProvider="background"
+                    android:background="@drawable/circle_avatar_bg"
                     android:src="@drawable/ic_person"
                     android:contentDescription="@string/artist_avatar"
                     android:elevation="8dp"
+                    app:layout_constraintTop_toTopOf="parent"
+                    app:layout_constraintBottom_toBottomOf="parent"
                     app:layout_constraintStart_toStartOf="parent"
                     app:layout_constraintEnd_toEndOf="parent"
-                    app:layout_constraintTop_toTopOf="parent"
-                    android:layout_marginTop="?attr/actionBarSize" />
+                    android:layout_marginTop="32dp"
+                    android:layout_marginBottom="96dp" />
 
-                <!-- Botón Reproducir debajo de la imagen del artista (separado) -->
+                <!-- Botón Reproducir CTA en esquina inferior derecha del header -->
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btnPlay"
-                    android:layout_width="@dimen/artist_image_size"
-                    android:layout_height="wrap_content"
+                    android:layout_width="280dp"
+                    android:layout_height="48dp"
+                    android:minWidth="0dp"
+                    android:paddingHorizontal="24dp"
                     android:text="@string/play"
                     android:textAllCaps="false"
                     android:textColor="#FFFFFF"
-                    app:backgroundTint="#FF2D55"
+                    app:backgroundTint="@color/primary"
                     app:cornerRadius="24dp"
                     app:iconPadding="8dp"
-                    app:layout_constraintTop_toBottomOf="@id/ivArtistImage"
-                    android:layout_marginTop="24dp"
                     app:layout_constraintStart_toStartOf="parent"
                     app:layout_constraintEnd_toEndOf="parent"
-                    android:shadowColor="#66000000"
-                    android:shadowDx="0"
-                    android:shadowDy="1.5"
-                    android:shadowRadius="3" />
+                    app:layout_constraintBottom_toBottomOf="parent"
+                    android:layout_marginBottom="16dp"
+                    android:elevation="8dp" />
+
+                <!-- Overlay inferior para transición con el contenido -->
+
 
             </androidx.constraintlayout.widget.ConstraintLayout>
 
-            <!-- Toolbar -->
+            <!-- Toolbar (fijo) -->
             <androidx.appcompat.widget.Toolbar
                 android:id="@+id/toolbar"
                 android:layout_width="match_parent"
                 android:layout_height="?attr/actionBarSize"
                 app:layout_collapseMode="pin"
                 app:navigationIcon="@drawable/ic_arrow_back"
-                app:navigationIconTint="#FFFFFF" />
+                app:navigationIconTint="#FFFFFF"
+                android:background="@android:color/transparent" />
 
         </com.google.android.material.appbar.CollapsingToolbarLayout>
 
@@ -113,8 +125,7 @@
             <RelativeLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:paddingStart="20dp"
-                android:paddingEnd="20dp"
+                android:paddingHorizontal="16dp"
                 android:paddingTop="12dp"
                 android:paddingBottom="16dp">
 
@@ -169,7 +180,8 @@
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
                 android:layout_marginBottom="32dp"
-                android:paddingStart="20dp">
+                android:paddingStart="16dp"
+                android:paddingEnd="0dp">
 
                 <TextView
                     android:layout_width="match_parent"
@@ -187,7 +199,7 @@
                     android:orientation="horizontal"
                     android:clipToPadding="false"
                     android:paddingStart="0dp"
-                    android:paddingEnd="8dp"
+                    android:paddingEnd="0dp"
                     tools:listitem="@layout/item_album_horizontal" />
 
             </LinearLayout>
@@ -206,7 +218,7 @@
                     android:textSize="20sp"
                     android:textStyle="bold"
                     android:layout_marginBottom="16dp"
-                    android:paddingHorizontal="20dp" />
+                    android:paddingHorizontal="16dp" />
 
                 <!-- Contenedor para la lista y el overlay de degradado -->
                 <FrameLayout
@@ -219,8 +231,7 @@
                         android:layout_height="wrap_content"
                         android:nestedScrollingEnabled="false"
                         android:clipToPadding="false"
-                        android:paddingStart="0dp"
-                        android:paddingEnd="0dp"
+                        android:paddingHorizontal="16dp"
                         tools:listitem="@layout/item_song" />
 
                     <!-- Overlay de degradado para indicar más contenido -->
@@ -258,7 +269,8 @@
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
                 android:layout_marginTop="24dp"
-                android:paddingStart="20dp"
+                android:paddingStart="16dp"
+                android:paddingEnd="0dp"
                 android:visibility="gone">
 
                 <TextView
@@ -277,7 +289,7 @@
                     android:orientation="horizontal"
                     android:clipToPadding="false"
                     android:paddingStart="0dp"
-                    android:paddingEnd="8dp"
+                    android:paddingEnd="0dp"
                     tools:listitem="@layout/item_artist_horizontal" />
 
             </LinearLayout>
