@@ -22,6 +22,7 @@
             app:contentScrim="#121212"
             app:statusBarScrim="#121212"
             app:scrimAnimationDuration="200"
+            app:expandedTitleGravity="bottom"
             app:layout_scrollFlags="scroll|exitUntilCollapsed"
             app:titleEnabled="false">
 
@@ -76,7 +77,8 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
-            android:paddingBottom="100dp">
+            android:paddingBottom="16dp"
+            >
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -160,6 +162,21 @@
                     android:src="@drawable/ic_more_vert"
                     app:tint="@color/white"
                     app:layout_constraintStart_toEndOf="@id/btnDownloadContainer"
+                    app:layout_constraintTop_toTopOf="parent"
+                    app:layout_constraintBottom_toBottomOf="parent" />
+
+                <!-- Favorite button: only visible for public playlists -->
+                <ImageButton
+                    android:id="@+id/btnFavorite"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:layout_marginStart="16dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="@string/add_to_favorites"
+                    android:src="@drawable/ic_favorite_border"
+                    android:visibility="gone"
+                    app:tint="@color/white"
+                    app:layout_constraintStart_toEndOf="@id/btnMore"
                     app:layout_constraintTop_toTopOf="parent"
                     app:layout_constraintBottom_toBottomOf="parent" />
 

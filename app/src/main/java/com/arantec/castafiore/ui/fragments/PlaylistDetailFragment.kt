@@ -25,6 +25,7 @@ import com.arantec.castafiore.service.MusicService
 import com.arantec.castafiore.ui.adapters.SongAdapter
 import com.arantec.castafiore.utils.ImageLoader
 import com.arantec.castafiore.utils.StatusBarUtils
+import com.arantec.castafiore.utils.PlaylistFavoritesManager
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.Dispatchers
@@ -133,6 +134,15 @@ class PlaylistDetailFragment : Fragment() {
         // Defer binding to onStart so only visible fragment attaches listeners
         // bindMusicService()
         loadPlaylist()
+
+        // Favorite button toggling
+        binding.btnFavorite.setOnClickListener {
+            val nowFav = PlaylistFavoritesManager.toggleFavorite(requireContext(), playlistId)
+            binding.btnFavorite.setImageResource(if (nowFav) R.drawable.ic_favorite else R.drawable.ic_favorite_border)
+            // Tint to primary when favorited, white otherwise
+            val tintColor = if (nowFav) R.color.primary else R.color.white
+            binding.btnFavorite.imageTintList = ColorStateList.valueOf(ContextCompat.getColor(requireContext(), tintColor))
+        }
     }
 
     private fun setupMoreButton() {
@@ -339,6 +349,8 @@ class PlaylistDetailFragment : Fragment() {
 
                 // Show or hide More depending on public status
                 binding.btnMore.visibility = if (info.public) View.GONE else View.VISIBLE
+                // Update favorites button for public playlists
+                updateFavoriteButtonVisibilityAndState()
 
                 // Cover art - Cargar tanto para mostrar como para extraer Palette
                 val (username, token, salt) = musicRepository.getAuthParams()
@@ -823,5 +835,18 @@ class PlaylistDetailFragment : Fragment() {
             else -> "Se eliminaron $deleted descargas"
         }
         snack(msg)
+    }
+
+    private fun updateFavoriteButtonVisibilityAndState() {
+        val info = playlistInfo
+        if (info?.public == true) {
+            binding.btnFavorite.visibility = View.VISIBLE
+            val isFav = PlaylistFavoritesManager.isFavorite(requireContext(), playlistId)
+            binding.btnFavorite.setImageResource(if (isFav) R.drawable.ic_favorite else R.drawable.ic_favorite_border)
+            val tintColor = if (isFav) R.color.primary else R.color.white
+            binding.btnFavorite.imageTintList = ColorStateList.valueOf(ContextCompat.getColor(requireContext(), tintColor))
+        } else {
+            binding.btnFavorite.visibility = View.GONE
+        }
     }
 }

@@ -21,6 +21,7 @@ import com.arantec.castafiore.utils.ImageLoader
 import com.arantec.castafiore.utils.StatusBarUtils
 import com.google.android.material.chip.Chip
 import com.arantec.castafiore.data.download.SongDownloadManager
+import com.arantec.castafiore.utils.PlaylistFavoritesManager
 import java.io.File
 
 class LibraryFragment : Fragment() {
@@ -255,6 +256,7 @@ class LibraryFragment : Fragment() {
             val result = musicRepository.getPlaylists()
             result.onSuccess { playlistsFromApi ->
                 val dm = SongDownloadManager.getInstance(requireContext())
+                val favorites = PlaylistFavoritesManager.getFavorites(requireContext())
 
                 // 1) Playlists privadas (siempre)
                 playlistsFromApi.filter { !it.public }.forEach { playlist ->
@@ -320,6 +322,29 @@ class LibraryFragment : Fragment() {
                             )
                             // Nota: no añadimos al playlistsMap para distinguir privadas vs públicas; navegación hace fallback
                         }
+                    }
+                }
+
+                // 3) Playlists públicas marcadas como favoritas: incluir aunque no estén descargadas
+                playlistsFromApi.filter { it.public && favorites.contains(it.id) }.forEach { playlist ->
+                    if (playlists.none { it.id == playlist.id }) {
+                        var imageUrl: String? = null
+                        if (playlist.coverArt != null && musicRepository.serverUrl != null) {
+                            val (u, t, s) = musicRepository.getAuthParams()
+                            imageUrl = playlist.getCoverArtUrl(musicRepository.serverUrl!!, u, t, s, 200)
+                        }
+                        val subtitle = if (playlist.songCount > 0) "Playlist • ${playlist.songCount} canciones" else "Playlist"
+                        playlists.add(
+                            LibraryItem(
+                                id = playlist.id,
+                                title = playlist.name,
+                                subtitle = subtitle,
+                                imageUrl = imageUrl,
+                                type = LibraryItemType.PLAYLIST
+                            )
+                        )
+                        // Añadir al mapa para navegación completa
+                        playlistsMap[playlist.id] = playlist
                     }
                 }
             }.onFailure {
@@ -739,6 +764,15 @@ class LibraryFragment : Fragment() {
             applyCheckedChipFromFilter()
             // Re-evaluar descargas por si cambiaron fuera de este fragmento (sin forzar si ya está calculado)
             updateDownloadsChipVisibility(force = false)
+
+            // Refrescar listas para reflejar cambios de favoritos de playlists públicas
+            viewLifecycleOwner.lifecycleScope.launch {
+                try {
+                    loadPlaylists()
+                    buildAllItemsList()
+                    filterContent()
+                } catch (_: Exception) { /* ignore refresh errors */ }
+            }
         }
     }
 
