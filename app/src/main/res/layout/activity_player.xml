@@ -42,7 +42,7 @@
                     android:layout_height="48dp"
                     android:background="?attr/selectableItemBackgroundBorderless"
                     android:contentDescription="Volver"
-                    android:src="@drawable/ic_arrow_back"
+                    android:src="@drawable/ic_chevron_down"
                     app:tint="@color/text_primary" />
 
                 <!-- Centro: título y origen -->
