@@ -51,8 +51,8 @@
                 <!-- Imagen del artista centrada tipo avatar circular -->
                 <ImageView
                     android:id="@+id/ivArtistImage"
-                    android:layout_width="280dp"
-                    android:layout_height="280dp"
+                    android:layout_width="240dp"
+                    android:layout_height="240dp"
                     android:scaleType="centerCrop"
                     android:clipToOutline="true"
                     android:outlineProvider="background"
