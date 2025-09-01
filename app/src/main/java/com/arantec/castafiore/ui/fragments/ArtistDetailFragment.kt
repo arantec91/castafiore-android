@@ -43,8 +43,10 @@ import kotlin.math.max
 import kotlin.random.Random
 import com.arantec.castafiore.utils.snack
 import androidx.core.content.ContextCompat
+import com.arantec.castafiore.ui.helpers.HasContentState
+import androidx.core.graphics.drawable.toDrawable
 
-class ArtistDetailFragment : Fragment() {
+class ArtistDetailFragment : Fragment(), HasContentState {
 
     private var _binding: FragmentArtistDetailBinding? = null
     private val binding get() = _binding!!
@@ -222,7 +224,10 @@ class ArtistDetailFragment : Fragment() {
     }
 
     private fun loadArtistData() {
-        showLoading(true)
+        // Only show local loader if we already have content (refresh behavior)
+        if (hasContent()) {
+            showLoading(true)
+        }
 
         viewLifecycleOwner.lifecycleScope.launch {
             try {
@@ -425,7 +430,7 @@ class ArtistDetailFragment : Fragment() {
         ImageLoader.loadArtistImageForFragment(this, binding.ivArtistImage, artistCoverUrl)
 
         // Además, cargar como Bitmap para extraer Palette y aplicar degradado dinámico
-        if (!artistCoverUrl.isNullOrEmpty()) {
+        if (artistCoverUrl.isNotEmpty()) {
             Glide.with(this)
                 .asBitmap()
                 .load(artistCoverUrl)
@@ -466,11 +471,11 @@ class ArtistDetailFragment : Fragment() {
         binding.gradientBackground.background = bgGradient
 
         // Para el AppBar y los scrims, usar color sólido estable
-        binding.appBarLayout.background = android.graphics.drawable.ColorDrawable(baseColor)
+        binding.appBarLayout.background = baseColor.toDrawable()
         binding.collapsingToolbar.setContentScrimColor(baseColor)
         // Usar color base estable en lugar de dinámico para evitar parpadeos
         binding.collapsingToolbar.setStatusBarScrimColor(baseColor)
-        binding.toolbar.navigationIcon?.setTint(android.graphics.Color.WHITE)
+        binding.toolbar.navigationIcon?.setTint(Color.WHITE)
         // Usar color fijo estable en lugar de dinámico para evitar parpadeos/crashes
         StatusBarUtils.setStatusBarColor(this)
     }
@@ -493,21 +498,19 @@ class ArtistDetailFragment : Fragment() {
             gradientType = GradientDrawable.LINEAR_GRADIENT
             setDither(true)
 
-            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
-                // Zona sólida solo del 10%, transición suave distribuida en el 90% restante
-                setColors(colors, floatArrayOf(0f, 0.1f, 0.22f, 0.35f, 0.5f, 0.65f, 0.78f, 0.88f, 0.95f, 1f))
-            }
+            // Zona sólida solo del 10%, transición suave distribuida en el 90% restante
+            setColors(colors, floatArrayOf(0f, 0.1f, 0.22f, 0.35f, 0.5f, 0.65f, 0.78f, 0.88f, 0.95f, 1f))
         }
     }
 
     // Función auxiliar para mezclar colores
     private fun blendColors(color1: Int, color2: Int, ratio: Float): Int {
         val inverseRatio = 1f - ratio
-        val r = (android.graphics.Color.red(color1) * ratio + android.graphics.Color.red(color2) * inverseRatio).toInt()
-        val g = (android.graphics.Color.green(color1) * ratio + android.graphics.Color.green(color2) * inverseRatio).toInt()
-        val b = (android.graphics.Color.blue(color1) * ratio + android.graphics.Color.blue(color2) * inverseRatio).toInt()
-        val a = (android.graphics.Color.alpha(color1) * ratio + android.graphics.Color.alpha(color2) * inverseRatio).toInt()
-        return android.graphics.Color.argb(a, r, g, b)
+        val r = (Color.red(color1) * ratio + Color.red(color2) * inverseRatio).toInt()
+        val g = (Color.green(color1) * ratio + Color.green(color2) * inverseRatio).toInt()
+        val b = (Color.blue(color1) * ratio + Color.blue(color2) * inverseRatio).toInt()
+        val a = (Color.alpha(color1) * ratio + Color.alpha(color2) * inverseRatio).toInt()
+        return Color.argb(a, r, g, b)
     }
 
     private fun setStaticBackground() {
@@ -873,14 +876,14 @@ class ArtistDetailFragment : Fragment() {
     private fun showLoading(show: Boolean) {
         if (!isAdded || _binding == null) return
         binding.progressBar.visibility = if (show) View.VISIBLE else View.GONE
-        // Usar el contenedor principal del layout
-        binding.root.findViewById<View>(android.R.id.content)?.visibility = if (show) View.GONE else View.VISIBLE
+        // Do not hide entire content; global overlay will cover initial loads
     }
 
     private fun showError(message: String) {
         snack(message)
     }
 
+    @Suppress("SameParameterValue")
     private fun showMessage(message: String) {
         snack(message)
     }
@@ -1029,6 +1032,14 @@ class ArtistDetailFragment : Fragment() {
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
         outState.putBoolean("songsExpanded", isSongsExpanded)
+    }
+
+    // Report whether there is already meaningful content rendered
+    override fun hasContent(): Boolean {
+        val albumsCount = if (this::albumAdapter.isInitialized) albumAdapter.itemCount else 0
+        val songsCount = if (this::songAdapter.isInitialized) songAdapter.itemCount else 0
+        // Consider content only when there’s meaningful list data rendered
+        return albumsCount > 0 || songsCount > 0
     }
 
     private fun updateFollowButton() {

@@ -27,6 +27,7 @@ import com.arantec.castafiore.ui.adapters.SongAdapter
 import com.arantec.castafiore.utils.ImageLoader
 import com.arantec.castafiore.utils.StatusBarUtils
 import com.arantec.castafiore.utils.PlaylistFavoritesManager
+import com.arantec.castafiore.ui.helpers.HasContentState
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.Dispatchers
@@ -45,7 +46,7 @@ import com.bumptech.glide.request.transition.Transition
 import android.graphics.drawable.Drawable
 import com.arantec.castafiore.utils.snack
 
-class PlaylistDetailFragment : Fragment() {
+class PlaylistDetailFragment : Fragment(), HasContentState {
 
     private var _binding: FragmentPlaylistDetailBinding? = null
     private val binding get() = _binding!!
@@ -154,7 +155,8 @@ class PlaylistDetailFragment : Fragment() {
             onSongMoreClick = { song ->
                 showSongOptions(song)
             },
-            showCover = false
+            // Habilitar la visualización de portadas de álbum en los ítems
+            showCover = true
         )
         binding.rvSongs.apply {
             layoutManager = LinearLayoutManager(requireContext())
@@ -197,9 +199,13 @@ class PlaylistDetailFragment : Fragment() {
     }
 
     private fun loadPlaylist() {
-        binding.progressBar.visibility = View.VISIBLE
+        // Show local loading only if there is already content (refresh behavior)
+        if (hasContent()) {
+            binding.progressBar.visibility = View.VISIBLE
+        }
+        // Do not pre-hide the content on initial loads; rely on global overlay instead
         binding.emptyLayout.visibility = View.GONE
-        binding.rvSongs.visibility = View.GONE
+        // Leave rvSongs visibility as-is; it will be toggled after data loads
 
         viewLifecycleOwner.lifecycleScope.launch {
             val id = playlistId ?: return@launch
@@ -267,8 +273,10 @@ class PlaylistDetailFragment : Fragment() {
                     binding.progressBar.visibility = View.GONE
                     if (playlistSongs.isEmpty()) {
                         binding.emptyLayout.visibility = View.VISIBLE
+                        binding.rvSongs.visibility = View.GONE
                     } else {
                         binding.rvSongs.visibility = View.VISIBLE
+                        binding.emptyLayout.visibility = View.GONE
                     }
 
                     // Actualizar botón play según estado actual
@@ -591,16 +599,13 @@ class PlaylistDetailFragment : Fragment() {
     }
 
     private fun showSongOptions(song: com.arantec.castafiore.data.models.Song) {
-        com.arantec.castafiore.ui.dialogs.SongOptionsBottomSheet
+        val sheet = com.arantec.castafiore.ui.dialogs.SongOptionsBottomSheet
             .newInstance(song)
             .setOnAddToQueueClickListener { s: com.arantec.castafiore.data.models.Song -> musicService?.addToQueue(s) }
             .setOnPlayNextClickListener { s: com.arantec.castafiore.data.models.Song -> musicService?.playNext(s) }
             .setOnAddToPlaylistClickListener { s: com.arantec.castafiore.data.models.Song ->
                 com.arantec.castafiore.ui.dialogs.PlaylistSelectorBottomSheet.newInstance(s)
                     .show(childFragmentManager, "playlistSelector")
-            }
-            .setOnRemoveFromPlaylistClickListener { s: com.arantec.castafiore.data.models.Song ->
-                confirmRemoveSong(s)
             }
             .setOnSongInfoClickListener { s: com.arantec.castafiore.data.models.Song ->
                 showSongInfo(s)
@@ -632,7 +637,15 @@ class PlaylistDetailFragment : Fragment() {
                     snack("Álbum no disponible")
                 }
             }
-            .show(childFragmentManager, "SongOptionsBottomSheet")
+
+        // Solo permitir "Quitar de la playlist" si la playlist NO es pública
+        if (playlistInfo?.public != true) {
+            sheet.setOnRemoveFromPlaylistClickListener { s: com.arantec.castafiore.data.models.Song ->
+                confirmRemoveSong(s)
+            }
+        }
+
+        sheet.show(childFragmentManager, "SongOptionsBottomSheet")
     }
 
     override fun onStart() {
@@ -645,9 +658,9 @@ class PlaylistDetailFragment : Fragment() {
         unbindMusicService()
     }
 
-    override fun onDestroyView() {
-        super.onDestroyView()
-        cleanupListeners()
+    override fun onDestroy() {
+        super.onDestroy()
+        unbindMusicService()
         _binding = null
     }
 
@@ -665,5 +678,9 @@ class PlaylistDetailFragment : Fragment() {
             isBound = false
             musicService = null
         }
+    }
+
+    override fun hasContent(): Boolean {
+        return this::songAdapter.isInitialized && songAdapter.itemCount > 0
     }
 }

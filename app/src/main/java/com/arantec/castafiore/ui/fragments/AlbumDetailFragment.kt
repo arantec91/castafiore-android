@@ -38,8 +38,9 @@ import kotlin.random.Random
 import android.graphics.drawable.GradientDrawable
 import androidx.core.graphics.toColorInt
 import com.arantec.castafiore.utils.snack
+import com.arantec.castafiore.ui.helpers.HasContentState
 
-class AlbumDetailFragment : Fragment() {
+class AlbumDetailFragment : Fragment(), HasContentState {
 
     private var _binding: FragmentAlbumDetailBinding? = null
     private val binding get() = _binding!!
@@ -990,6 +991,12 @@ class AlbumDetailFragment : Fragment() {
             isBound = false
             musicService = null
         }
+    }
+
+    override fun hasContent(): Boolean {
+        val hasSongs = (this::songAdapter.isInitialized && songAdapter.itemCount > 0) || albumSongs.isNotEmpty()
+        val hasHeader = _binding != null && !binding.tvAlbumTitle.text.isNullOrBlank()
+        return hasSongs || hasHeader
     }
 
 

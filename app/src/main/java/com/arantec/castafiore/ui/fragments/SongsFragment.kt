@@ -17,9 +17,10 @@ import com.arantec.castafiore.data.repository.MusicRepository
 import com.arantec.castafiore.databinding.FragmentMusicListBinding
 import com.arantec.castafiore.service.MusicService
 import com.arantec.castafiore.ui.adapters.SongAdapter
+import com.arantec.castafiore.ui.helpers.HasContentState
 import kotlinx.coroutines.*
 
-class SongsFragment : Fragment() {
+class SongsFragment : Fragment(), HasContentState {
 
     private var _binding: FragmentMusicListBinding? = null
     private val binding get() = _binding!!
@@ -107,9 +108,12 @@ class SongsFragment : Fragment() {
 
     private fun loadRandomSongs() {
         Log.d(TAG, "Starting to load random songs...")
-        binding.progressBar.visibility = View.VISIBLE
-        binding.recyclerView.visibility = View.GONE
+        // Only show local loader if list already has content (refresh behavior)
+        if (hasContent()) {
+            binding.progressBar.visibility = View.VISIBLE
+        }
         binding.tvEmpty.visibility = View.GONE
+        // Don’t pre-hide recyclerView on initial loads; global overlay will cover it
 
         CoroutineScope(Dispatchers.Main).launch {
             try {
@@ -123,16 +127,18 @@ class SongsFragment : Fragment() {
                     if (songs.isNotEmpty()) {
                         songAdapter.updateSongs(songs)
                         binding.recyclerView.visibility = View.VISIBLE
-                        Log.d(TAG, "Songs displayed in RecyclerView")
+                        binding.tvEmpty.visibility = View.GONE
                     } else {
                         Log.w(TAG, "No songs returned from server")
                         binding.tvEmpty.text = "No hay canciones disponibles"
                         binding.tvEmpty.visibility = View.VISIBLE
+                        binding.recyclerView.visibility = View.GONE
                     }
                 }.onFailure { error ->
                     Log.e(TAG, "Error loading songs: ${error.message}", error)
                     binding.tvEmpty.text = "Error: ${error.message}"
                     binding.tvEmpty.visibility = View.VISIBLE
+                    binding.recyclerView.visibility = View.GONE
                 }
 
                 binding.progressBar.visibility = View.GONE
@@ -141,6 +147,7 @@ class SongsFragment : Fragment() {
                 binding.progressBar.visibility = View.GONE
                 binding.tvEmpty.text = "Error inesperado: ${e.message}"
                 binding.tvEmpty.visibility = View.VISIBLE
+                binding.recyclerView.visibility = View.GONE
             }
         }
     }
@@ -151,9 +158,12 @@ class SongsFragment : Fragment() {
             return
         }
 
-        binding.progressBar.visibility = View.VISIBLE
-        binding.recyclerView.visibility = View.GONE
+        // Only show local loader if list already has content (refresh behavior)
+        if (hasContent()) {
+            binding.progressBar.visibility = View.VISIBLE
+        }
         binding.tvEmpty.visibility = View.GONE
+        // Don’t pre-hide recyclerView on initial loads; global overlay will cover it
 
         CoroutineScope(Dispatchers.Main).launch {
             try {
@@ -165,18 +175,22 @@ class SongsFragment : Fragment() {
                     if (songs.isNotEmpty()) {
                         songAdapter.updateSongs(songs)
                         binding.recyclerView.visibility = View.VISIBLE
+                        binding.tvEmpty.visibility = View.GONE
                     } else {
                         binding.tvEmpty.text = "No se encontraron canciones"
                         binding.tvEmpty.visibility = View.VISIBLE
+                        binding.recyclerView.visibility = View.GONE
                     }
                 }.onFailure { error ->
                     binding.tvEmpty.text = "Error en búsqueda: ${error.message}"
                     binding.tvEmpty.visibility = View.VISIBLE
+                    binding.recyclerView.visibility = View.GONE
                 }
 
             } catch (e: Exception) {
                 binding.tvEmpty.text = "Error al buscar: ${e.message}"
                 binding.tvEmpty.visibility = View.VISIBLE
+                binding.recyclerView.visibility = View.GONE
             } finally {
                 binding.progressBar.visibility = View.GONE
             }
@@ -197,5 +211,9 @@ class SongsFragment : Fragment() {
         super.onDestroy()
         unbindMusicService()
         _binding = null
+    }
+
+    override fun hasContent(): Boolean {
+        return this::songAdapter.isInitialized && songAdapter.itemCount > 0
     }
 }

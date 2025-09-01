@@ -27,6 +27,7 @@ import com.arantec.castafiore.utils.StatusBarUtils
 import com.arantec.castafiore.data.network.NavidromeClient
 import com.arantec.castafiore.data.network.InFlightTracker
 import com.arantec.castafiore.ui.helpers.HasContentState
+import com.arantec.castafiore.ui.helpers.LoadingHost
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
@@ -34,7 +35,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-class MainActivity : AppCompatActivity() {
+class MainActivity : AppCompatActivity(), LoadingHost {
 
     private lateinit var binding: ActivityMainBinding
     private lateinit var musicRepository: MusicRepository
@@ -113,6 +114,31 @@ class MainActivity : AppCompatActivity() {
         // Handle intent extras for navigation
         handleNavigationFromIntent()
     }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        // Update stored intent so handleNavigationFromIntent() reads the latest extras
+        setIntent(intent)
+        // React to navigation requests when MainActivity is reused (SINGLE_TOP/CLEAR_TOP)
+        handleNavigationFromIntent()
+    }
+
+    // LoadingHost implementation to allow child fragments to control the overlay explicitly
+    override fun showGlobalLoading(show: Boolean) {
+        // Cancel any pending debounced show to avoid race conditions
+        pendingShowJob?.cancel()
+        pendingShowJob = null
+        if (show) {
+            binding.globalLoadingOverlay.visibility = View.VISIBLE
+            overlayVisible = true
+            lastShowStartAt = System.currentTimeMillis()
+        } else {
+            // Hide respecting minimum show time to avoid flicker
+            hideOverlayRespectingMinShow()
+        }
+    }
+
+    override fun isGlobalLoadingVisible(): Boolean = overlayVisible
 
     private fun setupGlobalLoadingObserver() {
         // Recompute when in-flight state changes
@@ -409,11 +435,25 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        // Ensure overlay state is consistent after returning from another Activity (e.g., PlayerActivity)
+        recomputeGlobalOverlay(com.arantec.castafiore.data.network.InFlightTracker.isLoading.value)
         // When returning from PlayerActivity, refresh mini player artwork/state
         if (isBound) {
             updateMiniPlayer(musicService?.getCurrentSong())
             musicService?.let { updatePlayPauseButton(it.isPlaying()) }
         }
+    }
+
+    override fun onPause() {
+        // Hide overlay when going to background to avoid a stuck scrim if any in-flight state glitches
+        hideOverlayRespectingMinShow()
+        super.onPause()
+    }
+
+    override fun onStop() {
+        // Extra safety: ensure overlay is hidden when activity stops
+        hideOverlayRespectingMinShow()
+        super.onStop()
     }
 
     override fun onDestroy() {

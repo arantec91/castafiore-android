@@ -24,6 +24,9 @@ import com.arantec.castafiore.data.download.SongDownloadManager
 import com.arantec.castafiore.utils.PlaylistFavoritesManager
 import java.io.File
 import com.arantec.castafiore.ui.helpers.HasContentState
+import com.arantec.castafiore.ui.helpers.LoadingHost
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 class LibraryFragment : Fragment(), HasContentState {
 
@@ -36,13 +39,16 @@ class LibraryFragment : Fragment(), HasContentState {
 
     // Listas de datos separadas por tipo
     private var allItems = mutableListOf<LibraryItem>()
-    private var playlists = mutableListOf<LibraryItem>()
+    private var playlists: List<LibraryItem> = emptyList()
     private var albums = mutableListOf<LibraryItem>()
     private var artists = mutableListOf<LibraryItem>()
 
     // Mapas para mantener referencias a los objetos completos
     private var albumsMap = mutableMapOf<String, Album>()
     private var playlistsMap = mutableMapOf<String, Playlist>()
+
+    // Mutex para evitar condiciones de carrera al actualizar playlists
+    private val playlistsMutex = Mutex()
 
     // Descargas
     private var downloads = mutableListOf<LibraryItem>()
@@ -52,6 +58,8 @@ class LibraryFragment : Fragment(), HasContentState {
     // Estado para evitar parpadeo y actualizaciones redundantes
     private var lastDownloadsVisible: Boolean = false
     private var lastDownloadedIds: Set<String> = emptySet()
+
+    private fun loadingHost(): LoadingHost? = activity as? LoadingHost
 
     override fun hasContent(): Boolean {
         return this::libraryAdapter.isInitialized && libraryAdapter.itemCount > 0
@@ -221,6 +229,9 @@ class LibraryFragment : Fragment(), HasContentState {
         // Only show local loader if we already have content (refresh behavior)
         if (hasContent()) {
             showLoading(true)
+        } else {
+            // Cold start without content: ensure global overlay is visible as fallback
+            loadingHost()?.showGlobalLoading(true)
         }
 
         viewLifecycleOwner.lifecycleScope.launch {
@@ -240,6 +251,8 @@ class LibraryFragment : Fragment(), HasContentState {
             } catch (e: Exception) {
                 showError("Error al cargar la biblioteca: ${e.message}")
             } finally {
+                // Always hide global overlay after finishing initial load (success or error)
+                loadingHost()?.showGlobalLoading(false)
                 showLoading(false)
             }
         }
@@ -247,10 +260,14 @@ class LibraryFragment : Fragment(), HasContentState {
 
     private suspend fun loadPlaylists() {
         try {
-            playlists.clear()
+            // Construir listas locales para asignar de forma atómica y evitar duplicados por cargas concurrentes
+            val newPlaylists = mutableListOf<LibraryItem>()
+            val newPlaylistsMap = mutableMapOf<String, Playlist>()
 
+            // Conjunto para evitar duplicados por ID (robusto ante respuestas repetidas de API)
+            val seenPlaylistIds = mutableSetOf<String>()
             // Siempre agregar "Canciones que te gustan" primero
-            playlists.add(
+            newPlaylists.add(
                 LibraryItem(
                     id = "liked_songs",
                     title = "Canciones que te gustan",
@@ -259,6 +276,7 @@ class LibraryFragment : Fragment(), HasContentState {
                     type = LibraryItemType.LIKED_SONGS
                 )
             )
+            seenPlaylistIds.add("liked_songs")
 
             // Luego cargar las playlists de la API
             val result = musicRepository.getPlaylists()
@@ -268,33 +286,35 @@ class LibraryFragment : Fragment(), HasContentState {
 
                 // 1) Playlists privadas (siempre)
                 playlistsFromApi.filter { !it.public }.forEach { playlist ->
-                    val subtitle = "${playlist.songCount} canciones"
+                    if (seenPlaylistIds.add(playlist.id)) {
+                        val subtitle = "${playlist.songCount} canciones"
 
-                    // Construir URL de imagen si la playlist tiene coverArt
-                    var imageUrl: String? = null
-                    if (playlist.coverArt != null) {
-                        val (username, token, salt) = musicRepository.getAuthParams()
-                        imageUrl = playlist.getCoverArtUrl(
-                            musicRepository.serverUrl!!,
-                            username,
-                            token,
-                            salt,
-                            200
+                        // Construir URL de imagen si la playlist tiene coverArt
+                        var imageUrl: String? = null
+                        if (playlist.coverArt != null) {
+                            val (username, token, salt) = musicRepository.getAuthParams()
+                            imageUrl = playlist.getCoverArtUrl(
+                                musicRepository.serverUrl!!,
+                                username,
+                                token,
+                                salt,
+                                200
+                            )
+                        }
+
+                        newPlaylists.add(
+                            LibraryItem(
+                                id = playlist.id,
+                                title = playlist.name,
+                                subtitle = "Playlist • $subtitle",
+                                imageUrl = imageUrl,
+                                type = LibraryItemType.PLAYLIST
+                            )
                         )
+
+                        // Agregar al mapa de playlists
+                        newPlaylistsMap[playlist.id] = playlist
                     }
-
-                    playlists.add(
-                        LibraryItem(
-                            id = playlist.id,
-                            title = playlist.name,
-                            subtitle = "Playlist • $subtitle",
-                            imageUrl = imageUrl,
-                            type = LibraryItemType.PLAYLIST
-                        )
-                    )
-
-                    // Agregar al mapa de playlists
-                    playlistsMap[playlist.id] = playlist
                 }
 
                 // 2) Playlists públicas descargadas: incluir también en listas principales
@@ -305,21 +325,20 @@ class LibraryFragment : Fragment(), HasContentState {
                         musicRepository.getPlaylistSongs(playlist.id).onSuccess { songs ->
                             fullyDownloaded = songs.isNotEmpty() && songs.all { song ->
                                 val path = dm.createDownloadPath(song)
-                                File(path).exists()
+                                java.io.File(path).exists()
                             }
                         }
                     } catch (_: Exception) { /* ignore */ }
 
                     if (fullyDownloaded) {
-                        // Evitar duplicados si por alguna razón ya existe
-                        if (playlists.none { it.id == playlist.id }) {
+                        if (seenPlaylistIds.add(playlist.id)) {
                             var imageUrl: String? = null
                             if (playlist.coverArt != null && musicRepository.serverUrl != null) {
                                 val (u, t, s) = musicRepository.getAuthParams()
                                 imageUrl = playlist.getCoverArtUrl(musicRepository.serverUrl!!, u, t, s, 200)
                             }
                             val subtitle = if (playlist.songCount > 0) "Playlist • ${playlist.songCount} canciones" else "Playlist"
-                            playlists.add(
+                            newPlaylists.add(
                                 LibraryItem(
                                     id = playlist.id,
                                     title = playlist.name,
@@ -335,14 +354,14 @@ class LibraryFragment : Fragment(), HasContentState {
 
                 // 3) Playlists públicas marcadas como favoritas: incluir aunque no estén descargadas
                 playlistsFromApi.filter { it.public && favorites.contains(it.id) }.forEach { playlist ->
-                    if (playlists.none { it.id == playlist.id }) {
+                    if (seenPlaylistIds.add(playlist.id)) {
                         var imageUrl: String? = null
                         if (playlist.coverArt != null && musicRepository.serverUrl != null) {
                             val (u, t, s) = musicRepository.getAuthParams()
                             imageUrl = playlist.getCoverArtUrl(musicRepository.serverUrl!!, u, t, s, 200)
                         }
                         val subtitle = if (playlist.songCount > 0) "Playlist • ${playlist.songCount} canciones" else "Playlist"
-                        playlists.add(
+                        newPlaylists.add(
                             LibraryItem(
                                 id = playlist.id,
                                 title = playlist.name,
@@ -352,24 +371,36 @@ class LibraryFragment : Fragment(), HasContentState {
                             )
                         )
                         // Añadir al mapa para navegación completa
-                        playlistsMap[playlist.id] = playlist
+                        newPlaylistsMap[playlist.id] = playlist
                     }
                 }
             }.onFailure {
                 // Si falla la API, al menos tenemos "Canciones que te gustan"
             }
+
+            // De-duplicar por seguridad antes de asignar
+            val finalPlaylists = newPlaylists.distinctBy { it.id }
+
+            // Asignación atómica protegida por mutex para evitar interleavings
+            playlistsMutex.withLock {
+                playlists = finalPlaylists
+                playlistsMap.clear()
+                playlistsMap.putAll(newPlaylistsMap)
+            }
         } catch (_: Exception) {
             // En caso de error, solo mantener "Canciones que te gustan"
-            playlists.clear()
-            playlists.add(
-                LibraryItem(
-                    id = "liked_songs",
-                    title = "Canciones que te gustan",
-                    subtitle = "Playlist • Tus favoritas",
-                    imageUrl = null,
-                    type = LibraryItemType.LIKED_SONGS
+            playlistsMutex.withLock {
+                playlists = listOf(
+                    LibraryItem(
+                        id = "liked_songs",
+                        title = "Canciones que te gustan",
+                        subtitle = "Playlist • Tus favoritas",
+                        imageUrl = null,
+                        type = LibraryItemType.LIKED_SONGS
+                    )
                 )
-            )
+                playlistsMap.clear()
+            }
         }
     }
 
@@ -456,8 +487,9 @@ class LibraryFragment : Fragment(), HasContentState {
     private fun buildAllItemsList() {
         allItems.clear()
 
-        // Agregar en orden: playlists, álbumes, artistas
-        allItems.addAll(playlists)
+        // Agregar en orden: playlists, álbumes, artistas (deduplicando defensivamente por ID)
+        val uniquePlaylists = playlists.distinctBy { it.id }
+        allItems.addAll(uniquePlaylists)
         allItems.addAll(albums)
         allItems.addAll(artists)
     }
@@ -470,7 +502,7 @@ class LibraryFragment : Fragment(), HasContentState {
 
         val filteredItems = when (currentFilter) {
             "all" -> allItems.toList()
-            "playlists" -> playlists.toList()
+            "playlists" -> playlists.distinctBy { it.id }
             "albums" -> albums.toList()
             "artists" -> artists.toList()
             else -> allItems.toList()
@@ -491,6 +523,8 @@ class LibraryFragment : Fragment(), HasContentState {
 
     private fun filterDownloads() {
         viewLifecycleOwner.lifecycleScope.launch {
+            // Ensure global overlay is not blocking interactions in this local-only compute
+            loadingHost()?.showGlobalLoading(false)
             showLoading(true)
             try {
                 // Recalcular descargas al entrar explícitamente a esta vista
@@ -730,6 +764,8 @@ class LibraryFragment : Fragment(), HasContentState {
 
     private fun showLoading(show: Boolean) {
         if (_binding == null) return
+        // If we are showing the fragment-level loader, ensure the global overlay is not blocking
+        if (show) loadingHost()?.showGlobalLoading(false)
         binding.progressBar.visibility = if (show) View.VISIBLE else View.GONE
         binding.rvLibraryItems.visibility = if (show) View.GONE else View.VISIBLE
     }
@@ -756,6 +792,8 @@ class LibraryFragment : Fragment(), HasContentState {
 
     override fun onDestroyView() {
         super.onDestroyView()
+        // Safety: ensure global overlay isn't left visible when the view is destroyed
+        loadingHost()?.showGlobalLoading(false)
         _binding = null
     }
 

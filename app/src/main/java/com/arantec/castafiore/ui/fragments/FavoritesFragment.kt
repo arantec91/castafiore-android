@@ -29,8 +29,9 @@ import kotlin.random.Random
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.Dispatchers
 import androidx.core.content.ContextCompat
+import com.arantec.castafiore.ui.helpers.HasContentState
 
-class FavoritesFragment : Fragment() {
+class FavoritesFragment : Fragment(), HasContentState {
 
     private var _binding: FragmentFavoritesBinding? = null
     private val binding get() = _binding!!
@@ -164,10 +165,17 @@ class FavoritesFragment : Fragment() {
     }
 
     private fun loadFavorites() {
-        binding.loadingOverlay.visibility = View.VISIBLE
-        binding.progressBar.visibility = View.VISIBLE
+        // Show local loading only if there is already content on screen (refresh behavior)
+        if (hasContent()) {
+            binding.loadingOverlay.visibility = View.VISIBLE
+            binding.progressBar.visibility = View.VISIBLE
+        } else {
+            // Keep content as-is for initial loading; global overlay will handle blocking UI
+            binding.loadingOverlay.visibility = View.GONE
+            binding.progressBar.visibility = View.GONE
+        }
         binding.emptyLayout.visibility = View.GONE
-        binding.rvSongs.visibility = View.GONE
+        // Do not pre-hide rvSongs; will be toggled after data loads
 
         viewLifecycleOwner.lifecycleScope.launch {
             musicRepository.getStarredSongs().fold(
@@ -183,8 +191,10 @@ class FavoritesFragment : Fragment() {
 
                     if (favoriteSongs.isEmpty()) {
                         binding.emptyLayout.visibility = View.VISIBLE
+                        binding.rvSongs.visibility = View.GONE
                     } else {
                         binding.rvSongs.visibility = View.VISIBLE
+                        binding.emptyLayout.visibility = View.GONE
                     }
 
                     isPlaying = musicService?.isPlaying() == true && isFavoritesQueuePlaying()
@@ -462,8 +472,10 @@ class FavoritesFragment : Fragment() {
 
     override fun onDestroyView() {
         super.onDestroyView()
-        // Extra safety: ensure unbound
-        unbindMusicService()
         _binding = null
+    }
+
+    override fun hasContent(): Boolean {
+        return this::songAdapter.isInitialized && songAdapter.itemCount > 0
     }
 }

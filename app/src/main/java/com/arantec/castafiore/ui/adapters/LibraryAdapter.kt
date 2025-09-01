@@ -9,6 +9,7 @@ import com.arantec.castafiore.data.models.LibraryItem
 import com.arantec.castafiore.data.models.LibraryItemType
 import com.arantec.castafiore.utils.ImageLoader
 import com.arantec.castafiore.R
+import com.bumptech.glide.Glide
 
 class LibraryAdapter(
     private val onItemClick: (LibraryItem) -> Unit
@@ -45,7 +46,9 @@ class LibraryAdapter(
                 // Clear any previous compound drawable
                 tvSubtitle.setCompoundDrawablesRelative(null, null, null, null)
 
-                 // Reset reusable state that may linger from recycled views
+                // Cancel any pending Glide requests and reset image/background to avoid stale images on recycled views
+                Glide.with(ivCover).clear(ivCover)
+                ivCover.setImageDrawable(null)
                 ivCover.background = null
 
                 // Configurar icono/imagen según el tipo
@@ -85,8 +88,6 @@ class LibraryAdapter(
                         }
                     }
                 }
-
-                // Download status icon removed in streaming-only mode
 
                 // Click listener
                 root.setOnClickListener {

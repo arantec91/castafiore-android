@@ -1,4 +1,7 @@
 <resources>
     <dimen name="artist_image_size">220dp</dimen>
     <dimen name="artist_button_top">276dp</dimen>
+
+    <!-- Minimum height for horizontal rows in Home to prevent layout jumps -->
+    <dimen name="home_horizontal_row_min_height">180dp</dimen>
 </resources>

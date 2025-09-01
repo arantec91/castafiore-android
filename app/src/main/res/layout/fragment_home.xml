@@ -93,7 +93,8 @@
                     android:layout_marginBottom="40dp"
                     android:paddingEnd="0dp"
                     android:clipToPadding="false"
-                    android:orientation="horizontal" />
+                    android:orientation="horizontal"
+                    android:minHeight="@dimen/home_horizontal_row_min_height" />
 
                 <!-- Sección: Reproducidos recientemente -->
                 <TextView
@@ -112,9 +113,10 @@
                     android:layout_height="wrap_content"
                     android:layout_marginBottom="40dp"
                     android:clipToPadding="false"
-                    android:orientation="horizontal" />
+                    android:orientation="horizontal"
+                    android:minHeight="@dimen/home_horizontal_row_min_height" />
 
-                <!-- Sección: Artistas similares al último reproducido (movida aquí) -->
+                <!-- Sección: Artistas similares al último reproducido -->
                 <LinearLayout
                     android:id="@+id/similarHeaderContainer"
                     android:layout_width="match_parent"
@@ -184,26 +186,8 @@
                     android:layout_height="wrap_content"
                     android:layout_marginBottom="40dp"
                     android:clipToPadding="false"
-                    android:orientation="horizontal" />
-
-                <!-- Sección: Descubrir -->
-                <TextView
-                    android:id="@+id/tvDiscoverTitle"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginBottom="16dp"
-                    android:text="Descubrir"
-                    android:textColor="@color/text_primary"
-                    android:textSize="22sp"
-                    android:textStyle="bold" />
-
-                <androidx.recyclerview.widget.RecyclerView
-                    android:id="@+id/rvDiscover"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginBottom="24dp"
-                    android:clipToPadding="false"
-                    android:orientation="horizontal" />
+                    android:orientation="horizontal"
+                    android:minHeight="@dimen/home_horizontal_row_min_height" />
 
             </LinearLayout>
 

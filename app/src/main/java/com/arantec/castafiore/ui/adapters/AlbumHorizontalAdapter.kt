@@ -21,6 +21,11 @@ class AlbumHorizontalAdapter(
 
     // Backwards-compatible helper so callers don't need to change
     fun updateAlbums(newAlbums: List<Album>) {
+        // Never clear existing non-empty UI with an empty update
+        if (newAlbums.isEmpty() && itemCount > 0) {
+            android.util.Log.d("AlbumHorizontalAdapter", "Ignoring empty update; keeping ${'$'}itemCount existing items")
+            return
+        }
         submitList(newAlbums)
     }
 
