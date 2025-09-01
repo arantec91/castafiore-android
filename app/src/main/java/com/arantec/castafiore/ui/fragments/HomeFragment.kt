@@ -27,8 +27,9 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.supervisorScope
+import com.arantec.castafiore.ui.helpers.HasContentState
 
-class HomeFragment : Fragment() {
+class HomeFragment : Fragment(), HasContentState {
 
     private var _binding: FragmentHomeBinding? = null
     private val binding get() = _binding!!
@@ -47,14 +48,9 @@ class HomeFragment : Fragment() {
     private var isInitialLoad = true
     private var lastLoadTime = 0L
 
-    companion object {
-        private const val TAG = "HomeFragment"
-        private const val MANUAL_REFRESH_COOLDOWN = 30 * 1000L // 30 segundos entre refreshes manuales
-    }
-
     // Listener para refresh automático
     private val autoRefreshListener = {
-        android.util.Log.d(TAG, "Auto-refresh triggerizado")
+        android.util.Log.d("HomeFragment", "Auto-refresh triggerizado")
         if (isAdded && _binding != null) {
             performRefresh(isAutoRefresh = true)
         }
@@ -234,8 +230,8 @@ class HomeFragment : Fragment() {
         // Registrar listener para refresh automático
         appLifecycleManager.addRefreshListener(autoRefreshListener)
 
-        android.util.Log.d(TAG, "Sistema de refresh configurado")
-        android.util.Log.d(TAG, appLifecycleManager.getDebugInfo())
+        android.util.Log.d("HomeFragment", "Sistema de refresh configurado")
+        android.util.Log.d("HomeFragment", appLifecycleManager.getDebugInfo())
     }
 
     /**
@@ -251,14 +247,14 @@ class HomeFragment : Fragment() {
         // Verificar cooldown para refresh manual
         if (isManualRefresh && !forceRefresh) {
             val timeSinceLastLoad = currentTime - lastLoadTime
-            if (timeSinceLastLoad < MANUAL_REFRESH_COOLDOWN) {
-                android.util.Log.d(TAG, "Refresh manual en cooldown - ignorando")
+            if (timeSinceLastLoad < 30_000L) {
+                android.util.Log.d("HomeFragment", "Refresh manual en cooldown - ignorando")
                 binding.swipeRefreshLayout.isRefreshing = false
                 return
             }
         }
 
-        android.util.Log.d(TAG, "Iniciando refresh - Auto: $isAutoRefresh, Manual: $isManualRefresh, Force: $forceRefresh")
+        android.util.Log.d("HomeFragment", "Iniciando refresh - Auto: $isAutoRefresh, Manual: $isManualRefresh, Force: $forceRefresh")
 
         // Usar lifecycle del view para evitar fugas cuando se destruye la vista
         viewLifecycleOwner.lifecycleScope.launch {
@@ -279,10 +275,10 @@ class HomeFragment : Fragment() {
                 loadDataInternal(isRefresh = true)
                 lastLoadTime = currentTime
 
-                android.util.Log.d(TAG, "Refresh completado exitosamente")
+                android.util.Log.d("HomeFragment", "Refresh completado exitosamente")
 
             } catch (e: Exception) {
-                android.util.Log.e(TAG, "Error durante refresh", e)
+                android.util.Log.e("HomeFragment", "Error durante refresh", e)
                 showError("Error al actualizar datos: ${e.message}")
             } finally {
                 // Ocultar indicador de refresh
@@ -299,9 +295,9 @@ class HomeFragment : Fragment() {
             // Limpiar solo cache expirado para auto-refresh ligero
             musicRepository.cleanupCache()
 
-            android.util.Log.d(TAG, "Cache selectivo limpiado para auto-refresh")
+            android.util.Log.d("HomeFragment", "Cache selectivo limpiado para auto-refresh")
         } catch (e: Exception) {
-            android.util.Log.e(TAG, "Error limpiando cache selectivo", e)
+            android.util.Log.e("HomeFragment", "Error limpiando cache selectivo", e)
         }
     }
 
@@ -313,9 +309,9 @@ class HomeFragment : Fragment() {
             // Limpiar TODO el cache para asegurar datos completamente frescos
             musicRepository.clearCache()
 
-            android.util.Log.d(TAG, "Cache extensivo limpiado para refresh manual")
+            android.util.Log.d("HomeFragment", "Cache extensivo limpiado para refresh manual")
         } catch (e: Exception) {
-            android.util.Log.e(TAG, "Error limpiando cache extensivo", e)
+            android.util.Log.e("HomeFragment", "Error limpiando cache extensivo", e)
         }
     }
 
@@ -325,14 +321,15 @@ class HomeFragment : Fragment() {
     private suspend fun loadDataInternal(isRefresh: Boolean = false) {
         try {
             if (isRefresh) {
-                android.util.Log.d(TAG, "Cargando datos (refresh)")
+                android.util.Log.d("HomeFragment", "Cargando datos (refresh)")
             } else {
-                android.util.Log.d(TAG, "Cargando datos (inicial)")
+                android.util.Log.d("HomeFragment", "Cargando datos (inicial)")
             }
 
-            // Para refresh, mostrar indicador sin ocultar contenido
-            if (!isRefresh) {
-                showLoading(true)
+            // For initial load, avoid local spinner to prevent overlap; rely on global overlay
+            if (isRefresh) {
+                // Only for refresh, keep lightweight local indicator (SwipeRefreshLayout)
+                // No local blocking spinner here
             }
             hideError()
 
@@ -361,10 +358,10 @@ class HomeFragment : Fragment() {
                 // Ignorar; loadSimilarArtists maneja su propia visibilidad
             }
 
-            android.util.Log.d(TAG, "Carga de datos completada")
+            android.util.Log.d("HomeFragment", "Carga de datos completada")
 
         } catch (e: Exception) {
-            android.util.Log.e(TAG, "Error cargando datos", e)
+            android.util.Log.e("HomeFragment", "Error cargando datos", e)
             showError("Error al cargar contenido: ${e.localizedMessage}")
             if (!isRefresh) {
                 showLoading(false)
@@ -384,18 +381,18 @@ class HomeFragment : Fragment() {
         musicRepository.ensureCacheScope()
 
         // DEBUG: Agregar logs para diagnóstico
-        android.util.Log.d(TAG, "Starting data load...")
-        android.util.Log.d(TAG, "Server URL: ${musicRepository.serverUrl}")
-        android.util.Log.d(TAG, "Username: ${musicRepository.username}")
+        android.util.Log.d("HomeFragment", "Starting data load...")
+        android.util.Log.d("HomeFragment", "Server URL: ${musicRepository.serverUrl}")
+        android.util.Log.d("HomeFragment", "Username: ${musicRepository.username}")
 
         // IMPORTANTE: Reinicializar NavidromeClient con la URL guardada
         try {
             musicRepository.serverUrl?.let { serverUrl ->
                 com.arantec.castafiore.data.network.NavidromeClient.initialize(serverUrl)
-                android.util.Log.d(TAG, "NavidromeClient initialized with: $serverUrl")
+                android.util.Log.d("HomeFragment", "NavidromeClient initialized with: $serverUrl")
             }
         } catch (e: Exception) {
-            android.util.Log.e(TAG, "Error initializing NavidromeClient: ${e.message}")
+            android.util.Log.e("HomeFragment", "Error initializing NavidromeClient: ${e.message}")
             showError("Error de configuración del servidor")
             return
         }
@@ -555,10 +552,10 @@ class HomeFragment : Fragment() {
                                 val url = ImageLoader.buildArtistImageUrl(server, artistId, u, t, s, 300)
                                 ImageLoader.loadArtistImage(requireContext(), binding.ivSimilarArtist, url)
                             } else {
-                                binding.ivSimilarArtist.setImageResource(com.arantec.castafiore.R.drawable.ic_person)
+                                binding.ivSimilarArtist.setImageResource(R.drawable.ic_person)
                             }
                         } catch (_: Exception) {
-                            binding.ivSimilarArtist.setImageResource(com.arantec.castafiore.R.drawable.ic_person)
+                            binding.ivSimilarArtist.setImageResource(R.drawable.ic_person)
                         }
                         binding.similarHeaderContainer.visibility = View.VISIBLE
                         binding.rvSimilarArtists.visibility = View.VISIBLE
@@ -674,5 +671,19 @@ class HomeFragment : Fragment() {
         appLifecycleManager.removeRefreshListener(autoRefreshListener)
 
         _binding = null
+    }
+
+    override fun hasContent(): Boolean {
+        val hasAny = (
+            (this::recentlyAddedAdapter.isInitialized && recentlyAddedAdapter.itemCount > 0) ||
+            (this::recentlyPlayedAdapter.isInitialized && recentlyPlayedAdapter.itemCount > 0) ||
+            (this::mostPlayedAdapter.isInitialized && mostPlayedAdapter.itemCount > 0) ||
+            (this::discoverAdapter.isInitialized && discoverAdapter.itemCount > 0)
+        )
+        return hasAny
+    }
+
+    companion object {
+        // Keep companion object for future use, but constants are inlined above
     }
 }

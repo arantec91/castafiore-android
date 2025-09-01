@@ -181,35 +181,6 @@
                     android:src="@drawable/ic_favorite_border"
                     app:tint="@color/text_secondary" />
 
-                <!-- Botón descargar con indicador de progreso (moved before More) -->
-                <FrameLayout
-                    android:id="@+id/btnDownloadContainer"
-                    android:layout_width="32dp"
-                    android:layout_height="32dp"
-                    android:layout_marginStart="16dp">
-
-                    <ImageButton
-                        android:id="@+id/btnDownload"
-                        android:layout_width="match_parent"
-                        android:layout_height="match_parent"
-                        android:background="?attr/selectableItemBackgroundBorderless"
-                        android:contentDescription="@string/download"
-                        android:src="@drawable/ic_download"
-                        app:tint="@color/text_secondary" />
-
-                    <com.google.android.material.progressindicator.CircularProgressIndicator
-                        android:id="@+id/progressDownload"
-                        android:layout_width="match_parent"
-                        android:layout_height="match_parent"
-                        android:layout_gravity="center"
-                        android:indeterminate="true"
-                        android:visibility="gone"
-                        app:indicatorSize="20dp"
-                        app:indicatorInset="6dp"
-                        app:trackThickness="2dp"
-                        app:indicatorColor="@color/primary" />
-                </FrameLayout>
-
                 <!-- Botón más opciones (now after Download) -->
                 <ImageButton
                     android:id="@+id/btnMore"

@@ -12,6 +12,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.EditText
 import androidx.appcompat.app.AlertDialog
+import androidx.core.os.bundleOf
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.fragment.findNavController
@@ -42,8 +43,6 @@ import android.content.res.ColorStateList
 import com.bumptech.glide.request.target.CustomTarget
 import com.bumptech.glide.request.transition.Transition
 import android.graphics.drawable.Drawable
-import com.arantec.castafiore.data.download.SongDownloadManager
-import java.io.File
 import com.arantec.castafiore.utils.snack
 
 class PlaylistDetailFragment : Fragment() {
@@ -119,20 +118,7 @@ class PlaylistDetailFragment : Fragment() {
         setupFab()
         setupMoreButton()
 
-        // Download button: start playlist download or confirm delete if fully downloaded
-        binding.btnDownload.setOnClickListener {
-            if (isPlaylistFullyDownloaded()) {
-                showConfirmDeletePlaylistDownloads()
-            } else {
-                downloadPlaylist()
-            }
-        }
-        // Observe download states and update UI immediately
-        observeDownloadStates()
-        updateDownloadUIState()
-
         // Defer binding to onStart so only visible fragment attaches listeners
-        // bindMusicService()
         loadPlaylist()
 
         // Favorite button toggling
@@ -145,59 +131,49 @@ class PlaylistDetailFragment : Fragment() {
         }
     }
 
-    private fun setupMoreButton() {
-        binding.btnMore.setOnClickListener {
-            com.arantec.castafiore.ui.dialogs.PlaylistOptionsBottomSheet()
-                .setOnEditNameClickListener { showRenameDialog() }
-                .setOnDeleteListClickListener { confirmDeletePlaylist() }
-                .setOnDownloadClickListener { downloadPlaylist() }
-                .show(childFragmentManager, "PlaylistOptionsBottomSheet")
-        }
-    }
-
-    private fun downloadPlaylist() {
-        if (playlistSongs.isEmpty()) {
-            snack("No hay canciones para descargar")
-            return
-        }
-        val downloadManager = com.arantec.castafiore.data.download.SongDownloadManager.getInstance(requireContext())
-        val alreadyDownloaded = playlistSongs.count { downloadManager.isSongDownloaded(it.id) }
-        val currentlyDownloading = playlistSongs.count { downloadManager.isSongDownloading(it.id) }
-        val toDownload = playlistSongs.filter { !downloadManager.isSongDownloaded(it.id) && !downloadManager.isSongDownloading(it.id) }
-        when {
-            alreadyDownloaded == playlistSongs.size -> {
-                snack("La playlist ya está completamente descargada")
-            }
-            toDownload.isEmpty() && currentlyDownloading > 0 -> {
-                snack("La playlist se está descargando ($currentlyDownloading canciones pendientes)")
-            }
-            else -> {
-                toDownload.forEach { song -> downloadManager.downloadSong(song) }
-                val message = if (alreadyDownloaded > 0) {
-                    "Descargando ${toDownload.size} canciones restantes de la playlist"
-                } else {
-                    "Descargando playlist completa (${toDownload.size} canciones)"
-                }
-                snack(message)
-            }
-        }
-    }
-
     private fun setupToolbar() {
-        binding.toolbar.setNavigationOnClickListener { findNavController().popBackStack() }
-        // Removed toolbar menu to eliminate "more options" and "delete playlist" icons
-        binding.tvTitle.text = playlistName ?: getString(R.string.app_name)
-        // Aplicar gradiente estático inicial, se actualizará cuando se cargue la imagen
-        setStaticBackground()
+        binding.toolbar.setNavigationOnClickListener {
+            findNavController().popBackStack()
+        }
     }
 
     private fun setupRecyclerView() {
         songAdapter = SongAdapter(
-            onSongClick = { _, position ->
-                if (playlistSongs.isNotEmpty()) {
-                    musicService?.playQueue(
+            onSongClick = { song, position ->
+                // Reproducir la playlist desde la canción seleccionada
+                musicService?.playQueue(
+                    playlistSongs,
+                    position,
+                    MusicService.PlaybackSource(
+                        MusicService.SourceType.PLAYLIST,
+                        playlistId,
+                        playlistName
+                    )
+                )
+            },
+            onSongMoreClick = { song ->
+                showSongOptions(song)
+            },
+            showCover = false
+        )
+        binding.rvSongs.apply {
+            layoutManager = LinearLayoutManager(requireContext())
+            adapter = songAdapter
+            isNestedScrollingEnabled = false
+        }
+    }
+
+    private fun setupFab() {
+        binding.fabPlay.setOnClickListener {
+            val service = musicService
+            if (service != null) {
+                if (isPlaylistQueuePlaying()) {
+                    if (service.isPlaying()) service.pause() else service.play()
+                } else if (playlistSongs.isNotEmpty()) {
+                    val startIndex = if (service.getShuffleEnabled() && playlistSongs.size > 1) kotlin.random.Random.nextInt(playlistSongs.size) else 0
+                    service.playQueue(
                         playlistSongs,
-                        position,
+                        startIndex,
                         MusicService.PlaybackSource(
                             MusicService.SourceType.PLAYLIST,
                             playlistId,
@@ -205,128 +181,18 @@ class PlaylistDetailFragment : Fragment() {
                         )
                     )
                 }
-            },
-            onSongMoreClick = { song ->
-                // Abrir directamente el bottom sheet de opciones de canción, incluyendo "Eliminar de la playlist"
-                val bottomSheet = com.arantec.castafiore.ui.dialogs.SongOptionsBottomSheet
-                    .newInstance(song, false)
-                    .setOnAddToQueueClickListener { selectedSong ->
-                        val service = musicService
-                        if (service != null) {
-                            service.addToQueue(selectedSong)
-                            snack(getString(R.string.added_to_queue, selectedSong.title))
-                        } else {
-                            snack(getString(R.string.music_service_unavailable))
-                            bindMusicService()
-                        }
-                    }
-                    .setOnPlayNextClickListener { selectedSong ->
-                        val service = musicService
-                        if (service != null) {
-                            service.playNext(selectedSong)
-                            snack(getString(R.string.will_play_next, selectedSong.title))
-                        } else {
-                            snack(getString(R.string.music_service_unavailable))
-                            bindMusicService()
-                        }
-                    }
-                    .setOnAddToPlaylistClickListener { selectedSong ->
-                        com.arantec.castafiore.ui.dialogs.PlaylistSelectorBottomSheet
-                            .newInstance(selectedSong)
-                            .show(childFragmentManager, "PlaylistSelectorBottomSheet")
-                    }
-                    .setOnViewAlbumClickListener { selectedSong ->
-                        val albumId = selectedSong.albumId
-                        if (!albumId.isNullOrEmpty()) {
-                            viewLifecycleOwner.lifecycleScope.launch {
-                                musicRepository.getAlbumDetail(albumId).fold(
-                                    onSuccess = { album ->
-                                        val args = Bundle().apply { putParcelable("album", album) }
-                                        try {
-                                            findNavController().navigate(R.id.albumDetailFragment, args)
-                                        } catch (_: Exception) {
-                                            snack("No se pudo abrir el álbum")
-                                        }
-                                    },
-                                    onFailure = {
-                                        snack("No se pudo abrir el álbum")
-                                    }
-                                )
-                            }
-                        } else {
-                            snack("Álbum no disponible")
-                        }
-                    }
-                    .setOnViewArtistClickListener { selectedSong ->
-                        val artistId = selectedSong.artistId
-                        if (!artistId.isNullOrEmpty()) {
-                            val args = Bundle().apply {
-                                putString("artistId", artistId)
-                                putString("artistName", selectedSong.artist)
-                            }
-                            try {
-                                findNavController().navigate(R.id.artistDetailFragment, args)
-                            } catch (_: Exception) {
-                                snack("No se pudo abrir el artista")
-                            }
-                        } else {
-                            snack("Artista no disponible")
-                        }
-                    }
-                    .setOnSongInfoClickListener { selectedSong ->
-                        showSongInfo(selectedSong)
-                    }
-                // Mostrar "Quitar de la playlist" solo si la playlist NO es pública
-                if (playlistInfo?.public == false) {
-                    bottomSheet.setOnRemoveFromPlaylistClickListener { selectedSong ->
-                        confirmRemoveSong(selectedSong)
-                    }
-                }
-                bottomSheet.show(childFragmentManager, "SongOptionsBottomSheet")
-            }
-        )
-        binding.rvSongs.apply {
-            layoutManager = LinearLayoutManager(context)
-            adapter = songAdapter
-            isNestedScrollingEnabled = false
-            setHasFixedSize(true) // Optimize initial layout and reduce jank on enter
-        }
-    }
-
-    private fun setupFab() {
-        binding.fabPlay.setOnClickListener {
-            val service = musicService ?: return@setOnClickListener
-            if (isPlaylistQueuePlaying()) {
-                if (service.isPlaying()) service.pause() else service.play()
-            } else if (playlistSongs.isNotEmpty()) {
-                val startIndex = if (service.getShuffleEnabled() && playlistSongs.size > 1) {
-                    Random.nextInt(playlistSongs.size)
-                } else 0
-                service.playQueue(
-                    playlistSongs,
-                    startIndex,
-                    MusicService.PlaybackSource(
-                        MusicService.SourceType.PLAYLIST,
-                        playlistId,
-                        playlistName
-                    )
-                )
+            } else {
+                bindMusicService()
             }
         }
     }
 
-    private fun bindMusicService() {
-        val intent = Intent(requireContext(), MusicService::class.java)
-        requireContext().bindService(intent, serviceConnection, Context.BIND_AUTO_CREATE)
-    }
-
-    private fun unbindMusicService() {
-        if (isBound) {
-            // Remove listeners and unbind when fragment is not visible
-            cleanupListeners()
-            requireContext().unbindService(serviceConnection)
-            isBound = false
-            musicService = null
+    private fun setupMoreButton() {
+        binding.btnMore.setOnClickListener {
+            com.arantec.castafiore.ui.dialogs.PlaylistOptionsBottomSheet()
+                .setOnEditNameClickListener { showRenameDialog() }
+                .setOnDeleteListClickListener { confirmDeletePlaylist() }
+                .show(childFragmentManager, "PlaylistOptionsBottomSheet")
         }
     }
 
@@ -394,7 +260,6 @@ class PlaylistDetailFragment : Fragment() {
                     playlistSongs.clear()
                     playlistSongs.addAll(songs)
                     songAdapter.updateSongs(playlistSongs)
-                    updateDownloadUIState()
 
                     // Info
                     binding.tvInfo.text = buildInfoText(playlistSongs)
@@ -608,115 +473,86 @@ class PlaylistDetailFragment : Fragment() {
             .show()
     }
 
-    private fun observeDownloadStates() {
-        val dm = SongDownloadManager.getInstance(requireContext())
-        viewLifecycleOwner.lifecycleScope.launch {
-            dm.downloadStates
-                .map {
-                    val songs = playlistSongs.toList()
-                    val completed = songs.asSequence()
-                        .map { it.id to java.io.File(dm.createDownloadPath(it)).exists() }
-                        .filter { it.second }
-                        .map { it.first }
-                        .toSet()
-                    val anyDownloading = songs.any { dm.isSongDownloading(it.id) }
-                    Pair(completed, anyDownloading)
-                }
-                .distinctUntilChanged()
-                .flowOn(Dispatchers.Default)
-                .collect { (completedIds, anyDownloading) ->
-                    if (!isAdded || _binding == null) return@collect
-                    val changed = completedIds != lastCompletedIds || anyDownloading != lastAnyDownloading
-                    if (changed) {
-                        lastCompletedIds = completedIds
-                        lastAnyDownloading = anyDownloading
-                        updateDownloadUIState()
-                        songAdapter.notifyDataSetChanged()
-                    }
-                }
-        }
-    }
-
-    private fun updateDownloadUIState() {
-        if (!isAdded || _binding == null) return
-        val dm = SongDownloadManager.getInstance(requireContext())
-        val songs = playlistSongs.toList()
-        val anyDownloading = songs.any { dm.isSongDownloading(it.id) }
-        val allDownloaded = songs.isNotEmpty() && songs.all { File(dm.createDownloadPath(it)).exists() }
-
-        binding.progressDownload.visibility = if (anyDownloading) View.VISIBLE else View.GONE
-        binding.btnDownload.visibility = if (anyDownloading) View.INVISIBLE else View.VISIBLE
-
-        val tintColorRes = if (allDownloaded) R.color.primary else R.color.text_secondary
-        binding.btnDownload.imageTintList = ColorStateList.valueOf(
-            ContextCompat.getColor(requireContext(), tintColorRes)
-        )
-    }
-
     private fun confirmDeletePlaylist() {
         val id = playlistId ?: return
-        val name = playlistInfo?.name ?: playlistName ?: ""
         AlertDialog.Builder(requireContext())
-            .setTitle(R.string.delete_playlist)
-            .setMessage(getString(R.string.delete_playlist_confirm, name))
-            .setPositiveButton(R.string.delete) { _, _ ->
+            .setTitle("Eliminar playlist")
+            .setMessage("¿Estás seguro de que quieres eliminar esta playlist?")
+            .setPositiveButton("Eliminar") { _, _ ->
                 viewLifecycleOwner.lifecycleScope.launch {
                     musicRepository.deletePlaylist(id).fold(
                         onSuccess = {
-                            snack(getString(R.string.playlist_deleted_success))
+                            snack("Playlist eliminada")
                             findNavController().popBackStack()
                         },
                         onFailure = {
-                            snack(getString(R.string.playlist_delete_error))
+                            snack("Error al eliminar la playlist")
                         }
                     )
                 }
             }
-            .setNegativeButton(R.string.cancel, null)
+            .setNegativeButton("Cancelar", null)
             .show()
     }
 
+    private fun setStaticBackground() {
+        if (!isAdded || _binding == null) return
+
+        // Aplicar color estático de fondo oscuro
+        val staticColor = 0xFF121212.toInt()
+        binding.gradientBackground.setBackgroundColor(staticColor)
+        binding.collapsingToolbar.setContentScrimColor(staticColor)
+        binding.collapsingToolbar.setStatusBarScrimColor(staticColor)
+
+        // Usar iconos blancos para el toolbar
+        binding.toolbar.navigationIcon?.setTint(android.graphics.Color.WHITE)
+
+        // Aplicar color de status bar usando utility
+        StatusBarUtils.setStatusBarColor(this)
+    }
+
     private fun applyDynamicAppBarGradientFromBitmap(bitmap: Bitmap) {
+        if (!isAdded || _binding == null) return
+
         Palette.from(bitmap).generate { palette ->
             if (!isAdded || _binding == null) return@generate
 
             val darkMuted = palette?.darkVibrantSwatch?.rgb
                 ?: palette?.vibrantSwatch?.rgb
                 ?: palette?.darkMutedSwatch?.rgb
-                ?: "#2A2A2A".toColorInt()
+                ?: 0xFF2A2A2A.toInt()
 
             applyAppBarGradient(darkMuted)
         }
     }
 
     private fun applyAppBarGradient(topColor: Int) {
-        val baseColor = "#121212".toColorInt()
+        if (!isAdded || _binding == null) return
 
-        // Mantener el degradado para el fondo estático detrás del contenido
+        val baseColor = 0xFF121212.toInt()
+
+        // Construir un degradado suave para el fondo
         val bgGradient = buildSmoothGradient(baseColor, topColor)
         binding.gradientBackground.background = bgGradient
 
-        // Para AppBar y scrims, usar color sólido estable
+        // Para el AppBar, usar colores sólidos estables
         binding.appBarLayout.background = android.graphics.drawable.ColorDrawable(baseColor)
         binding.collapsingToolbar.setContentScrimColor(baseColor)
-        // Usar color base estable en lugar de dinámico para evitar parpadeos
         binding.collapsingToolbar.setStatusBarScrimColor(baseColor)
         binding.toolbar.navigationIcon?.setTint(android.graphics.Color.WHITE)
-        // Usar color fijo estable en lugar de dinámico para evitar parpadeos/crashes
         StatusBarUtils.setStatusBarColor(this)
     }
 
     private fun buildSmoothGradient(baseColor: Int, topColor: Int): GradientDrawable {
         // Crear múltiples colores intermedios con transición más temprana
-        val color1 = blendColors(baseColor, topColor, 0.92f)  // 92% base, 8% top
-        val color2 = blendColors(baseColor, topColor, 0.82f)  // 82% base, 18% top
-        val color3 = blendColors(baseColor, topColor, 0.68f)  // 68% base, 32% top
-        val color4 = blendColors(baseColor, topColor, 0.52f)  // 52% base, 48% top
-        val color5 = blendColors(baseColor, topColor, 0.35f)  // 35% base, 65% top
-        val color6 = blendColors(baseColor, topColor, 0.18f)  // 18% base, 82% top
-        val color7 = blendColors(baseColor, topColor, 0.05f)  // 5% base, 95% top
+        val color1 = blendColors(baseColor, topColor, 0.92f)
+        val color2 = blendColors(baseColor, topColor, 0.82f)
+        val color3 = blendColors(baseColor, topColor, 0.68f)
+        val color4 = blendColors(baseColor, topColor, 0.52f)
+        val color5 = blendColors(baseColor, topColor, 0.35f)
+        val color6 = blendColors(baseColor, topColor, 0.18f)
+        val color7 = blendColors(baseColor, topColor, 0.05f)
 
-        // Array de colores con transición suave desde 10%
         val colors = intArrayOf(baseColor, baseColor, color1, color2, color3, color4, color5, color6, color7, topColor)
 
         return GradientDrawable(GradientDrawable.Orientation.BOTTOM_TOP, colors).apply {
@@ -725,13 +561,11 @@ class PlaylistDetailFragment : Fragment() {
             setDither(true)
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                // Zona sólida solo del 10%, transición suave distribuida en el 90% restante
                 setColors(colors, floatArrayOf(0f, 0.1f, 0.22f, 0.35f, 0.5f, 0.65f, 0.78f, 0.88f, 0.95f, 1f))
             }
         }
     }
 
-    // Función auxiliar para mezclar colores
     private fun blendColors(color1: Int, color2: Int, ratio: Float): Int {
         val inverseRatio = 1f - ratio
         val r = (android.graphics.Color.red(color1) * ratio + android.graphics.Color.red(color2) * inverseRatio).toInt()
@@ -741,25 +575,64 @@ class PlaylistDetailFragment : Fragment() {
         return android.graphics.Color.argb(a, r, g, b)
     }
 
-    private fun setStaticBackground() {
-        if (!isAdded || _binding == null) return
-
-        // Aplicar color estático independientemente del bitmap
-        val staticColor = 0xFF121212.toInt()
-        binding.gradientBackground.setBackgroundColor(staticColor)
-        binding.collapsingToolbar.setContentScrimColor(staticColor)
-        binding.collapsingToolbar.setStatusBarScrimColor(staticColor)
-
-        // Usar iconos blancos para el toolbar (apropiado para fondo oscuro)
-        binding.toolbar.navigationIcon?.setTint(android.graphics.Color.WHITE)
-
-        // Use centralized status bar color utility
-        StatusBarUtils.setStatusBarColor(this)
+    private fun updateFavoriteButtonVisibilityAndState() {
+        val info = playlistInfo
+        if (info?.public == true) {
+            binding.btnFavorite.visibility = View.VISIBLE
+            val isFav = com.arantec.castafiore.utils.PlaylistFavoritesManager.isFavorite(requireContext(), playlistId)
+            binding.btnFavorite.setImageResource(if (isFav) R.drawable.ic_favorite else R.drawable.ic_favorite_border)
+            val tintColor = if (isFav) R.color.primary else R.color.white
+            binding.btnFavorite.imageTintList = android.content.res.ColorStateList.valueOf(
+                androidx.core.content.ContextCompat.getColor(requireContext(), tintColor)
+            )
+        } else {
+            binding.btnFavorite.visibility = View.GONE
+        }
     }
 
-    override fun onResume() {
-        super.onResume()
-        StatusBarUtils.setStatusBarColor(this)
+    private fun showSongOptions(song: com.arantec.castafiore.data.models.Song) {
+        com.arantec.castafiore.ui.dialogs.SongOptionsBottomSheet
+            .newInstance(song)
+            .setOnAddToQueueClickListener { s: com.arantec.castafiore.data.models.Song -> musicService?.addToQueue(s) }
+            .setOnPlayNextClickListener { s: com.arantec.castafiore.data.models.Song -> musicService?.playNext(s) }
+            .setOnAddToPlaylistClickListener { s: com.arantec.castafiore.data.models.Song ->
+                com.arantec.castafiore.ui.dialogs.PlaylistSelectorBottomSheet.newInstance(s)
+                    .show(childFragmentManager, "playlistSelector")
+            }
+            .setOnRemoveFromPlaylistClickListener { s: com.arantec.castafiore.data.models.Song ->
+                confirmRemoveSong(s)
+            }
+            .setOnSongInfoClickListener { s: com.arantec.castafiore.data.models.Song ->
+                showSongInfo(s)
+            }
+            .setOnViewArtistClickListener { s: com.arantec.castafiore.data.models.Song ->
+                val artistId = s.artistId
+                if (!artistId.isNullOrEmpty()) {
+                    val args = bundleOf(
+                        "artistId" to artistId,
+                        "artistName" to s.artist
+                    )
+                    findNavController().navigate(com.arantec.castafiore.R.id.artistDetailFragment, args)
+                } else {
+                    snack("Artista no disponible")
+                }
+            }
+            .setOnViewAlbumClickListener { s: com.arantec.castafiore.data.models.Song ->
+                val albumId = s.albumId
+                if (!albumId.isNullOrEmpty()) {
+                    viewLifecycleOwner.lifecycleScope.launch {
+                        musicRepository.getAlbumDetail(albumId).onSuccess { album ->
+                            val args = bundleOf("album" to album)
+                            findNavController().navigate(com.arantec.castafiore.R.id.albumDetailFragment, args)
+                        }.onFailure {
+                            snack("No se pudo abrir el álbum")
+                        }
+                    }
+                } else {
+                    snack("Álbum no disponible")
+                }
+            }
+            .show(childFragmentManager, "SongOptionsBottomSheet")
     }
 
     override fun onStart() {
@@ -774,79 +647,23 @@ class PlaylistDetailFragment : Fragment() {
 
     override fun onDestroyView() {
         super.onDestroyView()
+        cleanupListeners()
         _binding = null
-        // Ensure unbound
-        unbindMusicService()
     }
 
-    private fun isPlaylistFullyDownloaded(): Boolean {
-        val dm = SongDownloadManager.getInstance(requireContext())
-        val songs = playlistSongs.toList()
-        if (songs.isEmpty()) return false
-        return songs.all { File(dm.createDownloadPath(it)).exists() }
+    private fun bindMusicService() {
+        if (!isBound) {
+            val intent = Intent(requireContext(), MusicService::class.java)
+            requireContext().bindService(intent, serviceConnection, Context.BIND_AUTO_CREATE)
+        }
     }
 
-    private fun showConfirmDeletePlaylistDownloads() {
-        val dm = SongDownloadManager.getInstance(requireContext())
-        val downloadedSongs = playlistSongs.filter { File(dm.createDownloadPath(it)).exists() }
-        if (downloadedSongs.isEmpty()) {
-            snack("No hay descargas para eliminar")
-            return
-        }
-        val count = downloadedSongs.size
-        val message = if (count == 1) {
-            "Se eliminará 1 canción descargada de esta playlist. ¿Deseas continuar?"
-        } else {
-            "Se eliminarán $count canciones descargadas de esta playlist. ¿Deseas continuar?"
-        }
-        AlertDialog.Builder(requireContext())
-            .setTitle("Eliminar descargas de la playlist")
-            .setMessage(message)
-            .setPositiveButton("Eliminar") { _, _ ->
-                deletePlaylistDownloads(downloadedSongs)
-            }
-            .setNegativeButton(R.string.cancel, null)
-            .show()
-    }
-
-    private fun deletePlaylistDownloads(songsToDelete: List<Song>) {
-        val dm = SongDownloadManager.getInstance(requireContext())
-        var deleted = 0
-        songsToDelete.forEach { song ->
-            val removed = dm.deleteSong(song.id)
-            if (removed) {
-                deleted++
-            } else {
-                try {
-                    val path = dm.createDownloadPath(song)
-                    val f = File(path)
-                    if (f.exists() && f.delete()) {
-                        deleted++
-                    }
-                    dm.cancelDownload(song.id)
-                } catch (_: Exception) { /* ignore */ }
-            }
-        }
-        updateDownloadUIState()
-        songAdapter.notifyDataSetChanged()
-        val msg = when (deleted) {
-            0 -> "No se pudo eliminar ninguna descarga"
-            1 -> "Se eliminó 1 descarga"
-            else -> "Se eliminaron $deleted descargas"
-        }
-        snack(msg)
-    }
-
-    private fun updateFavoriteButtonVisibilityAndState() {
-        val info = playlistInfo
-        if (info?.public == true) {
-            binding.btnFavorite.visibility = View.VISIBLE
-            val isFav = PlaylistFavoritesManager.isFavorite(requireContext(), playlistId)
-            binding.btnFavorite.setImageResource(if (isFav) R.drawable.ic_favorite else R.drawable.ic_favorite_border)
-            val tintColor = if (isFav) R.color.primary else R.color.white
-            binding.btnFavorite.imageTintList = ColorStateList.valueOf(ContextCompat.getColor(requireContext(), tintColor))
-        } else {
-            binding.btnFavorite.visibility = View.GONE
+    private fun unbindMusicService() {
+        if (isBound) {
+            cleanupListeners()
+            requireContext().unbindService(serviceConnection)
+            isBound = false
+            musicService = null
         }
     }
 }

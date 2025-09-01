@@ -12,7 +12,6 @@ import android.view.ViewGroup
 import android.widget.Toast
 import androidx.lifecycle.lifecycleScope
 import com.arantec.castafiore.R
-import com.arantec.castafiore.data.download.SongDownloadManager
 import com.arantec.castafiore.data.models.Song
 import com.arantec.castafiore.data.repository.MusicRepository
 import com.arantec.castafiore.databinding.BottomSheetSongOptionsBinding
@@ -22,7 +21,6 @@ import com.arantec.castafiore.service.MusicService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.io.File
 
 class SongOptionsBottomSheet : BottomSheetDialogFragment() {
 
@@ -45,8 +43,8 @@ class SongOptionsBottomSheet : BottomSheetDialogFragment() {
     private var onViewArtistClick: ((Song) -> Unit)? = null
     private var onShareClick: ((Song) -> Unit)? = null
     private var onSongInfoClick: ((Song) -> Unit)? = null
-    private var onRemoveFromPlaylistClick: ((Song) -> Unit)? = null // Nuevo callback: eliminar de playlist
-    private var onSongRadioClick: ((Song, List<Song>) -> Unit)? = null // Nuevo callback: radio de canción
+    private var onRemoveFromPlaylistClick: ((Song) -> Unit)? = null
+    private var onSongRadioClick: ((Song, List<Song>) -> Unit)? = null
 
     private var musicService: MusicService? = null
     private var isBound: Boolean = false
@@ -316,14 +314,6 @@ class SongOptionsBottomSheet : BottomSheetDialogFragment() {
         // Implementar lógica real de favoritos para canciones conectada con la API de Navidrome
         viewLifecycleOwner.lifecycleScope.launch {
             try {
-                // Si vamos a marcar como favorito, verificar si las favoritas actuales están completamente descargadas
-                var favoritesFullyDownloadedBefore = false
-                if (!isSongFavorited) {
-                    favoritesFullyDownloadedBefore = withContext(Dispatchers.IO) {
-                        areFavoritesFullyDownloaded()
-                    }
-                }
-
                 val result = withContext(Dispatchers.IO) {
                     if (isSongFavorited) {
                         musicRepository.unstarSong(song.id)
@@ -336,10 +326,7 @@ class SongOptionsBottomSheet : BottomSheetDialogFragment() {
                     onSuccess = {
                         isSongFavorited = !isSongFavorited
                         updateFavoriteButton()
-                        // Si acabamos de agregar a favoritos y las favoritas estaban descargadas, descargar esta canción
-                        if (isSongFavorited && favoritesFullyDownloadedBefore) {
-                            downloadIfNeeded(song)
-                        }
+                        // Streaming-only: remove auto-download behavior when favorites were fully downloaded
                     },
                     onFailure = { error ->
                         Toast.makeText(
@@ -357,33 +344,6 @@ class SongOptionsBottomSheet : BottomSheetDialogFragment() {
                 ).show()
             }
         }
-    }
-
-    // Verifica si TODAS las canciones favoritas actuales están descargadas (antes de agregar una nueva)
-    private suspend fun areFavoritesFullyDownloaded(): Boolean {
-        return try {
-            val dm = SongDownloadManager.getInstance(requireContext())
-            val result = musicRepository.getStarredSongs()
-            result.fold(
-                onSuccess = { songs ->
-                    if (songs.isEmpty()) return@fold false
-                    songs.all { File(dm.createDownloadPath(it)).exists() }
-                },
-                onFailure = { false }
-            )
-        } catch (_: Exception) {
-            false
-        }
-    }
-
-    // Descarga la canción si aún no está descargada ni en descarga
-    private fun downloadIfNeeded(song: Song) {
-        try {
-            val dm = SongDownloadManager.getInstance(requireContext())
-            if (!dm.isSongDownloaded(song.id) && !dm.isSongDownloading(song.id)) {
-                dm.downloadSong(song)
-            }
-        } catch (_: Exception) { /* no-op */ }
     }
 
     private fun checkSongFavoriteStatus() {
@@ -461,13 +421,11 @@ class SongOptionsBottomSheet : BottomSheetDialogFragment() {
         return this
     }
 
-    // Nuevo setter: eliminar de playlist
     fun setOnRemoveFromPlaylistClickListener(listener: (Song) -> Unit): SongOptionsBottomSheet {
         onRemoveFromPlaylistClick = listener
         return this
     }
 
-    // Nuevo setter: radio de canción
     fun setOnSongRadioClickListener(listener: (Song, List<Song>) -> Unit): SongOptionsBottomSheet {
         onSongRadioClick = listener
         return this

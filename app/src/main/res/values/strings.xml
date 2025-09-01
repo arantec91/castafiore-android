@@ -3,7 +3,6 @@
     <string name="artist_avatar">Avatar del artista</string>
     <string name="album_icon">Icono de álbum</string>
     <string name="add_to_favorites">Añadir a favoritos</string>
-    <string name="download">Descargar</string>
     <string name="more_options">Más opciones</string>
     <string name="shuffle_play">Reproducción aleatoria</string>
     <string name="play_album">Reproducir álbum</string>
@@ -30,17 +29,20 @@
     <string name="favorite_songs_title">Canciones favoritas</string>
     <string name="error_loading_favorites">Error al cargar favoritos</string>
 
-    <!-- Descargas -->
+    <!-- Descargas (removed download-specific strings) -->
+    <!--
     <string name="song_already_downloaded">La canción ya está descargada</string>
     <string name="download_canceled">Descarga cancelada: %1$s</string>
     <string name="download_started">Descarga iniciada: %1$s</string>
     <string name="delete_download">Eliminar descarga</string>
     <string name="delete_download_confirm">¿Eliminar la descarga de "%1$s"?</string>
-    <string name="delete">Eliminar</string>
     <string name="download_deleted">Descarga eliminada</string>
     <string name="download_delete_error">Error al eliminar la descarga</string>
-    <string name="cancel">Cancelar</string>
+    <string name="cancel_download">Cancelar descarga</string>
     <string name="song_not_downloaded">La canción no está descargada</string>
+    -->
+    <string name="delete">Eliminar</string>
+    <string name="cancel">Cancelar</string>
 
     <!-- Accesibilidad y estados -->
     <string name="favorites_icon_desc">Icono de favoritos</string>

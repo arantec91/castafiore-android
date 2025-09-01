@@ -14,7 +14,6 @@ class PlaylistOptionsBottomSheet : BottomSheetDialogFragment() {
 
     private var onEditNameClickListener: (() -> Unit)? = null
     private var onDeleteListClickListener: (() -> Unit)? = null
-    private var onDownloadClickListener: (() -> Unit)? = null
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -45,10 +44,6 @@ class PlaylistOptionsBottomSheet : BottomSheetDialogFragment() {
             onDeleteListClickListener?.invoke()
             dismiss()
         }
-        binding.optionDownload.setOnClickListener {
-            onDownloadClickListener?.invoke()
-            dismiss()
-        }
     }
 
     fun setOnEditNameClickListener(listener: () -> Unit): PlaylistOptionsBottomSheet {
@@ -61,8 +56,8 @@ class PlaylistOptionsBottomSheet : BottomSheetDialogFragment() {
         return this
     }
 
-    fun setOnDownloadClickListener(listener: () -> Unit): PlaylistOptionsBottomSheet {
-        onDownloadClickListener = listener
+    @Deprecated("Download option removed in streaming-only mode; this is a no-op.")
+    fun setOnDownloadClickListener(@Suppress("UNUSED_PARAMETER") listener: () -> Unit): PlaylistOptionsBottomSheet {
         return this
     }
 
@@ -71,4 +66,3 @@ class PlaylistOptionsBottomSheet : BottomSheetDialogFragment() {
         _binding = null
     }
 }
-

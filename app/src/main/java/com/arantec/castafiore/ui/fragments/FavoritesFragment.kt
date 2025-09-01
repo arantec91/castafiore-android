@@ -26,12 +26,9 @@ import kotlinx.coroutines.launch
 import com.bumptech.glide.Glide
 import java.util.Locale
 import kotlin.random.Random
-import com.arantec.castafiore.data.download.SongDownloadManager
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.Dispatchers
 import androidx.core.content.ContextCompat
-import android.content.res.ColorStateList
-import java.io.File
 
 class FavoritesFragment : Fragment() {
 
@@ -92,29 +89,14 @@ class FavoritesFragment : Fragment() {
 
         setupToolbar()
         setupRecyclerView()
-        // Removed eager bind here; we'll bind in onStart so only visible fragment listens
-        // bindMusicService()
         loadFavorites()
         setupFab()
-
-        // Download button and observers
-        binding.btnDownload.setOnClickListener {
-            if (isFavoritesFullyDownloaded()) {
-                showConfirmDeleteFavoritesDownloads()
-            } else {
-                downloadFavorites()
-            }
-        }
-        observeDownloadStates()
-        updateDownloadUIState()
     }
 
     private fun setupToolbar() {
         binding.toolbar.setNavigationOnClickListener {
             findNavController().popBackStack()
         }
-        // Removed solid color override to allow XML gradient to show
-        // binding.gradientBackground.setBackgroundColor(0xFF121212.toInt())
     }
 
     private fun setupRecyclerView() {
@@ -195,7 +177,6 @@ class FavoritesFragment : Fragment() {
                     favoriteSongs.clear()
                     favoriteSongs.addAll(songs)
                     songAdapter.updateSongs(favoriteSongs)
-                    updateDownloadUIState()
 
                     binding.tvTitle.text = getString(R.string.favorite_songs_title)
                     binding.tvInfo.text = buildInfoText(favoriteSongs)
@@ -304,116 +285,9 @@ class FavoritesFragment : Fragment() {
         }
     }
 
-    // --- Downloads for Favorites ---
-    private fun observeDownloadStates() {
-        val dm = SongDownloadManager.getInstance(requireContext())
-        viewLifecycleOwner.lifecycleScope.launch {
-            dm.downloadStates
-                .map {
-                    val songs = favoriteSongs.toList()
-                    val completed = songs.asSequence()
-                        .map { it.id to File(dm.createDownloadPath(it)).exists() }
-                        .filter { it.second }
-                        .map { it.first }
-                        .toSet()
-                    val anyDownloading = songs.any { dm.isSongDownloading(it.id) }
-                    Pair(completed, anyDownloading)
-                }
-                .distinctUntilChanged()
-                .flowOn(Dispatchers.Default)
-                .collect { (completedIds, anyDownloading) ->
-                    if (!isAdded || _binding == null) return@collect
-                    val changed = completedIds != lastCompletedIds || anyDownloading != lastAnyDownloading
-                    if (changed) {
-                        lastCompletedIds = completedIds
-                        lastAnyDownloading = anyDownloading
-                        updateDownloadUIState()
-                        songAdapter.notifyDataSetChanged()
-                    }
-                }
-        }
-    }
-
-    private fun updateDownloadUIState() {
-        if (!isAdded || _binding == null) return
-        val dm = SongDownloadManager.getInstance(requireContext())
-        val songs = favoriteSongs.toList()
-        val anyDownloading = songs.any { dm.isSongDownloading(it.id) }
-        val allDownloaded = songs.isNotEmpty() && songs.all { File(dm.createDownloadPath(it)).exists() }
-
-        binding.progressDownload.visibility = if (anyDownloading) View.VISIBLE else View.GONE
-        binding.btnDownload.visibility = if (anyDownloading) View.INVISIBLE else View.VISIBLE
-
-        val tintColorRes = if (allDownloaded) R.color.primary else R.color.text_secondary
-        binding.btnDownload.imageTintList = ColorStateList.valueOf(
-            ContextCompat.getColor(requireContext(), tintColorRes)
-        )
-    }
-
-    private fun downloadFavorites() {
-        if (favoriteSongs.isEmpty()) {
-            snack("No hay canciones para descargar")
-            return
-        }
-        val dm = SongDownloadManager.getInstance(requireContext())
-        val alreadyDownloaded = favoriteSongs.count { dm.isSongDownloaded(it.id) }
-        val currentlyDownloading = favoriteSongs.count { dm.isSongDownloading(it.id) }
-        val toDownload = favoriteSongs.filter { !dm.isSongDownloaded(it.id) && !dm.isSongDownloading(it.id) }
-        when {
-            alreadyDownloaded == favoriteSongs.size -> {
-                snack("Todas las favoritas ya están descargadas")
-            }
-            toDownload.isEmpty() && currentlyDownloading > 0 -> {
-                snack("Descargando favoritas ($currentlyDownloading pendientes)")
-            }
-            else -> {
-                toDownload.forEach { song -> dm.downloadSong(song) }
-                val message = if (alreadyDownloaded > 0) {
-                    "Descargando ${toDownload.size} canciones restantes"
-                } else {
-                    "Descargando favoritas (${toDownload.size} canciones)"
-                }
-                snack(message)
-            }
-        }
-    }
-
     private fun showSongOptions(song: Song) {
         val bottomSheet = com.arantec.castafiore.ui.dialogs.SongOptionsBottomSheet
             .newInstance(song, false)
-            .setOnDownloadClickListener { selectedSong ->
-                val downloadManager = com.arantec.castafiore.data.download.SongDownloadManager.getInstance(requireContext())
-                when {
-                    downloadManager.isSongDownloaded(selectedSong.id) -> {
-                        snack(getString(R.string.song_already_downloaded))
-                    }
-                    downloadManager.isSongDownloading(selectedSong.id) -> {
-                        downloadManager.cancelDownload(selectedSong.id)
-                        snack(getString(R.string.download_canceled, selectedSong.title))
-                    }
-                    else -> {
-                        downloadManager.downloadSong(selectedSong)
-                        snack(getString(R.string.download_started, selectedSong.title))
-                    }
-                }
-            }
-            .setOnDeleteDownloadClickListener { selectedSong ->
-                val downloadManager = com.arantec.castafiore.data.download.SongDownloadManager.getInstance(requireContext())
-                if (downloadManager.isSongDownloaded(selectedSong.id)) {
-                    val builder = androidx.appcompat.app.AlertDialog.Builder(requireContext())
-                    builder.setTitle(R.string.delete_download)
-                    builder.setMessage(getString(R.string.delete_download_confirm, selectedSong.title))
-                    builder.setPositiveButton(R.string.delete) { _: android.content.DialogInterface, _: Int ->
-                        val success = downloadManager.deleteSong(selectedSong.id)
-                        val msg = if (success) R.string.download_deleted else R.string.download_delete_error
-                        snack(getString(msg))
-                    }
-                    builder.setNegativeButton(R.string.cancel, null)
-                    builder.show()
-                } else {
-                    snack(getString(R.string.song_not_downloaded))
-                }
-            }
             .setOnAddToQueueClickListener { selectedSong ->
                 val service = musicService
                 if (service != null) {
@@ -591,64 +465,5 @@ class FavoritesFragment : Fragment() {
         // Extra safety: ensure unbound
         unbindMusicService()
         _binding = null
-    }
-
-    private fun isFavoritesFullyDownloaded(): Boolean {
-        val dm = SongDownloadManager.getInstance(requireContext())
-        val songs = favoriteSongs.toList()
-        if (songs.isEmpty()) return false
-        return songs.all { File(dm.createDownloadPath(it)).exists() }
-    }
-
-    private fun showConfirmDeleteFavoritesDownloads() {
-        val dm = SongDownloadManager.getInstance(requireContext())
-        val downloadedSongs = favoriteSongs.filter { File(dm.createDownloadPath(it)).exists() }
-        if (downloadedSongs.isEmpty()) {
-            snack("No hay descargas para eliminar")
-            return
-        }
-        val count = downloadedSongs.size
-        val title = "Eliminar descargas de favoritas"
-        val message = if (count == 1) {
-            "Se eliminará 1 canción descargada de tus favoritas. ¿Deseas continuar?"
-        } else {
-            "Se eliminarán $count canciones descargadas de tus favoritas. ¿Deseas continuar?"
-        }
-        androidx.appcompat.app.AlertDialog.Builder(requireContext())
-            .setTitle(title)
-            .setMessage(message)
-            .setPositiveButton("Eliminar") { _, _ ->
-                deleteFavoritesDownloads(downloadedSongs)
-            }
-            .setNegativeButton(R.string.cancel, null)
-            .show()
-    }
-
-    private fun deleteFavoritesDownloads(songsToDelete: List<Song>) {
-        val dm = SongDownloadManager.getInstance(requireContext())
-        var deleted = 0
-        songsToDelete.forEach { song ->
-            val removed = dm.deleteSong(song.id)
-            if (removed) {
-                deleted++
-            } else {
-                try {
-                    val path = dm.createDownloadPath(song)
-                    val f = File(path)
-                    if (f.exists() && f.delete()) {
-                        deleted++
-                    }
-                    dm.cancelDownload(song.id)
-                } catch (_: Exception) { /* ignore */ }
-            }
-        }
-        updateDownloadUIState()
-        songAdapter.notifyDataSetChanged()
-        val msg = when (deleted) {
-            0 -> "No se pudo eliminar ninguna descarga"
-            1 -> "Se eliminó 1 descarga"
-            else -> "Se eliminaron $deleted descargas"
-        }
-        snack(msg)
     }
 }

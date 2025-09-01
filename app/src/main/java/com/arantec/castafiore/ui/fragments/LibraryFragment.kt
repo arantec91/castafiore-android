@@ -23,8 +23,9 @@ import com.google.android.material.chip.Chip
 import com.arantec.castafiore.data.download.SongDownloadManager
 import com.arantec.castafiore.utils.PlaylistFavoritesManager
 import java.io.File
+import com.arantec.castafiore.ui.helpers.HasContentState
 
-class LibraryFragment : Fragment() {
+class LibraryFragment : Fragment(), HasContentState {
 
     private var _binding: FragmentLibraryBinding? = null
     private val binding get() = _binding!!
@@ -51,6 +52,10 @@ class LibraryFragment : Fragment() {
     // Estado para evitar parpadeo y actualizaciones redundantes
     private var lastDownloadsVisible: Boolean = false
     private var lastDownloadedIds: Set<String> = emptySet()
+
+    override fun hasContent(): Boolean {
+        return this::libraryAdapter.isInitialized && libraryAdapter.itemCount > 0
+    }
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -213,7 +218,10 @@ class LibraryFragment : Fragment() {
     }
 
     private fun loadInitialData() {
-        showLoading(true)
+        // Only show local loader if we already have content (refresh behavior)
+        if (hasContent()) {
+            showLoading(true)
+        }
 
         viewLifecycleOwner.lifecycleScope.launch {
             try {

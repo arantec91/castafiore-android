@@ -39,7 +39,14 @@ class StorageFragment : Fragment() {
 
         binding.toolbar.setNavigationOnClickListener { findNavController().popBackStack() }
 
-        binding.btnDeleteDownloads.setOnClickListener { confirmAndDeleteDownloads() }
+        // Streaming-only: hide Delete Downloads section entirely
+        binding.tvTitleDeleteDownloads.visibility = View.GONE
+        binding.tvDescDeleteDownloads.visibility = View.GONE
+        binding.btnDeleteDownloads.visibility = View.GONE
+        binding.dividerAfterDelete.visibility = View.GONE
+
+        // Disable click listener for hidden button
+        // binding.btnDeleteDownloads.setOnClickListener { confirmAndDeleteDownloads() }
         binding.btnClearCache.setOnClickListener { clearCache() }
     }
 
@@ -73,9 +80,9 @@ class StorageFragment : Fragment() {
             }
             setBusy(false)
             if (success) {
-                toast(getString(R.string.storage_delete_success))
+                snack(getString(R.string.storage_delete_success))
             } else {
-                toast(getString(R.string.storage_delete_error))
+                snack(getString(R.string.storage_delete_error))
             }
         }
     }
@@ -106,9 +113,9 @@ class StorageFragment : Fragment() {
             }
             setBusy(false)
             if (success) {
-                toast(getString(R.string.storage_clear_cache_success))
+                snack(getString(R.string.storage_clear_cache_success))
             } else {
-                toast(getString(R.string.storage_clear_cache_error))
+                snack(getString(R.string.storage_clear_cache_error))
             }
         }
     }

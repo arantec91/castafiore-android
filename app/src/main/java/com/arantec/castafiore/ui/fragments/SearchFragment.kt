@@ -44,10 +44,10 @@ import android.os.IBinder
 import com.arantec.castafiore.service.MusicService
 import com.arantec.castafiore.ui.dialogs.SongOptionsBottomSheet
 import com.arantec.castafiore.ui.dialogs.PlaylistSelectorBottomSheet
-import com.arantec.castafiore.data.download.SongDownloadManager
 import com.arantec.castafiore.utils.StatusBarUtils
+import com.arantec.castafiore.ui.helpers.HasContentState
 
-class SearchFragment : Fragment() {
+class SearchFragment : Fragment(), HasContentState {
 
     companion object {
         private const val SEARCH_DELAY_MS = 350L
@@ -135,7 +135,10 @@ class SearchFragment : Fragment() {
         } else {
             if (cachedQuery.isNotBlank()) {
                 // Si hay query pero no items, disparar búsqueda sin mostrar estado vacío
-                showLoading(true)
+                // Importante: no mostrar loading local si no hay contenido aún; usar overlay global
+                if (hasContent()) {
+                    showLoading(true)
+                }
                 performSearch(cachedQuery)
             } else {
                 // Mostrar grid de playlists públicas en lugar del estado vacío
@@ -381,7 +384,10 @@ class SearchFragment : Fragment() {
         }
 
         ensureAuth()
-        showLoading(true)
+        // Solo mostrar loading local si ya hay contenido visible
+        if (hasContent()) {
+            showLoading(true)
+        }
 
         lifecycleScope.launch {
             val result = musicRepository.searchMusic(query)
@@ -432,13 +438,6 @@ class SearchFragment : Fragment() {
     private fun showSongOptions(song: Song) {
         val bottomSheet = SongOptionsBottomSheet
             .newInstance(song)
-            .setOnDownloadClickListener { s ->
-                SongDownloadManager.getInstance(requireContext()).downloadSong(s)
-            }
-            .setOnDeleteDownloadClickListener { s ->
-                val ok = SongDownloadManager.getInstance(requireContext()).deleteSong(s.id)
-                if (!ok) Toast.makeText(requireContext(), "No se pudo eliminar la descarga", Toast.LENGTH_SHORT).show()
-            }
             .setOnAddToQueueClickListener { s ->
                 musicService?.addToQueue(s)
             }
@@ -577,5 +576,11 @@ class SearchFragment : Fragment() {
         if (_binding != null) {
             binding.rvSearchResults.isNestedScrollingEnabled = true
         }
+    }
+
+    override fun hasContent(): Boolean {
+        val hasResults = (this::searchAdapter.isInitialized && searchAdapter.itemCount > 0)
+        val hasPlaylists = (this::publicPlaylistsAdapter.isInitialized && publicPlaylistsAdapter.itemCount > 0)
+        return hasResults || hasPlaylists
     }
 }

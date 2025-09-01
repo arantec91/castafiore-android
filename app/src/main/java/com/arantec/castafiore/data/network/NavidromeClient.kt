@@ -4,6 +4,7 @@ import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
+import java.net.URI
 import java.security.MessageDigest
 import java.util.*
 import java.util.concurrent.TimeUnit
@@ -16,8 +17,14 @@ object NavidromeClient {
         val logging = HttpLoggingInterceptor()
         logging.setLevel(HttpLoggingInterceptor.Level.BODY)
 
+        val host = try {
+            URI(if (serverUrl.endsWith("/")) serverUrl else "$serverUrl/").host ?: ""
+        } catch (_: Exception) { "" }
+
         val client = OkHttpClient.Builder()
             .addInterceptor(logging)
+            // Track only Navidrome API host
+            .addInterceptor(InFlightInterceptor(host))
             .connectTimeout(25, TimeUnit.SECONDS)
             .readTimeout(25, TimeUnit.SECONDS)
             .writeTimeout(25, TimeUnit.SECONDS)

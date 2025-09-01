@@ -19,7 +19,6 @@ import com.arantec.castafiore.R
 import com.arantec.castafiore.data.models.Album
 import com.arantec.castafiore.data.models.Song
 import com.arantec.castafiore.data.repository.MusicRepository
-import com.arantec.castafiore.data.download.SongDownloadManager
 import com.arantec.castafiore.databinding.FragmentAlbumDetailBinding
 import com.arantec.castafiore.service.MusicService
 import com.arantec.castafiore.ui.adapters.SongAdapter
@@ -38,7 +37,6 @@ import android.view.animation.AlphaAnimation
 import kotlin.random.Random
 import android.graphics.drawable.GradientDrawable
 import androidx.core.graphics.toColorInt
-import java.io.File
 import com.arantec.castafiore.utils.snack
 
 class AlbumDetailFragment : Fragment() {
@@ -53,14 +51,9 @@ class AlbumDetailFragment : Fragment() {
     private var currentAlbum: Album? = null
     private var albumSongs = mutableListOf<Song>()
 
-        // Cached summary to avoid excessive UI updates during downloads
-        private var lastCompletedIds: Set<String> = emptySet()
-        private var lastAnyDownloading: Boolean = false
-
     private var dominantNavIconColor: Int? = null
     private var isPlaying = false
-    private var isFavorited = false // Nueva variable para el estado de favoritos
-    private var autoFavoritedFromDownload = false // Evita repetir la acción al detectar descargas completas
+    private var isFavorited = false
 
     // Referencias a los listeners para poder removerlos después
     private var playbackStateListener: ((Boolean) -> Unit)? = null
@@ -146,8 +139,6 @@ class AlbumDetailFragment : Fragment() {
                 setupClickListeners()
                 loadAlbumDetails()
                 checkFavoriteStatus()
-                observeDownloadStates()
-                updateDownloadUIState()
             }
         }
     }
@@ -407,85 +398,8 @@ class AlbumDetailFragment : Fragment() {
             toggleFavorite()
         }
 
-        // Botón de descarga de álbum
-        binding.btnDownload.setOnClickListener {
-            currentAlbum?.let { album ->
-                // Si todo el álbum ya está descargado, pedir confirmación para eliminar
-                if (isAlbumFullyDownloaded()) {
-                    showConfirmDeleteAlbumDownloads()
-                } else {
-                    downloadAlbum(album)
-                }
-            }
-        }
-    }
-
-    private fun observeDownloadStates() {
-        val dm = SongDownloadManager.getInstance(requireContext())
-        viewLifecycleOwner.lifecycleScope.launch {
-            dm.downloadStates
-                .map { states ->
-                    val songs = albumSongs.toList()
-                    val completed = songs.asSequence()
-                        .map { it.id to java.io.File(dm.createDownloadPath(it)).exists() }
-                        .filter { it.second }
-                        .map { it.first }
-                        .toSet()
-                    val anyDownloading = songs.any { dm.isSongDownloading(it.id) }
-                    Pair(completed, anyDownloading)
-                }
-                .distinctUntilChanged()
-                .flowOn(kotlinx.coroutines.Dispatchers.Default)
-                .collect { (completedIds, anyDownloading) ->
-                    if (!isAdded || _binding == null) return@collect
-                    val changed = completedIds != lastCompletedIds || anyDownloading != lastAnyDownloading
-                    if (changed) {
-                        lastCompletedIds = completedIds
-                        lastAnyDownloading = anyDownloading
-                        updateDownloadUIState()
-                        songAdapter.notifyDataSetChanged()
-                    }
-                }
-        }
-    }
-
-    private fun updateDownloadUIState() {
-        if (!isAdded || _binding == null) return
-        val dm = SongDownloadManager.getInstance(requireContext())
-        val songs = albumSongs.toList()
-        val anyDownloading = songs.any { dm.isSongDownloading(it.id) }
-        val allDownloaded = songs.isNotEmpty() && songs.all { java.io.File(dm.createDownloadPath(it)).exists() }
-
-        // Mostrar indicador mientras se descarga algo del álbum
-        binding.progressDownload.visibility = if (anyDownloading) View.VISIBLE else View.GONE
-        binding.btnDownload.visibility = if (anyDownloading) View.INVISIBLE else View.VISIBLE
-
-        // Cambiar color del botón cuando todas las canciones estén descargadas
-        val tintColorRes = if (allDownloaded) R.color.primary else R.color.text_secondary
-        binding.btnDownload.imageTintList = ColorStateList.valueOf(
-            ContextCompat.getColor(requireContext(), tintColorRes)
-        )
-
-        // Nuevo: Si el álbum está completamente descargado, marcar como favorito y actualizar el botón
-        if (allDownloaded && !isFavorited) {
-            isFavorited = true
-            updateFavoriteButton()
-
-            if (!autoFavoritedFromDownload) {
-                autoFavoritedFromDownload = true
-                val albumId = currentAlbum?.id
-                if (!albumId.isNullOrEmpty()) {
-                    viewLifecycleOwner.lifecycleScope.launch {
-                        try {
-                            // Endpoint idempotente; si ya estaba en favoritos no causa problema
-                            musicRepository.starAlbum(albumId)
-                        } catch (_: Exception) {
-                            // Silenciar para no afectar la UI
-                        }
-                    }
-                }
-            }
-        }
+        // Botón de descarga de álbum deshabilitado en modo streaming
+        // binding.btnDownload.setOnClickListener { ... }
     }
 
     private fun loadAlbumDetails() {
@@ -506,7 +420,7 @@ class AlbumDetailFragment : Fragment() {
                                 albumSongs.clear()
                                 albumSongs.addAll(songsToUse)
                                 songAdapter.updateSongs(albumSongs)
-                                updateDownloadUIState()
+                                // updateDownloadUIState() // disabled in streaming-only mode
                                 songAdapter.notifyDataSetChanged()
                             } else {
                                 // Si no hay canciones en la respuesta, generar de muestra
@@ -577,24 +491,7 @@ class AlbumDetailFragment : Fragment() {
     }
 
     private fun loadAlbumCover(album: Album) {
-        try {
-            // Intentar portada local primero
-            val dm = com.arantec.castafiore.data.download.SongDownloadManager.getInstance(requireContext())
-            val localPath = dm.createAlbumCoverPath(album.artist, album.name)
-            val localFile = java.io.File(localPath)
-            if (localFile.exists()) {
-                // Cargar desde archivo local con fade-in y aplicar palette
-                val bitmap = android.graphics.BitmapFactory.decodeFile(localPath)
-                if (bitmap != null) {
-                    binding.ivAlbumCoverLarge.alpha = 0f
-                    binding.ivAlbumCoverLarge.setImageBitmap(bitmap)
-                    binding.ivAlbumCoverLarge.animate().alpha(1f).setDuration(250).start()
-                    applyDynamicAppBarGradientFromBitmap(bitmap)
-                    return
-                }
-            }
-        } catch (_: Exception) { /* ignorar y seguir con remoto */ }
-
+        // Streaming-only: always load from remote; no local download lookup
         if (album.coverArt != null && musicRepository.serverUrl != null) {
             try {
                 val (username, token, salt) = musicRepository.getAuthParams()
@@ -754,45 +651,13 @@ class AlbumDetailFragment : Fragment() {
 
     private fun showSongOptions(song: Song) {
         val bottomSheet = com.arantec.castafiore.ui.dialogs.SongOptionsBottomSheet.newInstance(song, false)
-            .setOnDownloadClickListener { selectedSong ->
-                val downloadManager = com.arantec.castafiore.data.download.SongDownloadManager.getInstance(requireContext())
-                when {
-                    downloadManager.isSongDownloaded(selectedSong.id) -> {
-                        snack("La canción ya está descargada")
-                    }
-                    downloadManager.isSongDownloading(selectedSong.id) -> {
-                        downloadManager.cancelDownload(selectedSong.id)
-                        snack("Descarga cancelada: ${selectedSong.title}")
-                    }
-                    else -> {
-                        downloadManager.downloadSong(selectedSong)
-                        snack("Descarga iniciada: ${selectedSong.title}")
-                    }
-                }
-            }
-            .setOnDeleteDownloadClickListener { selectedSong ->
-                val downloadManager = com.arantec.castafiore.data.download.SongDownloadManager.getInstance(requireContext())
-                if (downloadManager.isSongDownloaded(selectedSong.id)) {
-                    androidx.appcompat.app.AlertDialog.Builder(requireContext())
-                        .setTitle("Eliminar descarga")
-                        .setMessage("¿Estás seguro de que quieres eliminar la descarga de \"${selectedSong.title}\"?")
-                        .setPositiveButton("Eliminar") { _, _ ->
-                            val success = downloadManager.deleteSong(selectedSong.id)
-                            if (success) snack("Descarga eliminada: ${selectedSong.title}") else snack("Error al eliminar la descarga")
-                        }
-                        .setNegativeButton("Cancelar", null)
-                        .show()
-                } else {
-                    snack("La canción no está descargada")
-                }
-            }
             .setOnAddToQueueClickListener { selectedSong ->
                 musicService?.addToQueue(selectedSong)
-                snack("Agregado a la cola: ${selectedSong.title}")
+                snack("Agregado a la cola: ${'$'}{selectedSong.title}")
             }
             .setOnPlayNextClickListener { selectedSong ->
                 musicService?.playNext(selectedSong)
-                snack("Se reproducirá siguiente: ${selectedSong.title}")
+                snack("Se reproducirá siguiente: ${'$'}{selectedSong.title}")
             }
             .setOnAddToPlaylistClickListener { selectedSong ->
                 // Mostrar diálogo de selección de playlist
@@ -809,7 +674,7 @@ class AlbumDetailFragment : Fragment() {
             .setOnSongInfoClickListener { selectedSong ->
                 showSongInfo(selectedSong)
             }
-            .hideViewAlbumOption() // Ocultar "Ver álbum" ya que estamos viendo este álbum
+            .hideViewAlbumOption()
 
         bottomSheet.show(childFragmentManager, "SongOptionsBottomSheet")
     }
@@ -817,54 +682,17 @@ class AlbumDetailFragment : Fragment() {
     private fun showAlbumOptions() {
         currentAlbum?.let { album ->
             val bottomSheet = com.arantec.castafiore.ui.dialogs.AlbumOptionsBottomSheet.newInstance(album)
-                .setOnDownloadClickListener { selectedAlbum ->
-                    downloadAlbum(selectedAlbum)
-                }
-                .setOnAddToFavoritesClickListener { selectedAlbum ->
+                .setOnAddToFavoritesClickListener { _ ->
                     toggleFavorite()
                 }
                 .setOnAddToQueueClickListener { selectedAlbum ->
                     addAlbumToQueue(selectedAlbum)
-                }
-                .setOnShareClickListener { selectedAlbum ->
-                    shareAlbum(selectedAlbum)
                 }
                 .setOnAlbumInfoClickListener { selectedAlbum ->
                     showAlbumInfo(selectedAlbum)
                 }
 
             bottomSheet.show(childFragmentManager, "AlbumOptionsBottomSheet")
-        }
-    }
-
-    /**
-     * Descarga todas las canciones del álbum
-     */
-    private fun downloadAlbum(album: Album) {
-        if (albumSongs.isEmpty()) {
-            snack("No hay canciones para descargar")
-            return
-        }
-        val downloadManager = com.arantec.castafiore.data.download.SongDownloadManager.getInstance(requireContext())
-        val alreadyDownloaded = albumSongs.count { downloadManager.isSongDownloaded(it.id) }
-        val currentlyDownloading = albumSongs.count { downloadManager.isSongDownloading(it.id) }
-        val toDownload = albumSongs.filter { !downloadManager.isSongDownloaded(it.id) && !downloadManager.isSongDownloading(it.id) }
-        when {
-            alreadyDownloaded == albumSongs.size -> {
-                snack("El álbum ya está completamente descargado")
-            }
-            toDownload.isEmpty() && currentlyDownloading > 0 -> {
-                snack("El álbum se está descargando ($currentlyDownloading canciones pendientes)")
-            }
-            else -> {
-                toDownload.forEach { song -> downloadManager.downloadSong(song) }
-                val message = if (alreadyDownloaded > 0) {
-                    "Descargando ${toDownload.size} canciones restantes del álbum"
-                } else {
-                    "Descargando álbum completo (${toDownload.size} canciones)"
-                }
-                snack(message)
-            }
         }
     }
 
@@ -916,42 +744,24 @@ class AlbumDetailFragment : Fragment() {
     // Métodos para manejar favoritos
     private fun toggleFavorite() {
         currentAlbum?.let { album ->
-            // Deshabilitar mientras se procesa para evitar taps repetidos
             binding.btnFavorite.isEnabled = false
-
-            // Guardar estado previo para saber si estamos quitando de favoritos
-            val wasFavorited = isFavorited
-
             lifecycleScope.launch {
                 try {
                     val result = if (isFavorited) musicRepository.unstarAlbum(album.id) else musicRepository.starAlbum(album.id)
                     result.fold(
                         onSuccess = {
-                            // Toggle localmente
                             isFavorited = !isFavorited
                             updateFavoriteButton()
                             binding.btnFavorite.isEnabled = true
-
-                            // Si se estaba en favoritos y el álbum está completamente descargado, eliminar descargas sin confirmar
-                            if (wasFavorited && isAlbumFullyDownloaded()) {
-                                // Eliminar todas las descargas del álbum automáticamente
-                                val downloadedSongs = albumSongs.filter { song ->
-                                    val dm = SongDownloadManager.getInstance(requireContext())
-                                    java.io.File(dm.createDownloadPath(song)).exists()
-                                }
-                                if (downloadedSongs.isNotEmpty()) {
-                                    deleteAlbumDownloads(downloadedSongs)
-                                }
-                            }
                         },
                         onFailure = { error ->
                             binding.btnFavorite.isEnabled = true
-                            snack("Error al actualizar favoritos: ${error.message}")
+                            snack("Error al actualizar favoritos: ${'$'}{error.message}")
                         }
                     )
                 } catch (e: Exception) {
                     binding.btnFavorite.isEnabled = true
-                    snack("Error: ${e.message}")
+                    snack("Error: ${'$'}{e.message}")
                 }
             }
         }
@@ -1175,7 +985,6 @@ class AlbumDetailFragment : Fragment() {
 
     private fun unbindMusicService() {
         if (isBound) {
-            // Remover listeners específicos de este fragment
             cleanupListeners()
             requireContext().unbindService(serviceConnection)
             isBound = false
@@ -1183,72 +992,6 @@ class AlbumDetailFragment : Fragment() {
         }
     }
 
-    private fun isAlbumFullyDownloaded(): Boolean {
-        val dm = SongDownloadManager.getInstance(requireContext())
-        val songs = albumSongs.toList()
-        if (songs.isEmpty()) return false
-        return songs.all { java.io.File(dm.createDownloadPath(it)).exists() }
-    }
-
-    private fun showConfirmDeleteAlbumDownloads() {
-        val downloadedSongs = albumSongs.filter { song ->
-            val dm = SongDownloadManager.getInstance(requireContext())
-            java.io.File(dm.createDownloadPath(song)).exists()
-        }
-        if (downloadedSongs.isEmpty()) {
-            snack("No hay descargas para eliminar")
-            return
-        }
-
-        val count = downloadedSongs.size
-        val title = "Eliminar descargas del álbum"
-        val message = if (count == 1) {
-            "Se eliminará 1 canción descargada de este álbum. ¿Deseas continuar?"
-        } else {
-            "Se eliminarán $count canciones descargadas de este álbum. ¿Deseas continuar?"
-        }
-
-        androidx.appcompat.app.AlertDialog.Builder(requireContext())
-            .setTitle(title)
-            .setMessage(message)
-            .setPositiveButton("Eliminar") { _, _ -> deleteAlbumDownloads(downloadedSongs) }
-            .setNegativeButton("Cancelar", null)
-            .show()
-    }
-
-    private fun deleteAlbumDownloads(songsToDelete: List<Song>) {
-        val dm = SongDownloadManager.getInstance(requireContext())
-        var deleted = 0
-        songsToDelete.forEach { song ->
-            // Intentar eliminar vía DownloadManager para mantener estado
-            val removed = dm.deleteSong(song.id)
-            if (removed) {
-                deleted++
-            } else {
-                // Fallback: borrar el archivo directamente si existe
-                try {
-                    val path = dm.createDownloadPath(song)
-                    val file = java.io.File(path)
-                    if (file.exists() && file.delete()) {
-                        deleted++
-                    }
-                    // Cancelar cualquier trabajo pendiente asociado
-                    dm.cancelDownload(song.id)
-                } catch (_: Exception) { /* ignore */ }
-            }
-        }
-
-        // Actualizar UI
-        updateDownloadUIState()
-        songAdapter.notifyDataSetChanged()
-
-        val msg = when (deleted) {
-            0 -> "No se pudo eliminar ninguna descarga"
-            1 -> "Se eliminó 1 descarga"
-            else -> "Se eliminaron $deleted descargas"
-        }
-        snack(msg)
-    }
 
     // --- Helpers added to fix unresolved references ---
     private fun formatAlbumDuration(totalSeconds: Int): String {

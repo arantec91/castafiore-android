@@ -2,6 +2,7 @@ package com.arantec.castafiore.data.download
 
 import android.content.Context
 import android.os.Environment
+import androidx.lifecycle.Observer
 import androidx.work.*
 import com.arantec.castafiore.data.models.Song
 import com.arantec.castafiore.data.repository.MusicRepository
@@ -10,10 +11,16 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.launch
 import java.io.File
 import java.util.*
 import java.util.concurrent.TimeUnit
+
+// Distinción del origen de descarga
+enum class DownloadOrigin {
+    ALBUM,
+    PLAYLIST,
+    UNKNOWN
+}
 
 class SongDownloadManager private constructor(private val context: Context) {
 
@@ -41,17 +48,15 @@ class SongDownloadManager private constructor(private val context: Context) {
     }
 
     private val musicRepository = MusicRepository.getInstance(context)
+    // Mantener workManager para compatibilidad aunque no se use
     private val workManager = WorkManager.getInstance(context)
 
-    // Pequeño alcance para trabajos IO internos
-    private val ioScope = CoroutineScope(Dispatchers.IO)
-
-    // Mantener registro en memoria para evitar re-intentos de auto-favorito por el mismo álbum
-    private val autoStarredAlbums: MutableSet<String> = Collections.synchronizedSet(mutableSetOf())
-
-    // Estado de las descargas
+    // Estado de las descargas (siempre vacío en modo streaming)
     private val _downloadStates = MutableStateFlow<Map<String, DownloadState>>(emptyMap())
     val downloadStates: StateFlow<Map<String, DownloadState>> = _downloadStates.asStateFlow()
+
+    // Almacenar observadores para compatibilidad (no se usarán)
+    private val workObservers: MutableMap<UUID, Observer<WorkInfo>> = Collections.synchronizedMap(mutableMapOf())
 
     // Estado de descarga individual
     data class DownloadState(
@@ -62,171 +67,78 @@ class SongDownloadManager private constructor(private val context: Context) {
         val downloadedBytes: Long = 0,
         val totalBytes: Long = 0,
         val filePath: String? = null,
-        val error: String? = null
+        val error: String? = null,
+        val origin: DownloadOrigin = DownloadOrigin.UNKNOWN
     )
 
     /**
-     * Inicia la descarga de una canción
+     * Modo streaming: no iniciar descargas
      */
-    fun downloadSong(song: Song) {
-        // Verificar si ya está descargada o en proceso
-        if (isSongDownloaded(song.id) || isSongDownloading(song.id)) {
-            return
-        }
-
-        // Crear estado inicial
-        val downloadState = DownloadState(
-            songId = song.id,
-            song = song,
-            status = DownloadStatus.PENDING
-        )
-
-        updateDownloadState(song.id, downloadState)
-
-        // Configurar el trabajo de descarga
-        val downloadRequest = OneTimeWorkRequestBuilder<SongDownloadWorker>()
-            .setInputData(createInputData(song))
-            .setConstraints(createDownloadConstraints())
-            .addTag("download_${song.id}")
-            .build()
-
-        // Encolar el trabajo
-        workManager.enqueueUniqueWork(
-            "download_${song.id}",
-            ExistingWorkPolicy.KEEP,
-            downloadRequest
-        )
-
-        // Observar el progreso del trabajo
-        observeDownloadProgress(song.id, downloadRequest.id)
+    fun downloadSong(song: Song, origin: DownloadOrigin = DownloadOrigin.UNKNOWN) {
+        // No-op en modo streaming
     }
 
     /**
-     * Cancela la descarga de una canción
+     * Modo streaming: no hay descargas para cancelar
      */
     fun cancelDownload(songId: String) {
-        workManager.cancelUniqueWork("download_$songId")
-
-        val currentState = _downloadStates.value[songId]
-        currentState?.let { state ->
-            updateDownloadState(songId, state.copy(status = DownloadStatus.CANCELLED))
-        }
+        // No-op
     }
 
     /**
-     * Pausa todas las descargas
+     * Modo streaming: no encolar descargas
+     */
+    fun downloadSongsSequentially(songs: List<Song>, origin: DownloadOrigin = DownloadOrigin.UNKNOWN) {
+        // No-op
+    }
+
+    /**
+     * Pausa todas las descargas (no hay descargas en modo streaming)
      */
     fun pauseAllDownloads() {
-        workManager.cancelAllWorkByTag("download")
-
-        val currentStates = _downloadStates.value.toMutableMap()
-        currentStates.keys.forEach { songId ->
-            currentStates[songId]?.let { state ->
-                if (state.status == DownloadStatus.DOWNLOADING) {
-                    currentStates[songId] = state.copy(status = DownloadStatus.CANCELLED)
-                }
-            }
-        }
-        _downloadStates.value = currentStates
+        // No-op
     }
 
     /**
-     * Verifica si una canción está descargada
+     * Verifica si una canción está descargada (siempre false en modo streaming)
      */
     fun isSongDownloaded(songId: String): Boolean {
-        val state = _downloadStates.value[songId]
-        if (state?.status == DownloadStatus.COMPLETED && state.filePath != null) {
-            // Verificar que el archivo aún existe
-            return File(state.filePath).exists()
-        }
         return false
     }
 
     /**
-     * Verifica si una canción está en proceso de descarga
+     * Verifica si una canción está en proceso de descarga (siempre false)
      */
     fun isSongDownloading(songId: String): Boolean {
-        val state = _downloadStates.value[songId]
-        return state?.status == DownloadStatus.DOWNLOADING || state?.status == DownloadStatus.PENDING
+        return false
     }
 
     /**
-     * Obtiene la ruta del archivo descargado
+     * Obtiene la ruta del archivo descargado (siempre null)
      */
     fun getDownloadedFilePath(songId: String): String? {
-        val state = _downloadStates.value[songId]
-        return if (state?.status == DownloadStatus.COMPLETED) state.filePath else null
+        return null
     }
 
     /**
-     * Elimina una canción descargada del almacenamiento local
+     * Elimina una canción descargada (no hay descargas; devolver false)
      */
     fun deleteSong(songId: String): Boolean {
-        return try {
-            val song = getSongById(songId)
-            if (song != null) {
-                val filePath = createDownloadPath(song)
-                val file = File(filePath)
-
-                val deleted = if (file.exists()) {
-                    file.delete()
-                } else {
-                    true // Si el archivo no existe, consideramos que ya está "eliminado"
-                }
-
-                if (deleted) {
-                    // Remover del estado de descargas
-                    val currentStates = _downloadStates.value.toMutableMap()
-                    currentStates.remove(songId)
-                    _downloadStates.value = currentStates
-
-                    // Cancelar cualquier trabajo de descarga pendiente
-                    val workName = "download_$songId"
-                    workManager.cancelUniqueWork(workName)
-                }
-
-                deleted
-            } else {
-                false
-            }
-        } catch (e: Exception) {
-            false
-        }
+        return false
     }
 
     /**
-     * Elimina múltiples canciones descargadas
+     * Elimina múltiples canciones descargadas (no hay descargas; devolver 0)
      */
     fun deleteMultipleSongs(songIds: List<String>): Int {
-        var deletedCount = 0
-        songIds.forEach { songId ->
-            if (deleteSong(songId)) {
-                deletedCount++
-            }
-        }
-        return deletedCount
+        return 0
     }
 
     /**
-     * Obtiene el tamaño del archivo de una canción descargada
+     * Obtiene el tamaño del archivo de una canción descargada (0L)
      */
     fun getSongFileSize(songId: String): Long {
-        return try {
-            val song = getSongById(songId)
-            if (song != null) {
-                val filePath = createDownloadPath(song)
-                val file = File(filePath)
-                if (file.exists()) {
-                    file.length()
-                } else {
-                    0L
-                }
-            } else {
-                0L
-            }
-        } catch (e: Exception) {
-            0L
-        }
+        return 0L
     }
 
     /**
@@ -242,23 +154,20 @@ class SongDownloadManager private constructor(private val context: Context) {
     }
 
     /**
-     * Helper para obtener una canción por ID desde el estado actual
+     * Helper para obtener una canción por ID desde el estado actual (no se usa)
      */
     private fun getSongById(songId: String): Song? {
         return _downloadStates.value[songId]?.song
     }
 
     /**
-     * Crea la ruta de descarga para una canción
+     * Crea la ruta de descarga para una canción (se conserva por compatibilidad con comprobaciones de ruta)
      */
     fun createDownloadPath(song: Song): String {
         val musicDir = File(context.getExternalFilesDir(Environment.DIRECTORY_MUSIC), "Castafiore")
         val artistDir = File(musicDir, sanitizeFileName(song.artist))
         val albumDir = File(artistDir, sanitizeFileName(song.album))
-
-        // Crear directorios si no existen
         albumDir.mkdirs()
-
         val fileName = "${song.track?.toString()?.padStart(2, '0') ?: "00"} - ${sanitizeFileName(song.title)}.mp3"
         return File(albumDir, fileName).absolutePath
     }
@@ -275,8 +184,7 @@ class SongDownloadManager private constructor(private val context: Context) {
     }
 
     /**
-     * NUEVO: Crea la ruta de portada usando artista y álbum (sin objeto Song).
-     * Útil para pantallas que solo conocen esos datos.
+     * Crea la ruta de portada usando artista y álbum
      */
     fun createAlbumCoverPath(artist: String, album: String): String {
         val musicDir = File(context.getExternalFilesDir(Environment.DIRECTORY_PICTURES), "Castafiore/Covers")
@@ -287,124 +195,22 @@ class SongDownloadManager private constructor(private val context: Context) {
     }
 
     /**
-     * Obtiene la URL de descarga de la canción
+     * Obtiene la URL de descarga de la canción (conservado por compatibilidad)
      */
     fun getSongDownloadUrl(song: Song): String {
         val (username, token, salt) = musicRepository.getAuthParams()
-        return "${musicRepository.serverUrl}/rest/download.view?id=${song.id}&u=$username&t=$token&s=$salt&v=1.16.1&c=Castafiore"
+        val base = musicRepository.serverUrl ?: ""
+        return "$base/rest/download.view?id=${song.id}&u=$username&t=$token&s=$salt&v=1.16.1&c=Castafiore"
     }
 
-    private fun createInputData(song: Song): Data {
-        return Data.Builder()
-            .putString("song_id", song.id)
-            .putString("song_title", song.title)
-            .putString("song_artist", song.artist)
-            .putString("song_album", song.album)
-            .putInt("song_track", song.track ?: 0)
-            .putInt("song_duration", song.duration)
-            .putString("song_albumId", song.albumId ?: "")
-            .putString("song_coverArt", song.coverArt ?: "")
-            .build()
+    // Compatibilidad: API paralela (no-op)
+    fun downloadSongsParallel(songs: List<Song>, origin: DownloadOrigin = DownloadOrigin.UNKNOWN, maxConcurrent: Int = 3) {
+        // No-op
     }
 
-    private fun createDownloadConstraints(): Constraints {
-        return Constraints.Builder()
-            .setRequiredNetworkType(NetworkType.CONNECTED)
-            .setRequiresBatteryNotLow(false)
-            .setRequiresStorageNotLow(true)
-            .build()
-    }
-
-    private fun observeDownloadProgress(songId: String, workId: UUID) {
-        workManager.getWorkInfoByIdLiveData(workId).observeForever { workInfo ->
-            when (workInfo?.state) {
-                WorkInfo.State.RUNNING -> {
-                    val progress = workInfo.progress.getInt("progress", 0)
-                    val downloadedBytes = workInfo.progress.getLong("downloaded_bytes", 0)
-                    val totalBytes = workInfo.progress.getLong("total_bytes", 0)
-
-                    val currentState = _downloadStates.value[songId]
-                    currentState?.let { state ->
-                        updateDownloadState(songId, state.copy(
-                            status = DownloadStatus.DOWNLOADING,
-                            progress = progress,
-                            downloadedBytes = downloadedBytes,
-                            totalBytes = totalBytes
-                        ))
-                    }
-                }
-                WorkInfo.State.SUCCEEDED -> {
-                    val filePath = workInfo.outputData.getString("file_path")
-                    val currentState = _downloadStates.value[songId]
-                    currentState?.let { state ->
-                        updateDownloadState(songId, state.copy(
-                            status = DownloadStatus.COMPLETED,
-                            progress = 100,
-                            filePath = filePath
-                        ))
-                        // Intentar marcar como favorito el álbum si todas sus canciones están descargadas
-                        maybeAutoStarAlbum(state.song)
-                    }
-                }
-                WorkInfo.State.FAILED -> {
-                    val error = workInfo.outputData.getString("error") ?: "Error desconocido"
-                    val currentState = _downloadStates.value[songId]
-                    currentState?.let { state ->
-                        updateDownloadState(songId, state.copy(
-                            status = DownloadStatus.FAILED,
-                            error = error
-                        ))
-                    }
-                }
-                WorkInfo.State.CANCELLED -> {
-                    val currentState = _downloadStates.value[songId]
-                    currentState?.let { state ->
-                        updateDownloadState(songId, state.copy(
-                            status = DownloadStatus.CANCELLED
-                        ))
-                    }
-                }
-                else -> { /* Estados ENQUEUED y BLOCKED no requieren acción */ }
-            }
-        }
-    }
-
-    // Verifica si el álbum de la canción indicada tiene todas sus canciones descargadas y, de ser así, lo marca como favorito
-    private fun maybeAutoStarAlbum(song: Song) {
-        val albumId = song.albumId ?: return
-        if (albumId.isEmpty()) return
-        if (autoStarredAlbums.contains(albumId)) return
-
-        ioScope.launch {
-            try {
-                // Obtener todas las canciones del álbum
-                musicRepository.getAlbumSongs(albumId).onSuccess { songs ->
-                    if (songs.isNullOrEmpty()) return@onSuccess
-                    val allDownloaded = songs.all { s ->
-                        val path = createDownloadPath(s)
-                        File(path).exists()
-                    }
-                    if (allDownloaded) {
-                        // Evitar duplicar llamadas si ya está en favoritos
-                        musicRepository.isAlbumStarred(albumId).fold(
-                            onSuccess = { starred ->
-                                if (!starred) {
-                                    musicRepository.starAlbum(albumId)
-                                }
-                                autoStarredAlbums.add(albumId)
-                            },
-                            onFailure = {
-                                // Intentar igualmente, el endpoint suele ser idempotente
-                                musicRepository.starAlbum(albumId)
-                                autoStarredAlbums.add(albumId)
-                            }
-                        )
-                    }
-                }
-            } catch (_: Exception) {
-                // Silenciar errores para no interferir con el flujo de descargas
-            }
-        }
+    // Compatibilidad: auto-star (siempre false en modo streaming)
+    fun isAlbumAutoStarAuthorized(albumId: String): Boolean {
+        return false
     }
 
     private fun updateDownloadState(songId: String, newState: DownloadState) {
@@ -416,4 +222,9 @@ class SongDownloadManager private constructor(private val context: Context) {
     private fun sanitizeFileName(fileName: String): String {
         return fileName.replace(Regex("[^a-zA-Z0-9._-]"), "_")
     }
+
+    // Cola secuencial de descargas (sin uso en modo streaming)
+    private val queue: java.util.ArrayDeque<com.arantec.castafiore.data.models.Song> = java.util.ArrayDeque()
+    @Volatile private var isProcessingQueue: Boolean = false
+    @Volatile private var currentWorkId: java.util.UUID? = null
 }

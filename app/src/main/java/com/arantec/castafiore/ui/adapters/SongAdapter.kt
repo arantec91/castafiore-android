@@ -9,7 +9,6 @@ import com.arantec.castafiore.databinding.ItemSongBinding
 import com.arantec.castafiore.data.repository.MusicRepository
 import com.arantec.castafiore.utils.ImageLoader
 import com.arantec.castafiore.R
-import com.arantec.castafiore.data.download.SongDownloadManager
 import android.view.View
 import java.io.File
 
@@ -60,7 +59,7 @@ class SongAdapter(
                         ivSongCover.setImageResource(R.drawable.ic_music_note)
 
                         // 1) Local-first: si existe una portada descargada para el álbum
-                        val dm = SongDownloadManager.getInstance(root.context)
+                        val dm = com.arantec.castafiore.data.download.SongDownloadManager.getInstance(root.context)
                         val localPath = try { dm.createCoverPath(song) } catch (_: Exception) { null }
                         if (!localPath.isNullOrEmpty() && File(localPath).exists()) {
                             ImageLoader.loadLocalThumbnail(root.context, ivSongCover, localPath)
@@ -92,33 +91,21 @@ class SongAdapter(
                 tvSongTitle.text = song.title
                 tvSongArtist.text = song.artist
 
-                // Indicador de descarga
-                runCatching {
-                    val dm = SongDownloadManager.getInstance(root.context)
-                    val path = dm.createDownloadPath(song)
-                    if (File(path).exists()) {
-                        ivDownloadStatus.visibility = View.VISIBLE
-                    } else {
-                        ivDownloadStatus.visibility = View.GONE
-                    }
-                }
-
-                // Cambiar solo el color del título si es la canción actual
-                if (song.id == playingSongId) {
-                    tvSongTitle.setTextColor(android.graphics.Color.parseColor("#FF2D55")) // Color principal
+                // Highlight de canción reproduciéndose actualmente
+                val isPlaying = song.id == playingSongId
+                if (isPlaying) {
+                    tvSongTitle.setTextColor(root.context.getColor(R.color.primary))
+                    tvSongArtist.setTextColor(root.context.getColor(R.color.primary))
                 } else {
-                    tvSongTitle.setTextColor(android.graphics.Color.WHITE)
+                    tvSongTitle.setTextColor(root.context.getColor(R.color.text_primary))
+                    tvSongArtist.setTextColor(root.context.getColor(R.color.text_secondary))
                 }
 
-                // Click en la canción
+                // Click handlers
                 root.setOnClickListener {
-                    val pos = bindingAdapterPosition
-                    if (pos != RecyclerView.NO_POSITION) {
-                        onSongClick(song, pos)
-                    }
+                    onSongClick(song, adapterPosition)
                 }
 
-                // Click en el botón más opciones
                 btnSongMore.setOnClickListener {
                     onSongMoreClick(song)
                 }

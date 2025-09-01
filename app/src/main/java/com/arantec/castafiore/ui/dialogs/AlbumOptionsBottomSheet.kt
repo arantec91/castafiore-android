@@ -19,7 +19,6 @@ class AlbumOptionsBottomSheet : BottomSheetDialogFragment() {
 
     private var album: Album? = null
     private var isFavorited = false
-    private var onDownloadClickListener: ((Album) -> Unit)? = null
     private var onAddToQueueClickListener: ((Album) -> Unit)? = null
     private var onAddToFavoritesClickListener: ((Album) -> Unit)? = null
     private var onAlbumInfoClickListener: ((Album) -> Unit)? = null
@@ -120,7 +119,6 @@ class AlbumOptionsBottomSheet : BottomSheetDialogFragment() {
 
     private fun loadAlbumCover(album: Album) {
         try {
-            // Obtener la instancia del repositorio para acceder a la configuración del servidor
             val musicRepository = com.arantec.castafiore.data.repository.MusicRepository.getInstance(requireContext())
 
             if (musicRepository.serverUrl != null && album.coverArt != null) {
@@ -139,11 +137,9 @@ class AlbumOptionsBottomSheet : BottomSheetDialogFragment() {
                     .centerCrop()
                     .into(binding.ivAlbumCover)
             } else {
-                // Si no hay coverArt o serverUrl, usar placeholder
                 binding.ivAlbumCover.setImageResource(com.arantec.castafiore.R.drawable.ic_album_placeholder)
             }
         } catch (e: Exception) {
-            // En caso de error, usar placeholder
             binding.ivAlbumCover.setImageResource(com.arantec.castafiore.R.drawable.ic_album_placeholder)
         }
     }
@@ -158,11 +154,6 @@ class AlbumOptionsBottomSheet : BottomSheetDialogFragment() {
             }
         }
 
-        binding.llDownload.setOnClickListener {
-            album?.let { onDownloadClickListener?.invoke(it) }
-            dismiss()
-        }
-
         binding.llAddToQueue.setOnClickListener {
             album?.let { onAddToQueueClickListener?.invoke(it) }
             dismiss()
@@ -175,8 +166,9 @@ class AlbumOptionsBottomSheet : BottomSheetDialogFragment() {
     }
 
     // Builder pattern methods
-    fun setOnDownloadClickListener(listener: (Album) -> Unit): AlbumOptionsBottomSheet {
-        onDownloadClickListener = listener
+    @Deprecated("Download option removed in streaming-only mode; this is a no-op.")
+    fun setOnDownloadClickListener(@Suppress("UNUSED_PARAMETER") listener: (Album) -> Unit): AlbumOptionsBottomSheet {
+        // No-op to preserve compatibility
         return this
     }
 

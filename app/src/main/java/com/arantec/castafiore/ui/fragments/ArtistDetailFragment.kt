@@ -711,44 +711,6 @@ class ArtistDetailFragment : Fragment() {
 
     private fun showSongOptions(song: Song) {
         val bottomSheet = SongOptionsBottomSheet.newInstance(song)
-            .setOnDownloadClickListener { selectedSong ->
-                // Implementar descarga de canción con el sistema de descarga completo
-                val downloadManager = com.arantec.castafiore.data.download.SongDownloadManager.getInstance(requireContext())
-
-                when {
-                    downloadManager.isSongDownloaded(selectedSong.id) -> {
-                        snack("La canción ya está descargada")
-                    }
-                    downloadManager.isSongDownloading(selectedSong.id) -> {
-                        // Cancelar descarga en progreso
-                        downloadManager.cancelDownload(selectedSong.id)
-                        snack("Descarga cancelada: ${selectedSong.title}")
-                    }
-                    else -> {
-                        downloadManager.downloadSong(selectedSong)
-                        snack("Descarga iniciada: ${selectedSong.title}")
-                    }
-                }
-            }
-            .setOnDeleteDownloadClickListener { selectedSong ->
-                // Implementar eliminación de descarga
-                val downloadManager = com.arantec.castafiore.data.download.SongDownloadManager.getInstance(requireContext())
-
-                if (downloadManager.isSongDownloaded(selectedSong.id)) {
-                    // Mostrar diálogo de confirmación
-                    android.app.AlertDialog.Builder(requireContext())
-                        .setTitle("Eliminar descarga")
-                        .setMessage("¿Estás seguro de que quieres eliminar la descarga de \"${selectedSong.title}\"?")
-                        .setPositiveButton("Eliminar") { _, _ ->
-                            val success = downloadManager.deleteSong(selectedSong.id)
-                            if (success) snack("Descarga eliminada: ${selectedSong.title}") else snack("Error al eliminar la descarga")
-                        }
-                        .setNegativeButton("Cancelar", null)
-                        .show()
-                } else {
-                    snack("La canción no está descargada")
-                }
-            }
             .setOnAddToQueueClickListener { selectedSong ->
                 // Agregar canción a la cola de reproducción
                 musicService?.addToQueue(selectedSong)

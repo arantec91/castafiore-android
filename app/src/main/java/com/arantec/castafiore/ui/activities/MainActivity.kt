@@ -25,6 +25,14 @@ import com.arantec.castafiore.service.MusicService
 import com.arantec.castafiore.utils.ImageLoader
 import com.arantec.castafiore.utils.StatusBarUtils
 import com.arantec.castafiore.data.network.NavidromeClient
+import com.arantec.castafiore.data.network.InFlightTracker
+import com.arantec.castafiore.ui.helpers.HasContentState
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 class MainActivity : AppCompatActivity() {
 
@@ -65,6 +73,11 @@ class MainActivity : AppCompatActivity() {
         // La música seguirá funcionando sin notificaciones
     }
 
+    // Global loading overlay control
+    private var overlayVisible = false
+    private var pendingShowJob: Job? = null
+    private var lastShowStartAt: Long = 0L
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -94,16 +107,83 @@ class MainActivity : AppCompatActivity() {
         bindMusicService()
         requestNotificationPermission()
 
+        // Observe global network state and toggle the overlay
+        setupGlobalLoadingObserver()
+
         // Handle intent extras for navigation
         handleNavigationFromIntent()
     }
 
-    override fun onNewIntent(intent: Intent?) {
-        super.onNewIntent(intent)
-        android.util.Log.d("MainActivity", "onNewIntent called")
-        intent?.let {
-            setIntent(it)
-            handleNavigationFromIntent()
+    private fun setupGlobalLoadingObserver() {
+        // Recompute when in-flight state changes
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                InFlightTracker.isLoading.collect { isLoading ->
+                    recomputeGlobalOverlay(isLoading)
+                }
+            }
+        }
+
+        // Recompute when destination changes
+        val navHostFragment = supportFragmentManager.findFragmentById(R.id.nav_host_fragment) as NavHostFragment
+        navHostFragment.navController.addOnDestinationChangedListener { _, _, _ ->
+            recomputeGlobalOverlay(InFlightTracker.isLoading.value)
+        }
+    }
+
+    private fun recomputeGlobalOverlay(isLoading: Boolean) {
+        val hasContent = currentFragmentHasContent()
+        val shouldShow = isLoading && !hasContent
+        android.util.Log.d("GlobalLoader", "isLoading=$isLoading, hasContent=$hasContent, shouldShow=$shouldShow")
+        if (shouldShow) {
+            maybeShowOverlayWithDebounce()
+        } else {
+            hideOverlayRespectingMinShow()
+        }
+    }
+
+    private fun currentFragmentHasContent(): Boolean {
+        val navHost = supportFragmentManager.findFragmentById(R.id.nav_host_fragment) as? NavHostFragment
+        val current = navHost?.childFragmentManager?.fragments?.lastOrNull { it.isVisible }
+        val provider = current as? HasContentState
+        // Default to false so the overlay appears unless the screen explicitly signals content
+        return provider?.hasContent() ?: false
+    }
+
+    private fun maybeShowOverlayWithDebounce() {
+        if (overlayVisible) return
+        if (pendingShowJob != null) return
+        pendingShowJob = lifecycleScope.launch {
+            // Debounce to avoid flicker on super fast calls
+            delay(150)
+            // Ensure condition still holds
+            if (InFlightTracker.isLoading.value && !currentFragmentHasContent()) {
+                android.util.Log.d("GlobalLoader", "Showing overlay")
+                binding.globalLoadingOverlay.visibility = View.VISIBLE
+                overlayVisible = true
+                lastShowStartAt = System.currentTimeMillis()
+            }
+            pendingShowJob = null
+        }
+    }
+
+    private fun hideOverlayRespectingMinShow() {
+        pendingShowJob?.cancel()
+        pendingShowJob = null
+        if (!overlayVisible) return
+        val shownFor = System.currentTimeMillis() - lastShowStartAt
+        val hideAction = {
+            android.util.Log.d("GlobalLoader", "Hiding overlay")
+            binding.globalLoadingOverlay.visibility = View.GONE
+            overlayVisible = false
+        }
+        if (shownFor >= 200) {
+            hideAction()
+        } else {
+            lifecycleScope.launch {
+                delay(200 - shownFor)
+                hideAction()
+            }
         }
     }
 

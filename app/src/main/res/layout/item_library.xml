@@ -52,15 +52,4 @@
 
     </LinearLayout>
 
-    <!-- Indicador de descarga (opcional) -->
-    <ImageView
-        android:id="@+id/ivDownloaded"
-        android:layout_width="16dp"
-        android:layout_height="16dp"
-        android:layout_gravity="center_vertical"
-        android:layout_marginStart="8dp"
-        android:src="@drawable/ic_download_done"
-        android:visibility="gone"
-        app:tint="#1DB954" />
-
 </LinearLayout>
