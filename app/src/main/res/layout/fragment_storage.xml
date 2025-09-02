@@ -239,6 +239,7 @@
             android:id="@+id/tvTitleDeleteDownloads"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
             android:text="@string/storage_delete_downloads_title"
             android:textColor="@color/text_primary"
             android:textSize="18sp"
