@@ -445,6 +445,7 @@ class PlayerActivity : AppCompatActivity() {
             MusicService.SourceType.PLAYLIST -> "Playlist: ${source.name ?: "Desconocida"}"
             MusicService.SourceType.FAVORITES -> getString(R.string.favorite_songs_title)
             MusicService.SourceType.SONGS -> getString(R.string.songs)
+            MusicService.SourceType.DOWNLOADS -> source.name ?: getString(R.string.bottom_downloads)
             MusicService.SourceType.UNKNOWN, null -> currentSong?.album ?: "Álbum desconocido"
         }
         binding.tvPlayingFrom.text = text

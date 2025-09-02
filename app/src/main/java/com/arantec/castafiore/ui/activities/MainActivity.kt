@@ -301,6 +301,7 @@ class MainActivity : AppCompatActivity(), LoadingHost {
                 "home" -> R.id.homeFragment
                 "search" -> R.id.searchFragment
                 "library" -> R.id.libraryFragment
+                "downloads" -> R.id.downloadsFragment
                 else -> R.id.homeFragment
             }
             binding.bottomNavigation.selectedItemId = itemId

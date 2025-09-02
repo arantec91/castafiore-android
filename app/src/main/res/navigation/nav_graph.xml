@@ -134,4 +134,10 @@
         android:label="Información"
         tools:layout="@layout/fragment_info" />
 
+    <fragment
+        android:id="@+id/downloadsFragment"
+        android:name="com.arantec.castafiore.ui.fragments.DownloadsFragment"
+        android:label="Descargas"
+        tools:layout="@layout/fragment_downloads" />
+
 </navigation>

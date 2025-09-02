@@ -162,4 +162,14 @@
     <string name="song_already_downloaded">La canción ya está descargada</string>
     <string name="download_deleted">Descarga eliminada</string>
     <string name="download_delete_error">Error al eliminar la descarga</string>
+
+    <!-- Bottom navigation items -->
+    <string name="bottom_home">Inicio</string>
+    <string name="bottom_search">Buscar</string>
+    <string name="bottom_favorites">Favoritos</string>
+    <string name="bottom_downloads">Descargas</string>
+    <string name="downloads_empty">No hay descargas</string>
+    <string name="downloading_pending">Esperando…</string>
+    <string name="downloading_progress">Descargando %1$d%%</string>
+    <string name="downloading_failed">Error de descarga</string>
 </resources>

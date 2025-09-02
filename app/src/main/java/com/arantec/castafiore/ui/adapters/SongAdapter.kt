@@ -20,6 +20,7 @@ class SongAdapter(
 
     private var songs = mutableListOf<Song>()
     private var playingSongId: String? = null
+    private val downloadStates = mutableMapOf<String, com.arantec.castafiore.data.download.SongDownloadManager.DownloadState>()
 
     fun updateSongs(newSongs: List<Song>) {
         val diffCallback = SongDiffCallback(songs, newSongs)
@@ -39,6 +40,12 @@ class SongAdapter(
         if (oldIndex >= 0) notifyItemChanged(oldIndex)
         if (newIndex >= 0 && newIndex != oldIndex) notifyItemChanged(newIndex)
         if (oldIndex < 0 && newIndex < 0) notifyDataSetChanged() // fallback if we can't find items
+    }
+
+    fun updateDownloadState(state: com.arantec.castafiore.data.download.SongDownloadManager.DownloadState) {
+        downloadStates[state.songId] = state
+        val idx = songs.indexOfFirst { it.id == state.songId }
+        if (idx >= 0) notifyItemChanged(idx)
     }
 
     inner class SongViewHolder(
@@ -99,6 +106,39 @@ class SongAdapter(
                 } else {
                     tvSongTitle.setTextColor(root.context.getColor(R.color.text_primary))
                     tvSongArtist.setTextColor(root.context.getColor(R.color.text_secondary))
+                }
+
+                // Progreso de descarga (si aplica)
+                val dState = downloadStates[song.id]
+                if (dState != null) {
+                    when (dState.status) {
+                        com.arantec.castafiore.data.download.SongDownloadManager.DownloadStatus.PENDING -> {
+                            containerDownload.visibility = View.VISIBLE
+                            progressDownload.isIndeterminate = true
+                            progressDownload.progress = 0
+                            tvDownloadStatus.text = root.context.getString(R.string.downloading_pending)
+                        }
+                        com.arantec.castafiore.data.download.SongDownloadManager.DownloadStatus.DOWNLOADING -> {
+                            containerDownload.visibility = View.VISIBLE
+                            progressDownload.isIndeterminate = false
+                            progressDownload.progress = dState.progress.coerceIn(0, 100)
+                            tvDownloadStatus.text = root.context.getString(R.string.downloading_progress, dState.progress.coerceIn(0, 100))
+                        }
+                        com.arantec.castafiore.data.download.SongDownloadManager.DownloadStatus.COMPLETED -> {
+                            containerDownload.visibility = View.GONE
+                        }
+                        com.arantec.castafiore.data.download.SongDownloadManager.DownloadStatus.FAILED -> {
+                            containerDownload.visibility = View.VISIBLE
+                            progressDownload.isIndeterminate = false
+                            progressDownload.progress = 0
+                            tvDownloadStatus.text = root.context.getString(R.string.downloading_failed)
+                        }
+                        com.arantec.castafiore.data.download.SongDownloadManager.DownloadStatus.CANCELLED -> {
+                            containerDownload.visibility = View.GONE
+                        }
+                    }
+                } else {
+                    containerDownload.visibility = View.GONE
                 }
 
                 // Click handlers

@@ -16,9 +16,9 @@ import com.arantec.castafiore.data.download.SongDownloadManager
 import com.arantec.castafiore.data.models.Song
 import com.arantec.castafiore.data.repository.MusicRepository
 import com.arantec.castafiore.databinding.BottomSheetSongOptionsBinding
-import com.bumptech.glide.Glide
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment
 import com.arantec.castafiore.service.MusicService
+import com.arantec.castafiore.utils.ImageLoader
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -169,6 +169,17 @@ class SongOptionsBottomSheet : BottomSheetDialogFragment() {
 
     private fun loadSongCover(song: Song) {
         try {
+            // Preferir portada local si está disponible (descargas)
+            val localCoverPath = try { downloadManager.createCoverPath(song) } catch (_: Exception) { null }
+            if (!localCoverPath.isNullOrEmpty()) {
+                val file = java.io.File(localCoverPath)
+                if (file.exists()) {
+                    ImageLoader.loadLocalThumbnail(requireContext(), binding.ivSongCover, localCoverPath)
+                    return
+                }
+            }
+
+            // Fallback a URL remota si hay servidor/config disponible
             if (musicRepository.serverUrl != null) {
                 val (username, token, salt) = musicRepository.getAuthParams()
                 val coverUrl = song.getCoverArtUrl(
@@ -178,11 +189,8 @@ class SongOptionsBottomSheet : BottomSheetDialogFragment() {
                     salt
                 )
 
-                Glide.with(this)
-                    .load(coverUrl)
-                    .placeholder(R.drawable.ic_music_note)
-                    .error(R.drawable.ic_music_note)
-                    .into(binding.ivSongCover)
+                // Usar ImageLoader para manejo de caché consistente
+                ImageLoader.loadThumbnail(requireContext(), binding.ivSongCover, coverUrl)
             } else {
                 binding.ivSongCover.setImageResource(R.drawable.ic_music_note)
             }
@@ -493,6 +501,15 @@ class SongOptionsBottomSheet : BottomSheetDialogFragment() {
      */
     fun hideViewAlbumOption(): SongOptionsBottomSheet {
         _binding?.optionViewAlbum?.visibility = View.GONE
+        return this
+    }
+
+    /**
+     * Oculta la opción "Ver artista" de la UI
+     * Útil cuando no se dispone del ID de artista (por ejemplo, en descargas sin metadatos)
+     */
+    fun hideViewArtistOption(): SongOptionsBottomSheet {
+        _binding?.optionViewArtist?.visibility = View.GONE
         return this
     }
 }

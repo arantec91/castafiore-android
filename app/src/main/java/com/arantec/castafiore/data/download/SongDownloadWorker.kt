@@ -19,6 +19,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import java.io.File
 import java.io.IOException
 import java.io.OutputStream
 import java.util.Locale
@@ -38,6 +39,8 @@ class SongDownloadWorker(
         const val KEY_SONG_TRACK = "song_track"
         const val KEY_SONG_DURATION_SEC = "song_duration_sec"
         const val KEY_SONG_SUFFIX = "song_suffix"
+        const val KEY_ALBUM_ID = "album_id"
+        const val KEY_COVER_ART_ID = "cover_art_id"
 
         // Progress keys
         const val PROG_DOWNLOADED = "downloaded_bytes"
@@ -68,6 +71,8 @@ class SongDownloadWorker(
         val track = inputData.getInt(KEY_SONG_TRACK, 0).takeIf { it > 0 }
         val durationSec = inputData.getInt(KEY_SONG_DURATION_SEC, 0)
         val suffixFromApi = inputData.getString(KEY_SONG_SUFFIX)
+        val albumId = inputData.getString(KEY_ALBUM_ID)
+        val coverArtId = inputData.getString(KEY_COVER_ART_ID)
 
         try {
             val serverUrl = repo.serverUrl ?: return@withContext Result.failure()
@@ -172,6 +177,37 @@ class SongDownloadWorker(
             }
 
             if (!success) return@withContext Result.retry()
+
+            // After audio success, attempt to download album art (best-effort)
+            try {
+                val coverId = coverArtId ?: albumId
+                if (!coverId.isNullOrBlank()) {
+                    val coverUrl = StringBuilder()
+                        .append(serverUrl.trimEnd('/'))
+                        .append("/rest/getCoverArt.view?id=")
+                        .append(coverId)
+                        .append("&u=").append(username)
+                        .append("&t=").append(token)
+                        .append("&s=").append(salt)
+                        .append("&v=1.16.1&c=Castafiore&size=500")
+                        .toString()
+
+                    val coverReq = Request.Builder().url(coverUrl).get().build()
+                    httpClient.newCall(coverReq).execute().use { resp ->
+                        if (resp.isSuccessful) {
+                            val bytes = resp.body?.bytes()
+                            if (bytes != null && bytes.isNotEmpty()) {
+                                val dm = SongDownloadManager.getInstance(applicationContext)
+                                val path = dm.createAlbumCoverPath(artist, album)
+                                // Ensure parent dirs exist (createAlbumCoverPath does mkdirs already)
+                                try {
+                                    File(path).outputStream().use { it.write(bytes) }
+                                } catch (_: Exception) { /* ignore write errors */ }
+                            }
+                        }
+                    }
+                }
+            } catch (_: Exception) { /* ignore cover errors */ }
 
             val size = if (written > 0) written else null
             val out = Data.Builder()

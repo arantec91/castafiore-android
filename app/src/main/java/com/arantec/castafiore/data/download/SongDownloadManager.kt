@@ -38,17 +38,21 @@ class SongDownloadManager private constructor(private val context: Context) {
         const val DOWNLOAD_NOTIFICATION_CHANNEL_ID = "download_channel"
         const val DOWNLOAD_NOTIFICATION_ID = 1001
 
-        // Estados de descarga
-        enum class DownloadStatus {
-            PENDING,
-            DOWNLOADING,
-            COMPLETED,
-            FAILED,
-            CANCELLED
-        }
-
         private const val PREFS_NAME = "downloads_prefs"
         private fun keyFor(songId: String) = "download_uri_" + songId
+        private const val KEY_PREFIX = "download_uri_"
+        private fun albumKeyFor(songId: String) = "download_albumId_" + songId
+        private fun artistKeyFor(songId: String) = "download_artistId_" + songId
+        private fun coverArtKeyFor(songId: String) = "download_coverArt_" + songId
+    }
+
+    // Estados de descarga disponibles
+    enum class DownloadStatus {
+        PENDING,
+        DOWNLOADING,
+        COMPLETED,
+        FAILED,
+        CANCELLED
     }
 
     private val musicRepository = MusicRepository.getInstance(context)
@@ -86,7 +90,9 @@ class SongDownloadManager private constructor(private val context: Context) {
             SongDownloadWorker.KEY_SONG_ALBUM to song.album,
             SongDownloadWorker.KEY_SONG_TRACK to (song.track ?: 0),
             SongDownloadWorker.KEY_SONG_DURATION_SEC to song.duration,
-            SongDownloadWorker.KEY_SONG_SUFFIX to song.suffix
+            SongDownloadWorker.KEY_SONG_SUFFIX to song.suffix,
+            SongDownloadWorker.KEY_ALBUM_ID to song.albumId,
+            SongDownloadWorker.KEY_COVER_ART_ID to song.coverArt
         )
 
         val constraints = Constraints.Builder()
@@ -118,7 +124,12 @@ class SongDownloadManager private constructor(private val context: Context) {
                 }
                 WorkInfo.State.SUCCEEDED -> {
                     val uri = info.outputData.getString(SongDownloadWorker.OUT_CONTENT_URI)
-                    if (!uri.isNullOrEmpty()) prefs.edit().putString(keyFor(song.id), uri).apply()
+                    if (!uri.isNullOrEmpty()) prefs.edit()
+                        .putString(keyFor(song.id), uri)
+                        .putString(albumKeyFor(song.id), song.albumId)
+                        .putString(artistKeyFor(song.id), song.artistId)
+                        .putString(coverArtKeyFor(song.id), song.coverArt)
+                        .apply()
                     updateDownloadState(song.id, current(song.id)?.copy(
                         status = DownloadStatus.COMPLETED,
                         progress = 100,
@@ -164,7 +175,9 @@ class SongDownloadManager private constructor(private val context: Context) {
                     SongDownloadWorker.KEY_SONG_ALBUM to song.album,
                     SongDownloadWorker.KEY_SONG_TRACK to (song.track ?: 0),
                     SongDownloadWorker.KEY_SONG_DURATION_SEC to song.duration,
-                    SongDownloadWorker.KEY_SONG_SUFFIX to song.suffix
+                    SongDownloadWorker.KEY_SONG_SUFFIX to song.suffix,
+                    SongDownloadWorker.KEY_ALBUM_ID to song.albumId,
+                    SongDownloadWorker.KEY_COVER_ART_ID to song.coverArt
                 ))
                 .build().also {
                     updateDownloadState(song.id, DownloadState(song.id, song, DownloadStatus.PENDING, origin = origin))
@@ -201,7 +214,12 @@ class SongDownloadManager private constructor(private val context: Context) {
         val uriStr = prefs.getString(keyFor(songId), null) ?: return false
         return try {
             val deleted = context.contentResolver.delete(Uri.parse(uriStr), null, null) > 0
-            if (deleted) prefs.edit().remove(keyFor(songId)).apply()
+            if (deleted) prefs.edit()
+                .remove(keyFor(songId))
+                .remove(albumKeyFor(songId))
+                .remove(artistKeyFor(songId))
+                .remove(coverArtKeyFor(songId))
+                .apply()
             deleted
         } catch (_: Exception) { false }
     }
@@ -299,4 +317,93 @@ class SongDownloadManager private constructor(private val context: Context) {
     private val queue: ArrayDeque<com.arantec.castafiore.data.models.Song> = ArrayDeque()
     @Volatile private var isProcessingQueue: Boolean = false
     @Volatile private var currentWorkId: UUID? = null
+
+    fun getDownloadedContentUri(songId: String): Uri? {
+        val uriStr = prefs.getString(keyFor(songId), null) ?: return null
+        return try { Uri.parse(uriStr) } catch (_: Exception) { null }
+    }
+
+    fun getAllDownloadedSongs(): List<com.arantec.castafiore.data.models.Song> {
+        val result = mutableListOf<com.arantec.castafiore.data.models.Song>()
+        val resolver = context.contentResolver
+        val all = prefs.all
+        for ((k, v) in all) {
+            if (!k.startsWith(KEY_PREFIX)) continue
+            val songId = k.removePrefix(KEY_PREFIX)
+            val uriStr = v as? String ?: continue
+            val uri = try { Uri.parse(uriStr) } catch (_: Exception) { null } ?: continue
+            val storedAlbumId = prefs.getString(albumKeyFor(songId), null)
+            val storedArtistId = prefs.getString(artistKeyFor(songId), null)
+            val storedCoverArt = prefs.getString(coverArtKeyFor(songId), null)
+            try {
+                val projection = arrayOf(
+                    MediaStore.Audio.Media.TITLE,
+                    MediaStore.Audio.Media.ARTIST,
+                    MediaStore.Audio.Media.ALBUM,
+                    MediaStore.Audio.Media.DURATION,
+                    MediaStore.Audio.Media.TRACK
+                )
+                resolver.query(uri, projection, null, null, null)?.use { c ->
+                    if (c.moveToFirst()) {
+                        val title = c.getString(0) ?: ""
+                        val artist = c.getString(1) ?: ""
+                        val album = c.getString(2) ?: ""
+                        val durationMs = runCatching { c.getLong(3) }.getOrNull() ?: 0L
+                        val durationSec = (durationMs / 1000L).toInt()
+                        val track = runCatching { c.getInt(4) }.getOrNull()
+                        result.add(
+                            com.arantec.castafiore.data.models.Song(
+                                id = songId,
+                                title = title.ifBlank { "(sin título)" },
+                                artist = artist.ifBlank { "(desconocido)" },
+                                album = album.ifBlank { "(desconocido)" },
+                                duration = durationSec,
+                                track = track,
+                                year = null,
+                                genre = null,
+                                coverArt = storedCoverArt,
+                                artistId = storedArtistId,
+                                albumId = storedAlbumId,
+                                path = uriStr,
+                                suffix = null,
+                                bitRate = null,
+                                size = null
+                            )
+                        )
+                    }
+                }
+            } catch (_: Exception) {
+                // If query fails, still list a minimal Song item
+                result.add(
+                    com.arantec.castafiore.data.models.Song(
+                        id = songId,
+                        title = "(sin título)",
+                        artist = "(desconocido)",
+                        album = "(desconocido)",
+                        duration = 0,
+                        track = null,
+                        year = null,
+                        genre = null,
+                        coverArt = storedCoverArt,
+                        artistId = storedArtistId,
+                        albumId = storedAlbumId,
+                        path = uriStr,
+                        suffix = null,
+                        bitRate = null,
+                        size = null
+                    )
+                )
+            }
+        }
+        // Sort by artist, album, track, title for nicer ordering
+        return result.sortedWith(compareBy({ it.artist.lowercase(Locale.getDefault()) }, { it.album.lowercase(Locale.getDefault()) }, { it.track ?: Int.MAX_VALUE }, { it.title.lowercase(Locale.getDefault()) }))
+    }
+
+    fun saveSongMetadata(songId: String, albumId: String? = null, artistId: String? = null, coverArt: String? = null) {
+        val edit = prefs.edit()
+        albumId?.let { edit.putString(albumKeyFor(songId), it) }
+        artistId?.let { edit.putString(artistKeyFor(songId), it) }
+        coverArt?.let { edit.putString(coverArtKeyFor(songId), it) }
+        edit.apply()
+    }
 }

@@ -9,7 +9,6 @@
         <item name="android:windowLightNavigationBar">false</item>
 
         <!-- Configuración específica para Android 14+ -->
-        <item name="android:windowOptOutEdgeToEdgeEnforcement">true</item>
         <item name="android:windowLayoutInDisplayCutoutMode">never</item>
         <item name="android:windowTranslucentStatus">false</item>
         <item name="android:windowTranslucentNavigation">false</item>
@@ -26,4 +25,3 @@
         <item name="android:colorBackground">@color/background_primary</item>
     </style>
 </resources>
-

@@ -59,6 +59,36 @@
                 tools:text="Artist Name" />
         </LinearLayout>
 
+        <!-- Descarga: barra de progreso + estado -->
+        <LinearLayout
+            android:id="@+id/containerDownload"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:visibility="gone"
+            android:layout_marginTop="6dp">
+
+            <ProgressBar
+                android:id="@+id/progressDownload"
+                style="@android:style/Widget.ProgressBar.Horizontal"
+                android:layout_width="match_parent"
+                android:layout_height="4dp"
+                android:progress="0"
+                android:max="100"
+                android:indeterminate="false"
+                android:progressTint="@color/primary"
+                tools:progress="42" />
+
+            <TextView
+                android:id="@+id/tvDownloadStatus"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textColor="@color/text_secondary"
+                android:textSize="12sp"
+                android:layout_marginTop="2dp"
+                tools:text="Descargando 42%" />
+        </LinearLayout>
+
     </LinearLayout>
 
     <!-- Botón más opciones -->

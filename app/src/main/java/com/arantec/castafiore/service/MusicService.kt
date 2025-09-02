@@ -40,6 +40,7 @@ import com.arantec.castafiore.data.lyrics.LyricsProvider
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
+import android.net.Uri
 
 class MusicService : Service() {
 
@@ -325,12 +326,17 @@ class MusicService : Service() {
     private fun startNewSong() {
         val song = currentSong ?: return
         val dm = com.arantec.castafiore.data.download.SongDownloadManager.getInstance(this)
+        // Prefer MediaStore content URI if downloaded
+        val downloadedUri: Uri? = try { dm.getDownloadedContentUri(song.id) } catch (_: Exception) { null }
         val localPath = try { dm.createDownloadPath(song) } catch (_: Exception) { null }
         val localFile = if (!localPath.isNullOrEmpty()) java.io.File(localPath) else null
 
         val mediaItemBuilder = MediaItem.Builder()
-        if (localFile != null && localFile.exists()) {
-            // Use local file for offline playback
+        if (downloadedUri != null) {
+            mediaItemBuilder.setUri(downloadedUri)
+        } else if (song.path?.startsWith("content:") == true) {
+            mediaItemBuilder.setUri(Uri.parse(song.path))
+        } else if (localFile != null && localFile.exists()) {
             val uri = android.net.Uri.fromFile(localFile)
             mediaItemBuilder.setUri(uri)
         } else {
@@ -467,12 +473,18 @@ class MusicService : Service() {
         if (song == null || player == null) return
         currentPosition = position
         val dm = com.arantec.castafiore.data.download.SongDownloadManager.getInstance(this)
+        val downloadedUri: Uri? = try { dm.getDownloadedContentUri(song.id) } catch (_: Exception) { null }
         val localPath = try { dm.createDownloadPath(song) } catch (_: Exception) { null }
         val localFile = if (!localPath.isNullOrEmpty()) java.io.File(localPath) else null
         val highQuality = musicRepository.highQualityEnabled
 
+        if (downloadedUri != null || song.path?.startsWith("content:") == true) {
+            // Local (MediaStore) file is fully seekable
+            player.seekTo(position)
+            updatePlaybackState()
+            return
+        }
         if (localFile != null && localFile.exists()) {
-            // Local file is fully seekable
             player.seekTo(position)
             updatePlaybackState()
             return
@@ -488,7 +500,7 @@ class MusicService : Service() {
         val (username, token, salt) = musicRepository.getAuthParams()
         val offsetSec = (position / 1000L).toInt().coerceAtLeast(0)
         val streamUrl = song.getStreamUrl(serverUrl, username, token, salt, maxBitRate = 128, format = "mp3", timeOffsetSeconds = offsetSec)
-        val cacheKey = "song_${song.id}_128_offset_$offsetSec"
+        val cacheKey = "song_${song.id}_128_offset_${offsetSec}"
         val newItem = MediaItem.Builder()
             .setUri(streamUrl)
             .setCustomCacheKey(cacheKey)
@@ -1108,7 +1120,7 @@ class MusicService : Service() {
 
     // Playback source tracking
     data class PlaybackSource(val type: SourceType, val id: String? = null, val name: String? = null)
-    enum class SourceType { ALBUM, ARTIST, PLAYLIST, FAVORITES, SONGS, UNKNOWN }
+    enum class SourceType { ALBUM, ARTIST, PLAYLIST, FAVORITES, SONGS, DOWNLOADS, UNKNOWN }
 
     private var playbackSource: PlaybackSource? = null
 
@@ -1122,11 +1134,16 @@ class MusicService : Service() {
         if (repeatMode == RepeatMode.ONE) return
         val nextSong = playlist.getOrNull(currentIndex + 1) ?: return
         val dm = com.arantec.castafiore.data.download.SongDownloadManager.getInstance(this)
+        val downloadedUri: Uri? = try { dm.getDownloadedContentUri(nextSong.id) } catch (_: Exception) { null }
         val localPath = try { dm.createDownloadPath(nextSong) } catch (_: Exception) { null }
         val localFile = if (!localPath.isNullOrEmpty()) java.io.File(localPath) else null
 
         val builder = MediaItem.Builder()
-        if (localFile != null && localFile.exists()) {
+        if (downloadedUri != null) {
+            builder.setUri(downloadedUri)
+        } else if (nextSong.path?.startsWith("content:") == true) {
+            builder.setUri(Uri.parse(nextSong.path))
+        } else if (localFile != null && localFile.exists()) {
             val uri = android.net.Uri.fromFile(localFile)
             builder.setUri(uri)
         } else {
