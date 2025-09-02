@@ -172,4 +172,16 @@
     <string name="downloading_pending">Esperando…</string>
     <string name="downloading_progress">Descargando %1$d%%</string>
     <string name="downloading_failed">Error de descarga</string>
+
+    <!-- Downloads screen -->
+    <string name="downloaded_songs_title">Canciones descargadas</string>
+    <string name="downloads_icon_desc">Icono de descargas</string>
+
+    <!-- Storage status section -->
+    <string name="storage_status_title">Estado del almacenamiento</string>
+    <string name="storage_summary_format">Usado: %1$s de %2$s (%3$d%%)</string>
+    <string name="storage_other_apps">Otras aplicaciones</string>
+    <string name="storage_castafiore_downloads">Descargas de Castafiore</string>
+    <string name="storage_castafiore_cache">Caché de Castafiore</string>
+    <string name="storage_available">Disponible</string>
 </resources>

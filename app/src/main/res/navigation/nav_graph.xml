@@ -89,6 +89,9 @@
         <action
             android:id="@+id/action_library_to_search"
             app:destination="@id/searchFragment" />
+        <action
+            android:id="@+id/action_library_to_downloads"
+            app:destination="@id/downloadsFragment" />
     </fragment>
 
     <fragment

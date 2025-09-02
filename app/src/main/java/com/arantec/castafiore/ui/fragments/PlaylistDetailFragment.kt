@@ -15,6 +15,8 @@ import androidx.appcompat.app.AlertDialog
 import androidx.core.os.bundleOf
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.navigation.fragment.findNavController
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.arantec.castafiore.R
@@ -69,6 +71,8 @@ class PlaylistDetailFragment : Fragment(), HasContentState {
     private var playbackStateListener: ((Boolean) -> Unit)? = null
     private var songChangeListener: ((Song?) -> Unit)? = null
 
+    private lateinit var downloadManager: com.arantec.castafiore.data.download.SongDownloadManager
+
     private val serviceConnection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
             val binder = service as MusicService.MusicBinder
@@ -102,6 +106,7 @@ class PlaylistDetailFragment : Fragment(), HasContentState {
         super.onViewCreated(view, savedInstanceState)
 
         musicRepository = MusicRepository.getInstance(requireContext())
+        downloadManager = com.arantec.castafiore.data.download.SongDownloadManager.getInstance(requireContext())
 
         // Args
         playlistId = arguments?.getString("playlistId")
@@ -118,6 +123,7 @@ class PlaylistDetailFragment : Fragment(), HasContentState {
         setupRecyclerView()
         setupFab()
         setupMoreButton()
+        setupDownloadObservers()
 
         // Defer binding to onStart so only visible fragment attaches listeners
         loadPlaylist()
@@ -156,7 +162,8 @@ class PlaylistDetailFragment : Fragment(), HasContentState {
                 showSongOptions(song)
             },
             // Habilitar la visualización de portadas de álbum en los ítems
-            showCover = true
+            showCover = true,
+            circularDownloadInIcon = true
         )
         binding.rvSongs.apply {
             layoutManager = LinearLayoutManager(requireContext())
@@ -169,9 +176,7 @@ class PlaylistDetailFragment : Fragment(), HasContentState {
         binding.fabPlay.setOnClickListener {
             val service = musicService
             if (service != null) {
-                if (isPlaylistQueuePlaying()) {
-                    if (service.isPlaying()) service.pause() else service.play()
-                } else if (playlistSongs.isNotEmpty()) {
+                if (isPlaylistQueuePlaying()) service.pause().takeIf { service.isPlaying() } ?: service.play() else if (playlistSongs.isNotEmpty()) {
                     val startIndex = if (service.getShuffleEnabled() && playlistSongs.size > 1) kotlin.random.Random.nextInt(playlistSongs.size) else 0
                     service.playQueue(
                         playlistSongs,
@@ -195,6 +200,18 @@ class PlaylistDetailFragment : Fragment(), HasContentState {
                 .setOnEditNameClickListener { showRenameDialog() }
                 .setOnDeleteListClickListener { confirmDeletePlaylist() }
                 .show(childFragmentManager, "PlaylistOptionsBottomSheet")
+        }
+    }
+
+    private fun setupDownloadObservers() {
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                downloadManager.downloadStates.collect { states ->
+                    states.values.forEach { state ->
+                        songAdapter.updateDownloadState(state)
+                    }
+                }
+            }
         }
     }
 

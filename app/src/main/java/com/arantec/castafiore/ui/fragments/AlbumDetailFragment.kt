@@ -263,7 +263,8 @@ class AlbumDetailFragment : Fragment(), HasContentState {
             onSongMoreClick = { song ->
                 showSongOptions(song)
             },
-            showCover = false
+            showCover = false,
+            circularDownloadInIcon = true
         )
 
         binding.rvSongs.apply {

@@ -12,6 +12,8 @@ import android.view.ViewGroup
 import android.view.ViewTreeObserver
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.navigation.fragment.findNavController
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.arantec.castafiore.R
@@ -26,9 +28,6 @@ import kotlinx.coroutines.launch
 import com.bumptech.glide.Glide
 import java.util.Locale
 import kotlin.random.Random
-import kotlinx.coroutines.flow.*
-import kotlinx.coroutines.Dispatchers
-import androidx.core.content.ContextCompat
 import com.arantec.castafiore.ui.helpers.HasContentState
 
 class FavoritesFragment : Fragment(), HasContentState {
@@ -42,13 +41,12 @@ class FavoritesFragment : Fragment(), HasContentState {
     private var isBound = false
 
     private val favoriteSongs = mutableListOf<Song>()
-    // Cached summary to avoid excessive UI updates during downloads
-    private var lastCompletedIds: Set<String> = emptySet()
-    private var lastAnyDownloading: Boolean = false
     private var isPlaying = false
 
     private var playbackStateListener: ((Boolean) -> Unit)? = null
     private var songChangeListener: ((Song?) -> Unit)? = null
+
+    private lateinit var downloadManager: com.arantec.castafiore.data.download.SongDownloadManager
 
     private val serviceConnection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
@@ -87,11 +85,13 @@ class FavoritesFragment : Fragment(), HasContentState {
         super.onViewCreated(view, savedInstanceState)
 
         musicRepository = MusicRepository.getInstance(requireContext())
+        downloadManager = com.arantec.castafiore.data.download.SongDownloadManager.getInstance(requireContext())
 
         setupToolbar()
         setupRecyclerView()
         loadFavorites()
         setupFab()
+        setupDownloadObservers()
     }
 
     private fun setupToolbar() {
@@ -117,7 +117,9 @@ class FavoritesFragment : Fragment(), HasContentState {
             },
             onSongMoreClick = { song ->
                 showSongOptions(song)
-            }
+            },
+            showCover = true,
+            circularDownloadInIcon = true
         )
 
         binding.rvSongs.apply {
@@ -449,6 +451,18 @@ class FavoritesFragment : Fragment(), HasContentState {
             sizeInBytes >= mb -> String.format(Locale.getDefault(), "%.1f MB", sizeInBytes / mb)
             sizeInBytes >= kb -> String.format(Locale.getDefault(), "%.1f KB", sizeInBytes / kb)
             else -> "$sizeInBytes bytes"
+        }
+    }
+
+    private fun setupDownloadObservers() {
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                downloadManager.downloadStates.collect { states ->
+                    states.values.forEach { state ->
+                        songAdapter.updateDownloadState(state)
+                    }
+                }
+            }
         }
     }
 

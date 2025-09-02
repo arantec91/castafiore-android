@@ -15,7 +15,8 @@ import java.io.File
 class SongAdapter(
     private val onSongClick: (Song, Int) -> Unit,
     private val onSongMoreClick: (Song) -> Unit,
-    private val showCover: Boolean = true
+    private val showCover: Boolean = true,
+    private val circularDownloadInIcon: Boolean = false
 ) : RecyclerView.Adapter<SongAdapter.SongViewHolder>() {
 
     private var songs = mutableListOf<Song>()
@@ -108,37 +109,88 @@ class SongAdapter(
                     tvSongArtist.setTextColor(root.context.getColor(R.color.text_secondary))
                 }
 
+                // Reset visibilities for download UI
+                cpiDownload.visibility = View.GONE
+                ivDownloaded.visibility = View.GONE
+                containerIconDownload.visibility = View.GONE
+
                 // Progreso de descarga (si aplica)
                 val dState = downloadStates[song.id]
                 if (dState != null) {
                     when (dState.status) {
                         com.arantec.castafiore.data.download.SongDownloadManager.DownloadStatus.PENDING -> {
-                            containerDownload.visibility = View.VISIBLE
-                            progressDownload.isIndeterminate = true
-                            progressDownload.progress = 0
-                            tvDownloadStatus.text = root.context.getString(R.string.downloading_pending)
+                            if (circularDownloadInIcon) {
+                                containerDownload.visibility = View.GONE
+                                containerIconDownload.visibility = View.VISIBLE
+                                cpiDownload.visibility = View.VISIBLE
+                                cpiDownload.isIndeterminate = true
+                            } else {
+                                containerDownload.visibility = View.VISIBLE
+                                progressDownload.isIndeterminate = true
+                                progressDownload.progress = 0
+                                tvDownloadStatus.text = root.context.getString(R.string.downloading_pending)
+                            }
                         }
                         com.arantec.castafiore.data.download.SongDownloadManager.DownloadStatus.DOWNLOADING -> {
-                            containerDownload.visibility = View.VISIBLE
-                            progressDownload.isIndeterminate = false
-                            progressDownload.progress = dState.progress.coerceIn(0, 100)
-                            tvDownloadStatus.text = root.context.getString(R.string.downloading_progress, dState.progress.coerceIn(0, 100))
+                            if (circularDownloadInIcon) {
+                                containerDownload.visibility = View.GONE
+                                containerIconDownload.visibility = View.VISIBLE
+                                val p = dState.progress.coerceIn(0, 100)
+                                when {
+                                    p <= 0 -> {
+                                        // No progreso aún: mantener animación indeterminada para evitar anillo "vacío"
+                                        cpiDownload.visibility = View.VISIBLE
+                                        cpiDownload.isIndeterminate = true
+                                    }
+                                    p in 1..99 -> {
+                                        // Progreso real: cambiar a modo determinado
+                                        cpiDownload.visibility = View.VISIBLE
+                                        if (cpiDownload.isIndeterminate) cpiDownload.isIndeterminate = false
+                                        try {
+                                            cpiDownload.setProgressCompat(p, true)
+                                        } catch (_: Exception) {
+                                            cpiDownload.progress = p
+                                        }
+                                    }
+                                    else -> {
+                                        // p == 100: tratar como completado en el siguiente bloque
+                                        cpiDownload.visibility = View.GONE
+                                    }
+                                }
+                            } else {
+                                containerDownload.visibility = View.VISIBLE
+                                progressDownload.isIndeterminate = false
+                                progressDownload.progress = dState.progress.coerceIn(0, 100)
+                                tvDownloadStatus.text = root.context.getString(R.string.downloading_progress, dState.progress.coerceIn(0, 100))
+                            }
                         }
                         com.arantec.castafiore.data.download.SongDownloadManager.DownloadStatus.COMPLETED -> {
                             containerDownload.visibility = View.GONE
+                            cpiDownload.visibility = View.GONE
+                            // containerIconDownload handled after we compute isDownloaded
                         }
                         com.arantec.castafiore.data.download.SongDownloadManager.DownloadStatus.FAILED -> {
-                            containerDownload.visibility = View.VISIBLE
-                            progressDownload.isIndeterminate = false
-                            progressDownload.progress = 0
-                            tvDownloadStatus.text = root.context.getString(R.string.downloading_failed)
+                            if (circularDownloadInIcon) {
+                                containerDownload.visibility = View.GONE
+                                cpiDownload.visibility = View.GONE
+                                containerIconDownload.visibility = View.GONE
+                            } else {
+                                containerDownload.visibility = View.VISIBLE
+                                progressDownload.isIndeterminate = false
+                                progressDownload.progress = 0
+                                tvDownloadStatus.text = root.context.getString(R.string.downloading_failed)
+                            }
                         }
                         com.arantec.castafiore.data.download.SongDownloadManager.DownloadStatus.CANCELLED -> {
                             containerDownload.visibility = View.GONE
+                            cpiDownload.visibility = View.GONE
+                            containerIconDownload.visibility = View.GONE
                         }
                     }
                 } else {
                     containerDownload.visibility = View.GONE
+                    cpiDownload.visibility = View.GONE
+                    containerIconDownload.visibility = View.GONE
                 }
 
                 // Icono de descargado: visible cuando la canción está descargada
@@ -146,14 +198,25 @@ class SongAdapter(
                     val dm = com.arantec.castafiore.data.download.SongDownloadManager.getInstance(root.context)
                     val isDownloaded = dm.isSongDownloaded(song.id)
                         || (dState?.status == com.arantec.castafiore.data.download.SongDownloadManager.DownloadStatus.COMPLETED)
-                    ivDownloaded.visibility = if (isDownloaded) View.VISIBLE else View.GONE
+                    val isSpinnerVisible = cpiDownload.visibility == View.VISIBLE
+                    if (!isSpinnerVisible && isDownloaded) {
+                        ivDownloaded.visibility = View.VISIBLE
+                        containerIconDownload.visibility = View.VISIBLE
+                    } else if (!isSpinnerVisible && !isDownloaded) {
+                        // ensure no gap
+                        ivDownloaded.visibility = View.GONE
+                        containerIconDownload.visibility = View.GONE
+                    }
                 } catch (_: Exception) {
                     ivDownloaded.visibility = View.GONE
+                    if (cpiDownload.visibility != View.VISIBLE) {
+                        containerIconDownload.visibility = View.GONE
+                    }
                 }
 
                 // Click handlers
                 root.setOnClickListener {
-                    onSongClick(song, adapterPosition)
+                    onSongClick(song, bindingAdapterPosition)
                 }
 
                 btnSongMore.setOnClickListener {

@@ -9,5 +9,5 @@ data class LibraryItem(
 )
 
 enum class LibraryItemType {
-    PLAYLIST, ARTIST, ALBUM, LIKED_SONGS
+    PLAYLIST, ARTIST, ALBUM, LIKED_SONGS, DOWNLOADS
 }

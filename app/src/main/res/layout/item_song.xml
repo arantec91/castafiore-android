@@ -48,16 +48,40 @@
             android:orientation="horizontal"
             android:gravity="center_vertical">
 
-            <!-- Icono de descarga (visible solo si la canción está descargada) -->
-            <ImageView
-                android:id="@+id/ivDownloaded"
-                android:layout_width="14dp"
-                android:layout_height="14dp"
+            <!-- Contenedor del indicador de descarga: circular o icono descargado -->
+            <FrameLayout
+                android:id="@+id/containerIconDownload"
+                android:layout_width="18dp"
+                android:layout_height="18dp"
                 android:layout_marginEnd="6dp"
-                android:contentDescription="@string/download_to_device"
-                android:src="@drawable/ic_download"
-                app:tint="@color/primary"
-                android:visibility="gone" />
+                android:visibility="gone">
+
+                <!-- Icono de descarga (visible solo si la canción está descargada) -->
+                <ImageView
+                    android:id="@+id/ivDownloaded"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:contentDescription="@string/download_to_device"
+                    android:src="@drawable/ic_download"
+                    app:tint="@color/primary"
+                    android:visibility="gone" />
+
+                <!-- Indicador de progreso circular (aparece en lugar del icono mientras descarga) -->
+                <com.google.android.material.progressindicator.CircularProgressIndicator
+                    android:id="@+id/cpiDownload"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:visibility="gone"
+                    app:indicatorSize="18dp"
+                    app:trackThickness="2dp"
+                    app:indicatorInset="0dp"
+                    app:indicatorDirectionCircular="clockwise"
+                    app:trackColor="@color/text_secondary"
+                    app:indicatorColor="@color/primary"
+                    app:showAnimationBehavior="inward"
+                    app:hideAnimationBehavior="outward"
+                    tools:indeterminate="true" />
+            </FrameLayout>
 
             <TextView
                 android:id="@+id/tvSongArtist"

@@ -45,6 +45,9 @@ import com.arantec.castafiore.utils.snack
 import androidx.core.content.ContextCompat
 import com.arantec.castafiore.ui.helpers.HasContentState
 import androidx.core.graphics.drawable.toDrawable
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
+import com.arantec.castafiore.data.download.SongDownloadManager
 
 class ArtistDetailFragment : Fragment(), HasContentState {
 
@@ -80,6 +83,9 @@ class ArtistDetailFragment : Fragment(), HasContentState {
     // Estado colapsable de canciones populares
     private var isSongsExpanded: Boolean = false
     private val INITIAL_SONGS_LIMIT = 6
+
+    // Agregado: gestor de descargas para observar progreso
+    private lateinit var downloadManager: SongDownloadManager
 
 
     private val serviceConnection = object : ServiceConnection {
@@ -137,6 +143,7 @@ class ArtistDetailFragment : Fragment(), HasContentState {
         super.onViewCreated(view, savedInstanceState)
 
         musicRepository = MusicRepository.getInstance(requireContext())
+        downloadManager = SongDownloadManager.getInstance(requireContext())
 
         setupToolbar()
         setupRecyclerViews()
@@ -144,6 +151,18 @@ class ArtistDetailFragment : Fragment(), HasContentState {
 
         // Inicializa el estado del botón de seguir/favoritos sin parpadeos
         initializeFollowUI()
+
+        // Observar progreso/estado de descargas para reflejarlo en la lista de canciones
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                downloadManager.downloadStates.collect { map ->
+                    // Actualizar solo los elementos visibles/relevantes
+                    map.values.forEach { state ->
+                        songAdapter.updateDownloadState(state)
+                    }
+                }
+            }
+        }
 
         loadArtistData()
     }
@@ -189,7 +208,9 @@ class ArtistDetailFragment : Fragment(), HasContentState {
         // Setup songs RecyclerView con la firma correcta del SongAdapter
         songAdapter = SongAdapter(
             onSongClick = { song, position -> playSong(song) },
-            onSongMoreClick = { song -> showSongOptions(song) }
+            onSongMoreClick = { song -> showSongOptions(song) },
+            showCover = true,
+            circularDownloadInIcon = true
         )
         binding.rvPopularSongs.apply {
             adapter = songAdapter
@@ -318,7 +339,7 @@ class ArtistDetailFragment : Fragment(), HasContentState {
             onFailure = { error ->
                 withContext(Dispatchers.Main) {
                     if (!isAdded || _binding == null) return@withContext
-                    showError("Error al cargar canciones populares: ${error.message}")
+                    showError("Error al cargar canciones populares: ${'$'}{error.message}")
                 }
             }
         )
@@ -717,12 +738,12 @@ class ArtistDetailFragment : Fragment(), HasContentState {
             .setOnAddToQueueClickListener { selectedSong ->
                 // Agregar canción a la cola de reproducción
                 musicService?.addToQueue(selectedSong)
-                snack("Agregado a la cola: ${selectedSong.title}")
+                snack("Agregado a la cola: ${'$'}{selectedSong.title}")
             }
             .setOnPlayNextClickListener { selectedSong ->
                 // Agregar canción para reproducir siguiente
                 musicService?.playNext(selectedSong)
-                snack("Se reproducirá siguiente: ${selectedSong.title}")
+                snack("Se reproducirá siguiente: ${'$'}{selectedSong.title}")
             }
             .setOnAddToPlaylistClickListener { selectedSong ->
                 // Mostrar diálogo de selección de playlist
@@ -890,7 +911,7 @@ class ArtistDetailFragment : Fragment(), HasContentState {
 
     // Métodos auxiliares para el bottom sheet de opciones de canciones
     private fun shareSong(song: Song) {
-        val shareText = "Escucha \"${song.title}\" de ${song.artist} en el álbum \"${song.album}\""
+        val shareText = "Escucha \"${'$'}{song.title}\" de ${'$'}{song.artist} en el álbum \"${'$'}{song.album}\""
         val shareIntent = Intent().apply {
             action = Intent.ACTION_SEND
             putExtra(Intent.EXTRA_TEXT, shareText)
@@ -932,7 +953,7 @@ class ArtistDetailFragment : Fragment(), HasContentState {
         // Configurar información opcional
         tvInfoGenre.text = song.genre ?: "Desconocido"
         tvInfoYear.text = song.year?.toString() ?: "Desconocido"
-        tvInfoBitrate.text = if (song.bitRate != null) "${song.bitRate} kbps" else "Desconocido"
+        tvInfoBitrate.text = if (song.bitRate != null) "${'$'}{song.bitRate} kbps" else "Desconocido"
         tvInfoFormat.text = song.suffix?.uppercase() ?: "Desconocido"
 
         // Formatear el tamaño del archivo
@@ -995,7 +1016,7 @@ class ArtistDetailFragment : Fragment(), HasContentState {
             sizeInBytes >= gb -> String.format(Locale.getDefault(), "%.1f GB", sizeInBytes / gb)
             sizeInBytes >= mb -> String.format(Locale.getDefault(), "%.1f MB", sizeInBytes / mb)
             sizeInBytes >= kb -> String.format(Locale.getDefault(), "%.1f KB", sizeInBytes / kb)
-            else -> "$sizeInBytes bytes"
+            else -> "${'$'}sizeInBytes bytes"
         }
     }
 

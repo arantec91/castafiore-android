@@ -14,9 +14,4 @@
         android:id="@+id/libraryFragment"
         android:icon="@drawable/ic_favorite_filled"
         android:title="@string/bottom_favorites" />
-
-    <item
-        android:id="@+id/downloadsFragment"
-        android:icon="@drawable/ic_download"
-        android:title="@string/bottom_downloads" />
 </menu>

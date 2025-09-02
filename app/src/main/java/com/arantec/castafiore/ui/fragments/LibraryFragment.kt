@@ -295,6 +295,18 @@ class LibraryFragment : Fragment(), HasContentState {
             )
             seenPlaylistIds.add("liked_songs")
 
+            // Agregar acceso a Canciones descargadas (lista de canciones locales)
+            newPlaylists.add(
+                LibraryItem(
+                    id = "downloads",
+                    title = "Canciones descargadas",
+                    subtitle = "Playlist • Offline",
+                    imageUrl = null,
+                    type = LibraryItemType.DOWNLOADS
+                )
+            )
+            seenPlaylistIds.add("downloads")
+
             // Luego cargar las playlists de la API UNA SOLA VEZ
             val playlistsFromApi = musicRepository.getPlaylists().getOrElse { emptyList() }
             allPlaylistsRaw = playlistsFromApi
@@ -368,7 +380,7 @@ class LibraryFragment : Fragment(), HasContentState {
                 playlistsMap.putAll(newPlaylistsMap)
             }
         } catch (_: Exception) {
-            // En caso de error, solo mantener "Canciones que te gustan"
+            // En caso de error, solo mantener "Canciones que te gustan" y Descargas
             playlistsMutex.withLock {
                 playlists = listOf(
                     LibraryItem(
@@ -377,6 +389,13 @@ class LibraryFragment : Fragment(), HasContentState {
                         subtitle = "Playlist • Tus favoritas",
                         imageUrl = null,
                         type = LibraryItemType.LIKED_SONGS
+                    ),
+                    LibraryItem(
+                        id = "downloads",
+                        title = "Canciones descargadas",
+                        subtitle = "Playlist • Offline",
+                        imageUrl = null,
+                        type = LibraryItemType.DOWNLOADS
                     )
                 )
                 playlistsMap.clear()
@@ -778,6 +797,10 @@ class LibraryFragment : Fragment(), HasContentState {
                 LibraryItemType.LIKED_SONGS -> {
                     // Navegar a canciones favoritas con animaciones definidas
                     findNavController().navigate(R.id.action_library_to_favorites)
+                }
+                LibraryItemType.DOWNLOADS -> {
+                    // Navegar a Descargas (canciones locales)
+                    findNavController().navigate(R.id.action_library_to_downloads)
                 }
             }
         }

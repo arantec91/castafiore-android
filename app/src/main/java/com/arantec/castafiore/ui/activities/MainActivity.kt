@@ -34,6 +34,7 @@ import androidx.lifecycle.repeatOnLifecycle
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import android.content.Context.BIND_AUTO_CREATE
 
 class MainActivity : AppCompatActivity(), LoadingHost {
 
@@ -301,7 +302,8 @@ class MainActivity : AppCompatActivity(), LoadingHost {
                 "home" -> R.id.homeFragment
                 "search" -> R.id.searchFragment
                 "library" -> R.id.libraryFragment
-                "downloads" -> R.id.downloadsFragment
+                // "downloads" tab deprecated: redirect to Library for now
+                "downloads" -> R.id.libraryFragment
                 else -> R.id.homeFragment
             }
             binding.bottomNavigation.selectedItemId = itemId
@@ -410,7 +412,7 @@ class MainActivity : AppCompatActivity(), LoadingHost {
 
     private fun bindMusicService() {
         val intent = Intent(this, MusicService::class.java)
-        bindService(intent, serviceConnection, android.content.Context.BIND_AUTO_CREATE)
+        bindService(intent, serviceConnection, BIND_AUTO_CREATE)
     }
 
     private fun requestNotificationPermission() {
@@ -478,7 +480,7 @@ class MainActivity : AppCompatActivity(), LoadingHost {
     override fun onResume() {
         super.onResume()
         // Ensure overlay state is consistent after returning from another Activity (e.g., PlayerActivity)
-        recomputeGlobalOverlay(com.arantec.castafiore.data.network.InFlightTracker.isLoading.value)
+        recomputeGlobalOverlay(InFlightTracker.isLoading.value)
         // When returning from PlayerActivity, refresh mini player artwork/state
         if (isBound) {
             updateMiniPlayer(musicService?.getCurrentSong())

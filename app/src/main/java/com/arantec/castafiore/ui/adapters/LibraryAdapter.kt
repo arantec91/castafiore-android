@@ -57,6 +57,10 @@ class LibraryAdapter(
                         ivCover.setImageResource(R.drawable.ic_favorite_filled)
                         ivCover.setBackgroundResource(R.drawable.liked_songs_background)
                     }
+                    LibraryItemType.DOWNLOADS -> {
+                        ivCover.setImageResource(R.drawable.ic_download)
+                        ivCover.setBackgroundResource(R.drawable.liked_songs_background)
+                    }
                     LibraryItemType.PLAYLIST -> {
                         if (item.imageUrl != null) {
                             ImageLoader.loadThumbnail(itemView.context, ivCover, item.imageUrl)

@@ -214,19 +214,49 @@ class SongDownloadManager private constructor(private val context: Context) {
         val uriStr = prefs.getString(keyFor(songId), null) ?: return false
         return try {
             val deleted = context.contentResolver.delete(Uri.parse(uriStr), null, null) > 0
-            if (deleted) prefs.edit()
-                .remove(keyFor(songId))
-                .remove(albumKeyFor(songId))
-                .remove(artistKeyFor(songId))
-                .remove(coverArtKeyFor(songId))
-                .apply()
+            if (deleted) {
+                // Clear stored metadata
+                prefs.edit()
+                    .remove(keyFor(songId))
+                    .remove(albumKeyFor(songId))
+                    .remove(artistKeyFor(songId))
+                    .remove(coverArtKeyFor(songId))
+                    .apply()
+                // Emit a CANCELLED state so UI refreshes immediately and hides the downloaded icon
+                val cur = current(songId)
+                val songForState = cur?.song ?: Song(
+                    id = songId,
+                    title = "",
+                    artist = "",
+                    album = "",
+                    duration = 0
+                )
+                updateDownloadState(
+                    songId,
+                    DownloadState(
+                        songId = songId,
+                        song = songForState,
+                        status = DownloadStatus.CANCELLED,
+                        progress = 0,
+                        downloadedBytes = 0,
+                        totalBytes = 0,
+                        filePath = null,
+                        error = null,
+                        origin = cur?.origin ?: DownloadOrigin.UNKNOWN
+                    )
+                )
+            }
             deleted
         } catch (_: Exception) { false }
     }
 
     fun deleteMultipleSongs(songIds: List<String>): Int {
         var count = 0
-        songIds.forEach { if (deleteSong(it)) count++ }
+        songIds.forEach { id ->
+            if (deleteSong(id)) {
+                count++
+            }
+        }
         return count
     }
 

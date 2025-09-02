@@ -9,29 +9,23 @@ import android.os.IBinder
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.view.ViewTreeObserver
 import androidx.fragment.app.Fragment
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
+import androidx.navigation.fragment.findNavController
 import androidx.recyclerview.widget.LinearLayoutManager
-import com.arantec.castafiore.data.download.SongDownloadManager
+import com.arantec.castafiore.R
 import com.arantec.castafiore.data.models.Song
 import com.arantec.castafiore.databinding.FragmentDownloadsBinding
 import com.arantec.castafiore.service.MusicService
 import com.arantec.castafiore.ui.adapters.SongAdapter
 import com.arantec.castafiore.ui.helpers.HasContentState
 import com.arantec.castafiore.utils.StatusBarUtils
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
+import com.arantec.castafiore.utils.snack
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import com.arantec.castafiore.R
-import com.arantec.castafiore.ui.dialogs.SongOptionsBottomSheet
-import com.arantec.castafiore.ui.dialogs.PlaylistSelectorBottomSheet
-import androidx.navigation.fragment.findNavController
-import androidx.core.os.bundleOf
-import com.arantec.castafiore.data.repository.MusicRepository
-import androidx.lifecycle.lifecycleScope
-import androidx.lifecycle.repeatOnLifecycle
-import androidx.lifecycle.Lifecycle
-import kotlinx.coroutines.flow.collect
+import kotlin.random.Random
 
 class DownloadsFragment : Fragment(), HasContentState {
 
@@ -39,127 +33,111 @@ class DownloadsFragment : Fragment(), HasContentState {
     private val binding get() = _binding!!
 
     private lateinit var songAdapter: SongAdapter
-    private lateinit var downloadManager: SongDownloadManager
     private var musicService: MusicService? = null
     private var isBound = false
-    private var songs: List<Song> = emptyList()
+
+    private val downloadedSongs = mutableListOf<Song>()
+    private var isPlaying = false
+
+    private var playbackStateListener: ((Boolean) -> Unit)? = null
+    private var songChangeListener: ((Song?) -> Unit)? = null
+
+    private lateinit var downloadManager: com.arantec.castafiore.data.download.SongDownloadManager
 
     private val serviceConnection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
-            val binder = service as MusicService.MusicBinder
+            val binder = service as? MusicService.MusicBinder ?: return
             musicService = binder.getService()
             isBound = true
-            // Highlight currently playing if belongs to downloads
-            musicService?.addSongChangeListener { song ->
-                songAdapter.setPlayingSong(song?.id)
+            setupMusicServiceListeners()
+            val serviceIsPlaying = musicService?.isPlaying() == true
+            val inContext = isDownloadsQueuePlaying()
+            isPlaying = serviceIsPlaying && inContext
+            updatePlayButton()
+            val currentId = musicService?.getCurrentSong()?.id
+            if (isAdded && _binding != null) {
+                songAdapter.setPlayingSong(if (inContext) currentId else null)
             }
         }
+
         override fun onServiceDisconnected(name: ComponentName?) {
+            cleanupListeners()
             musicService = null
             isBound = false
         }
     }
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
+        StatusBarUtils.setStatusBarColor(this)
         _binding = FragmentDownloadsBinding.inflate(inflater, container, false)
         return binding.root
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-        downloadManager = SongDownloadManager.getInstance(requireContext())
+        downloadManager = com.arantec.castafiore.data.download.SongDownloadManager.getInstance(requireContext())
 
-        // Evitar que el contenido se dibuje detrás de la status bar (comportamiento consistente con Home)
-        StatusBarUtils.applyStatusBarTopPadding(binding.root)
-
+        setupToolbar()
         setupRecyclerView()
-        setupDownloadObservers()
         loadDownloads()
+        setupFab()
+        setupDownloadObservers()
     }
 
-    private fun setupDownloadObservers() {
-        viewLifecycleOwner.lifecycleScope.launch {
-            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
-                downloadManager.downloadStates.collect { states ->
-                    states.values.forEach { state ->
-                        songAdapter.updateDownloadState(state)
-                    }
-                }
-            }
-        }
+    private fun setupToolbar() {
+        binding.toolbar.setNavigationOnClickListener { findNavController().popBackStack() }
     }
 
     private fun setupRecyclerView() {
         songAdapter = SongAdapter(
-            onSongClick = { song, _ -> playSong(song) },
-            onSongMoreClick = { song -> showMoreOptions(song) },
-            showCover = true
+            onSongClick = { _, position ->
+                val service = musicService ?: return@SongAdapter
+                if (downloadedSongs.isNotEmpty()) {
+                    service.playQueue(
+                        downloadedSongs,
+                        position,
+                        MusicService.PlaybackSource(
+                            MusicService.SourceType.DOWNLOADS,
+                            null,
+                            getString(R.string.bottom_downloads)
+                        )
+                    )
+                }
+            },
+            onSongMoreClick = { song ->
+                showSongOptions(song)
+            },
+            showCover = true,
+            circularDownloadInIcon = true
         )
-        binding.recyclerView.apply {
+
+        binding.rvSongs.apply {
             layoutManager = LinearLayoutManager(context)
             adapter = songAdapter
+            isNestedScrollingEnabled = false
         }
     }
 
-    private fun showMoreOptions(song: Song) {
-        val sheet = SongOptionsBottomSheet
-            .newInstance(song)
-            .setOnAddToQueueClickListener { s ->
-                if (isBound) musicService?.addToQueue(s)
+    private fun setupFab() {
+        binding.fabPlay.setOnClickListener {
+            val service = musicService ?: return@setOnClickListener
+            if (isDownloadsQueuePlaying()) {
+                if (service.isPlaying()) service.pause() else service.play()
+            } else if (downloadedSongs.isNotEmpty()) {
+                val startIndex = if (service.getShuffleEnabled() && downloadedSongs.size > 1) {
+                    Random.nextInt(downloadedSongs.size)
+                } else 0
+                service.playQueue(
+                    downloadedSongs,
+                    startIndex,
+                    MusicService.PlaybackSource(
+                        MusicService.SourceType.DOWNLOADS,
+                        null,
+                        getString(R.string.bottom_downloads)
+                    )
+                )
             }
-            .setOnPlayNextClickListener { s ->
-                if (isBound) musicService?.playNext(s)
-            }
-            .setOnAddToPlaylistClickListener { s ->
-                // Abrir selector de playlist
-                val selector = PlaylistSelectorBottomSheet.newInstance(s)
-                selector.show(childFragmentManager, "PlaylistSelectorBottomSheet")
-            }
-            .setOnViewAlbumClickListener { s ->
-                val albumId = s.albumId
-                if (!albumId.isNullOrEmpty()) {
-                    // Cargar álbum y navegar
-                    viewLifecycleOwner.lifecycleScope.launch {
-                        val repo = MusicRepository.getInstance(requireContext())
-                        val result = withContext(Dispatchers.IO) { repo.getAlbumDetail(albumId) }
-                        result.fold(
-                            onSuccess = { album ->
-                                try {
-                                    findNavController().navigate(
-                                        R.id.albumDetailFragment,
-                                        bundleOf("album" to album)
-                                    )
-                                } catch (_: Exception) {}
-                            },
-                            onFailure = {
-                                android.widget.Toast.makeText(requireContext(), getString(R.string.error_loading_favorites), android.widget.Toast.LENGTH_SHORT).show()
-                            }
-                        )
-                    }
-                }
-            }
-            .setOnViewArtistClickListener { s ->
-                val artistId = s.artistId
-                if (!artistId.isNullOrEmpty()) {
-                    try {
-                        findNavController().navigate(
-                            R.id.artistDetailFragment,
-                            bundleOf(
-                                "artistId" to artistId,
-                                "artistName" to (s.artist)
-                            )
-                        )
-                    } catch (_: Exception) {}
-                }
-            }
-        // Ocultar "Ver álbum" y "Ver artista" si no tenemos IDs disponibles en modo descargas
-        if (song.albumId.isNullOrEmpty()) {
-            sheet.hideViewAlbumOption()
         }
-        if (song.artistId.isNullOrEmpty()) {
-            sheet.hideViewArtistOption()
-        }
-        sheet.show(childFragmentManager, "SongOptionsBottomSheet")
     }
 
     private fun bindMusicService() {
@@ -169,37 +147,276 @@ class DownloadsFragment : Fragment(), HasContentState {
 
     private fun unbindMusicService() {
         if (isBound) {
+            cleanupListeners()
             requireContext().unbindService(serviceConnection)
             isBound = false
             musicService = null
         }
     }
 
-    private fun playSong(song: Song) {
-        if (isBound && musicService != null) {
-            // Play within this list context
-            val source = MusicService.PlaybackSource(MusicService.SourceType.DOWNLOADS, null, getString(R.string.bottom_downloads))
-            musicService?.playQueue(songs, songs.indexOfFirst { it.id == song.id }.coerceAtLeast(0), source)
+    private fun loadDownloads() {
+        if (hasContent()) {
+            binding.loadingOverlay.visibility = View.VISIBLE
+            binding.progressBar.visibility = View.VISIBLE
+        } else {
+            binding.loadingOverlay.visibility = View.GONE
+            binding.progressBar.visibility = View.GONE
+        }
+        binding.emptyLayout.visibility = View.GONE
+
+        viewLifecycleOwner.lifecycleScope.launch {
+            val songs = try { downloadManager.getAllDownloadedSongs() } catch (_: Exception) { emptyList() }
+            if (!isAdded || _binding == null) return@launch
+
+            downloadedSongs.clear()
+            downloadedSongs.addAll(songs)
+            songAdapter.updateSongs(downloadedSongs)
+
+            binding.tvTitle.text = getString(R.string.bottom_downloads)
+            updateInfoAndEmptyState()
+
+            isPlaying = musicService?.isPlaying() == true && isDownloadsQueuePlaying()
+            updatePlayButton()
+
+            hideLoadingOverlayAfterNextDraw()
         }
     }
 
-    private fun loadDownloads() {
-        binding.progressBar.visibility = if (hasContent()) View.VISIBLE else View.GONE
-        binding.tvEmpty.visibility = View.GONE
-        CoroutineScope(Dispatchers.Main).launch {
-            val list = withContext(Dispatchers.IO) { downloadManager.getAllDownloadedSongs() }
-            songs = list
-            if (list.isNotEmpty()) {
-                songAdapter.updateSongs(list)
-                binding.recyclerView.visibility = View.VISIBLE
-                binding.tvEmpty.visibility = View.GONE
-            } else {
-                binding.tvEmpty.text = getString(R.string.downloads_empty)
-                binding.tvEmpty.visibility = View.VISIBLE
-                binding.recyclerView.visibility = View.GONE
+    private fun hideLoadingOverlayAfterNextDraw() {
+        if (!isAdded || _binding == null) return
+        val root = binding.root
+        val listener = object : ViewTreeObserver.OnPreDrawListener {
+            override fun onPreDraw(): Boolean {
+                if (!isAdded || _binding == null) return true
+                root.viewTreeObserver.removeOnPreDrawListener(this)
+                binding.loadingOverlay.visibility = View.GONE
+                binding.progressBar.visibility = View.GONE
+                return true
             }
-            binding.progressBar.visibility = View.GONE
         }
+        root.viewTreeObserver.addOnPreDrawListener(listener)
+    }
+
+    private fun buildInfoText(list: List<Song>): String {
+        val count = list.size
+        val totalSeconds = list.sumOf { it.duration }
+        val minutes = totalSeconds / 60
+        val hours = minutes / 60
+        val remMin = minutes % 60
+        val durationText = if (hours > 0) "$hours h $remMin min" else "$minutes min"
+        return "$count canciones • $durationText"
+    }
+
+    private fun isDownloadsQueuePlaying(): Boolean {
+        val service = musicService ?: return false
+        val src = service.getPlaybackSource()
+        return src?.type == MusicService.SourceType.DOWNLOADS
+    }
+
+    private fun setupMusicServiceListeners() {
+        musicService?.let { service ->
+            cleanupListeners()
+
+            playbackStateListener = { playing ->
+                if (isAdded && _binding != null) {
+                    requireActivity().runOnUiThread {
+                        isPlaying = playing && isDownloadsQueuePlaying()
+                        updatePlayButton()
+                    }
+                }
+            }
+
+            songChangeListener = { song ->
+                if (isAdded && _binding != null) {
+                    requireActivity().runOnUiThread {
+                        val inContext = isDownloadsQueuePlaying()
+                        isPlaying = service.isPlaying() && inContext
+                        updatePlayButton()
+                        songAdapter.setPlayingSong(if (inContext) song?.id else null)
+                    }
+                }
+            }
+
+            playbackStateListener?.let { service.addPlaybackStateListener(it) }
+            songChangeListener?.let { service.addSongChangeListener(it) }
+        }
+    }
+
+    private fun cleanupListeners() {
+        musicService?.let { service ->
+            playbackStateListener?.let { service.removePlaybackStateListener(it) }
+            songChangeListener?.let { service.removeSongChangeListener(it) }
+        }
+        playbackStateListener = null
+        songChangeListener = null
+    }
+
+    private fun updatePlayButton() {
+        if (!isAdded || _binding == null) return
+        if (Thread.currentThread() == requireActivity().mainLooper.thread) {
+            binding.fabPlay.setImageResource(if (isPlaying) R.drawable.ic_pause else R.drawable.ic_play)
+        } else {
+            requireActivity().runOnUiThread {
+                if (isAdded && _binding != null) {
+                    binding.fabPlay.setImageResource(if (isPlaying) R.drawable.ic_pause else R.drawable.ic_play)
+                }
+            }
+        }
+    }
+
+    private fun setupDownloadObservers() {
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                downloadManager.downloadStates.collect { states ->
+                    // Update per-item download UI
+                    states.values.forEach { state ->
+                        songAdapter.updateDownloadState(state)
+                    }
+                    // Remove items that were deleted in real time
+                    val toRemove = states.values
+                        .filter { st ->
+                            (st.status == com.arantec.castafiore.data.download.SongDownloadManager.DownloadStatus.CANCELLED ||
+                             st.status == com.arantec.castafiore.data.download.SongDownloadManager.DownloadStatus.FAILED) &&
+                            downloadedSongs.any { it.id == st.songId } &&
+                            !downloadManager.isSongDownloaded(st.songId)
+                        }
+                        .map { it.songId }
+                        .toSet()
+
+                    if (toRemove.isNotEmpty()) {
+                        downloadedSongs.removeAll { it.id in toRemove }
+                        if (isAdded && _binding != null) {
+                            songAdapter.updateSongs(downloadedSongs)
+                            updateInfoAndEmptyState()
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private fun updateInfoAndEmptyState() {
+        if (!isAdded || _binding == null) return
+        binding.tvInfo.text = buildInfoText(downloadedSongs)
+        if (downloadedSongs.isEmpty()) {
+            binding.emptyLayout.visibility = View.VISIBLE
+            binding.rvSongs.visibility = View.GONE
+        } else {
+            binding.rvSongs.visibility = View.VISIBLE
+            binding.emptyLayout.visibility = View.GONE
+        }
+    }
+
+    private fun showSongOptions(song: Song) {
+        val bottomSheet = com.arantec.castafiore.ui.dialogs.SongOptionsBottomSheet
+            .newInstance(song, false)
+            .setOnAddToQueueClickListener { selectedSong ->
+                val service = musicService
+                if (service != null) {
+                    service.addToQueue(selectedSong)
+                    snack(getString(R.string.added_to_queue, selectedSong.title))
+                } else {
+                    snack(getString(R.string.music_service_unavailable))
+                    bindMusicService()
+                }
+            }
+            .setOnPlayNextClickListener { selectedSong ->
+                val service = musicService
+                if (service != null) {
+                    service.playNext(selectedSong)
+                    snack(getString(R.string.will_play_next, selectedSong.title))
+                } else {
+                    snack(getString(R.string.music_service_unavailable))
+                    bindMusicService()
+                }
+            }
+            .setOnAddToPlaylistClickListener { selectedSong ->
+                com.arantec.castafiore.ui.dialogs.PlaylistSelectorBottomSheet
+                    .newInstance(selectedSong)
+                    .show(childFragmentManager, "PlaylistSelectorBottomSheet")
+            }
+            .setOnViewAlbumClickListener { selectedSong ->
+                val albumId = selectedSong.albumId
+                if (!albumId.isNullOrEmpty()) {
+                    viewLifecycleOwner.lifecycleScope.launch {
+                        com.arantec.castafiore.data.repository.MusicRepository.getInstance(requireContext()).getAlbumDetail(albumId).fold(
+                            onSuccess = { album ->
+                                val args = Bundle().apply { putParcelable("album", album) }
+                                try { findNavController().navigate(R.id.albumDetailFragment, args) } catch (_: Exception) { snack("No se pudo abrir el álbum") }
+                            },
+                            onFailure = { snack("No se pudo abrir el álbum") }
+                        )
+                    }
+                } else {
+                    snack("Álbum no disponible")
+                }
+            }
+            .setOnViewArtistClickListener { selectedSong ->
+                val artistId = selectedSong.artistId
+                if (!artistId.isNullOrEmpty()) {
+                    val args = Bundle().apply {
+                        putString("artistId", artistId)
+                        putString("artistName", selectedSong.artist)
+                    }
+                    try { findNavController().navigate(R.id.artistDetailFragment, args) } catch (_: Exception) { snack("No se pudo abrir el artista") }
+                } else {
+                    snack("Artista no disponible")
+                }
+            }
+            .setOnSongInfoClickListener { selectedSong ->
+                // Reuse Favorites dialog for consistency
+                val dialogBuilder = androidx.appcompat.app.AlertDialog.Builder(requireContext())
+                val inflater = LayoutInflater.from(requireContext())
+                val dialogView = inflater.inflate(R.layout.dialog_song_info, null)
+                val ivInfoCover = dialogView.findViewById<android.widget.ImageView>(R.id.iv_info_cover)
+                val tvInfoTitle = dialogView.findViewById<android.widget.TextView>(R.id.tv_info_title)
+                val tvInfoArtist = dialogView.findViewById<android.widget.TextView>(R.id.tv_info_artist)
+                val tvInfoAlbum = dialogView.findViewById<android.widget.TextView>(R.id.tv_info_album)
+                val tvInfoDuration = dialogView.findViewById<android.widget.TextView>(R.id.tv_info_duration)
+                val tvInfoGenre = dialogView.findViewById<android.widget.TextView>(R.id.tv_info_genre)
+                val tvInfoYear = dialogView.findViewById<android.widget.TextView>(R.id.tv_info_year)
+                val tvInfoBitrate = dialogView.findViewById<android.widget.TextView>(R.id.tv_info_bitrate)
+                val tvInfoFormat = dialogView.findViewById<android.widget.TextView>(R.id.tv_info_format)
+                val tvInfoFileSize = dialogView.findViewById<android.widget.TextView>(R.id.tv_info_file_size)
+                tvInfoTitle.text = selectedSong.title
+                tvInfoArtist.text = selectedSong.artist
+                tvInfoAlbum.text = selectedSong.album
+                tvInfoDuration.text = formatSongDuration(selectedSong.duration)
+                tvInfoGenre.text = selectedSong.genre ?: "Desconocido"
+                tvInfoYear.text = selectedSong.year?.toString() ?: "Desconocido"
+                tvInfoBitrate.text = if (selectedSong.bitRate != null) "${'$'}{selectedSong.bitRate} kbps" else "Desconocido"
+                tvInfoFormat.text = selectedSong.suffix?.uppercase() ?: "Desconocido"
+                tvInfoFileSize.text = com.arantec.castafiore.data.download.SongDownloadManager.getInstance(requireContext()).formatFileSize(
+                    com.arantec.castafiore.data.download.SongDownloadManager.getInstance(requireContext()).getSongFileSize(selectedSong.id)
+                )
+                try {
+                    val repo = com.arantec.castafiore.data.repository.MusicRepository.getInstance(requireContext())
+                    if (repo.serverUrl != null && selectedSong.coverArt != null) {
+                        val (username, token, salt) = repo.getAuthParams()
+                        val coverUrl = selectedSong.getCoverArtUrl(repo.serverUrl!!, username, token, salt)
+                        com.bumptech.glide.Glide.with(this)
+                            .load(coverUrl)
+                            .placeholder(R.drawable.ic_album_placeholder)
+                            .error(R.drawable.ic_album_placeholder)
+                            .into(ivInfoCover)
+                    } else {
+                        ivInfoCover.setImageResource(R.drawable.ic_album_placeholder)
+                    }
+                } catch (_: Exception) {
+                    ivInfoCover.setImageResource(R.drawable.ic_album_placeholder)
+                }
+                dialogBuilder.setView(dialogView)
+                    .setTitle("Información de la canción")
+                    .setPositiveButton("Cerrar") { dialog, _ -> dialog.dismiss() }
+                    .show()
+            }
+        bottomSheet.show(childFragmentManager, "SongOptionsBottomSheet")
+    }
+
+    private fun formatSongDuration(seconds: Int): String {
+        val minutes = seconds / 60
+        val remainingSeconds = seconds % 60
+        return String.format(java.util.Locale.getDefault(), "%d:%02d", minutes, remainingSeconds)
     }
 
     override fun onStart() {
@@ -207,14 +424,16 @@ class DownloadsFragment : Fragment(), HasContentState {
         bindMusicService()
     }
 
-    override fun onResume() {
-        super.onResume()
-        loadDownloads()
-    }
-
     override fun onStop() {
         super.onStop()
         unbindMusicService()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        StatusBarUtils.setStatusBarColor(this)
+        // refresh downloads in case list changed
+        loadDownloads()
     }
 
     override fun onDestroyView() {
@@ -222,5 +441,7 @@ class DownloadsFragment : Fragment(), HasContentState {
         _binding = null
     }
 
-    override fun hasContent(): Boolean = this::songAdapter.isInitialized && songAdapter.itemCount > 0
+    override fun hasContent(): Boolean {
+        return this::songAdapter.isInitialized && songAdapter.itemCount > 0
+    }
 }
