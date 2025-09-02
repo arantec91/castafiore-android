@@ -241,7 +241,7 @@ class HomeFragment : Fragment(), HasContentState {
         swipeRefresh.setOnRefreshListener {
             performRefresh(isManualRefresh = true)
         }
-        // Configurar colores del refresh indicator
+        // Configurar colores del refresh indicador
         swipeRefresh.setColorSchemeResources(
             R.color.primary,
             R.color.primary_dark,
@@ -494,12 +494,13 @@ class HomeFragment : Fragment(), HasContentState {
                     if (unique.isNotEmpty()) {
                         withContext(Dispatchers.Main) { recentlyPlayedAdapter.updateAlbums(unique.take(10)) }
                     } else {
-                        // Fallback si la respuesta es vacía
-                        loadFallbackAlbums(recentlyPlayedAdapter, "recent")
+                        // Usuario sin historial: no usar fallback para evitar datos no relevantes
+                        android.util.Log.d("HomeFragment", "RecentlyPlayed vacío para el usuario; se ocultará la sección")
                     }
                 },
                 onFailure = {
-                    loadFallbackAlbums(recentlyPlayedAdapter, "recent")
+                    // Error al cargar historial: no usar fallback, mantener sección oculta si está vacía
+                    android.util.Log.w("HomeFragment", "getRecentlyPlayedAlbums falló: ${it.message}")
                 }
             )
         } catch (e: Exception) {
@@ -519,11 +520,13 @@ class HomeFragment : Fragment(), HasContentState {
                     if (unique.isNotEmpty()) {
                         withContext(Dispatchers.Main) { mostPlayedAdapter.updateAlbums(unique.take(10)) }
                     } else {
-                        loadFallbackAlbums(mostPlayedAdapter, "frequent")
+                        // Usuario sin datos de "más reproducidos": no usar fallback
+                        android.util.Log.d("HomeFragment", "MostPlayed vacío para el usuario; se ocultará la sección")
                     }
                 },
                 onFailure = {
-                    loadFallbackAlbums(mostPlayedAdapter, "frequent")
+                    // Error al cargar: no usar fallback
+                    android.util.Log.w("HomeFragment", "getMostPlayedAlbums falló: ${it.message}")
                 }
             )
         } catch (e: Exception) {
@@ -604,7 +607,7 @@ class HomeFragment : Fragment(), HasContentState {
                                 val list = artists.filter { it.id != artistId }.distinctBy { it.id }.take(10)
                                 if (list.isNotEmpty()) {
                                     similarArtistsAdapter.submit(list)
-                                    // Header with base artist
+                                    // Header con artista base
                                     binding.tvSimilarArtistName.text = artistName
                                     try {
                                         val server = musicRepository.serverUrl
@@ -730,7 +733,7 @@ class HomeFragment : Fragment(), HasContentState {
         // Asegurar que las secciones base estén visibles al volver
         ensureBaseSectionsVisible()
 
-        // Si por alguna razón la lista quedó vacía, intentar rellenar con cache expirado para evitar UI en blanco
+        // Si por alguna razón la lista quedó vacía, intentar rellenar con cache expirada para evitar UI en blanco
         if (this::recentlyAddedAdapter.isInitialized && recentlyAddedAdapter.itemCount == 0) {
             applyCachedRecentlyAddedIfAvailable(allowExpired = true)
         }

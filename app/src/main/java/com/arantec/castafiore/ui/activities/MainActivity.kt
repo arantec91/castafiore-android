@@ -78,6 +78,8 @@ class MainActivity : AppCompatActivity(), LoadingHost {
     private var overlayVisible = false
     private var pendingShowJob: Job? = null
     private var lastShowStartAt: Long = 0L
+    // Reference-counted manual override so fragments can force the overlay without flicker
+    private var overlayManualOverrideCount = 0
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -129,13 +131,19 @@ class MainActivity : AppCompatActivity(), LoadingHost {
         pendingShowJob?.cancel()
         pendingShowJob = null
         if (show) {
-            binding.globalLoadingOverlay.visibility = View.VISIBLE
-            overlayVisible = true
-            lastShowStartAt = System.currentTimeMillis()
+            // Bump manual override and force show immediately
+            overlayManualOverrideCount++
+            if (!overlayVisible) {
+                binding.globalLoadingOverlay.visibility = View.VISIBLE
+                overlayVisible = true
+                lastShowStartAt = System.currentTimeMillis()
+            }
         } else {
-            // Hide respecting minimum show time to avoid flicker
-            hideOverlayRespectingMinShow()
+            // Release manual override if present
+            if (overlayManualOverrideCount > 0) overlayManualOverrideCount--
         }
+        // Recompute final state after manual change
+        updateOverlayStateFromSources()
     }
 
     override fun isGlobalLoadingVisible(): Boolean = overlayVisible
@@ -158,10 +166,40 @@ class MainActivity : AppCompatActivity(), LoadingHost {
     }
 
     private fun recomputeGlobalOverlay(isLoading: Boolean) {
+        // If a fragment requested manual override, keep overlay as-is (visible) until released
+        if (overlayManualOverrideCount > 0) {
+            android.util.Log.d("GlobalLoader", "Manual override active ($overlayManualOverrideCount), keeping overlay visible")
+            if (!overlayVisible) {
+                binding.globalLoadingOverlay.visibility = View.VISIBLE
+                overlayVisible = true
+                lastShowStartAt = System.currentTimeMillis()
+            }
+            return
+        }
         val hasContent = currentFragmentHasContent()
         val shouldShow = isLoading && !hasContent
         android.util.Log.d("GlobalLoader", "isLoading=$isLoading, hasContent=$hasContent, shouldShow=$shouldShow")
         if (shouldShow) {
+            maybeShowOverlayWithDebounce()
+        } else {
+            hideOverlayRespectingMinShow()
+        }
+    }
+
+    private fun updateOverlayStateFromSources() {
+        // Respect manual override first
+        if (overlayManualOverrideCount > 0) {
+            if (!overlayVisible) {
+                binding.globalLoadingOverlay.visibility = View.VISIBLE
+                overlayVisible = true
+                lastShowStartAt = System.currentTimeMillis()
+            }
+            return
+        }
+        // Otherwise derive from in-flight and content state
+        val shouldShow = InFlightTracker.isLoading.value && !currentFragmentHasContent()
+        if (shouldShow) {
+            // Debounce show to avoid quick blinks
             maybeShowOverlayWithDebounce()
         } else {
             hideOverlayRespectingMinShow()
@@ -182,8 +220,8 @@ class MainActivity : AppCompatActivity(), LoadingHost {
         pendingShowJob = lifecycleScope.launch {
             // Debounce to avoid flicker on super fast calls
             delay(150)
-            // Ensure condition still holds
-            if (InFlightTracker.isLoading.value && !currentFragmentHasContent()) {
+            // Ensure condition still holds and no manual override is active
+            if (overlayManualOverrideCount == 0 && InFlightTracker.isLoading.value && !currentFragmentHasContent()) {
                 android.util.Log.d("GlobalLoader", "Showing overlay")
                 binding.globalLoadingOverlay.visibility = View.VISIBLE
                 overlayVisible = true
@@ -194,6 +232,8 @@ class MainActivity : AppCompatActivity(), LoadingHost {
     }
 
     private fun hideOverlayRespectingMinShow() {
+        // Do not hide if a manual override is active
+        if (overlayManualOverrideCount > 0) return
         pendingShowJob?.cancel()
         pendingShowJob = null
         if (!overlayVisible) return
@@ -208,7 +248,8 @@ class MainActivity : AppCompatActivity(), LoadingHost {
         } else {
             lifecycleScope.launch {
                 delay(200 - shownFor)
-                hideAction()
+                // Ensure no manual override appeared meanwhile
+                if (overlayManualOverrideCount == 0) hideAction()
             }
         }
     }
