@@ -12,6 +12,7 @@ import android.view.ViewGroup
 import android.widget.Toast
 import androidx.lifecycle.lifecycleScope
 import com.arantec.castafiore.R
+import com.arantec.castafiore.data.download.SongDownloadManager
 import com.arantec.castafiore.data.models.Song
 import com.arantec.castafiore.data.repository.MusicRepository
 import com.arantec.castafiore.databinding.BottomSheetSongOptionsBinding
@@ -30,6 +31,7 @@ class SongOptionsBottomSheet : BottomSheetDialogFragment() {
     private var song: Song? = null
     private var isSongFavorited = false
     private lateinit var musicRepository: MusicRepository
+    private lateinit var downloadManager: SongDownloadManager
 
     // Variables para controlar la visibilidad de opciones
     private var hideAddToQueue = false
@@ -87,6 +89,8 @@ class SongOptionsBottomSheet : BottomSheetDialogFragment() {
             isSongFavorited = it.getBoolean(ARG_IS_FAVORITED, false)
         }
         musicRepository = MusicRepository.getInstance(requireContext())
+        // Initialize download manager
+        downloadManager = SongDownloadManager.getInstance(requireContext())
     }
 
     override fun onCreateView(
@@ -117,6 +121,7 @@ class SongOptionsBottomSheet : BottomSheetDialogFragment() {
 
         setupUI()
         setupClickListeners()
+        setupDownloadOptions()
         checkSongFavoriteStatus() // Verificar el estado inicial de favoritos
     }
 
@@ -203,6 +208,13 @@ class SongOptionsBottomSheet : BottomSheetDialogFragment() {
         } catch (_: Exception) {
             // ignore
         }
+    }
+
+    private fun setupDownloadOptions() {
+        val currentSong = song ?: return
+        val isDownloaded = downloadManager.isSongDownloaded(currentSong.id)
+        binding.optionDownload.visibility = if (isDownloaded) View.GONE else View.VISIBLE
+        binding.optionDeleteDownload.visibility = if (isDownloaded) View.VISIBLE else View.GONE
     }
 
     private fun setupClickListeners() {
@@ -305,6 +317,30 @@ class SongOptionsBottomSheet : BottomSheetDialogFragment() {
                             binding.iconSongRadio.alpha = 1f
                         }
                     )
+                }
+            }
+
+            // Descargar a dispositivo
+            binding.optionDownload.setOnClickListener {
+                if (!downloadManager.isSongDownloaded(currentSong.id)) {
+                    downloadManager.downloadSong(currentSong)
+                    Toast.makeText(requireContext(), getString(R.string.download_started), Toast.LENGTH_SHORT).show()
+                    dismiss()
+                } else {
+                    Toast.makeText(requireContext(), getString(R.string.song_already_downloaded), Toast.LENGTH_SHORT).show()
+                    setupDownloadOptions()
+                }
+            }
+
+            // Eliminar descarga
+            binding.optionDeleteDownload.setOnClickListener {
+                val ok = downloadManager.deleteSong(currentSong.id)
+                if (ok) {
+                    Toast.makeText(requireContext(), getString(R.string.download_deleted), Toast.LENGTH_SHORT).show()
+                    setupDownloadOptions()
+                    dismiss()
+                } else {
+                    Toast.makeText(requireContext(), getString(R.string.download_delete_error), Toast.LENGTH_SHORT).show()
                 }
             }
         }

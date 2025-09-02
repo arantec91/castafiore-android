@@ -156,4 +156,10 @@
     <string name="storage_clear_cache_success">Caché borrada</string>
     <string name="storage_clear_cache_error">Error al borrar caché</string>
     <string name="castafiore_music">Castafiore Music</string>
+    <string name="download_to_device">Descargar al dispositivo</string>
+    <string name="delete_download">Eliminar descarga</string>
+    <string name="download_started">Descarga iniciada</string>
+    <string name="song_already_downloaded">La canción ya está descargada</string>
+    <string name="download_deleted">Descarga eliminada</string>
+    <string name="download_delete_error">Error al eliminar la descarga</string>
 </resources>
