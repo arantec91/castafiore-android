@@ -48,6 +48,17 @@
             android:orientation="horizontal"
             android:gravity="center_vertical">
 
+            <!-- Icono de descarga (visible solo si la canción está descargada) -->
+            <ImageView
+                android:id="@+id/ivDownloaded"
+                android:layout_width="14dp"
+                android:layout_height="14dp"
+                android:layout_marginEnd="6dp"
+                android:contentDescription="@string/download_to_device"
+                android:src="@drawable/ic_download"
+                app:tint="@color/primary"
+                android:visibility="gone" />
+
             <TextView
                 android:id="@+id/tvSongArtist"
                 android:layout_width="match_parent"

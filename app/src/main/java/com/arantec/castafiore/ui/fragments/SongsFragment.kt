@@ -19,6 +19,11 @@ import com.arantec.castafiore.service.MusicService
 import com.arantec.castafiore.ui.adapters.SongAdapter
 import com.arantec.castafiore.ui.helpers.HasContentState
 import kotlinx.coroutines.*
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
+import androidx.lifecycle.Lifecycle
+import com.arantec.castafiore.data.download.SongDownloadManager
+import kotlinx.coroutines.flow.collect
 
 class SongsFragment : Fragment(), HasContentState {
 
@@ -29,6 +34,8 @@ class SongsFragment : Fragment(), HasContentState {
     private lateinit var songAdapter: SongAdapter
     private var musicService: MusicService? = null
     private var isBound = false
+
+    private lateinit var downloadManager: SongDownloadManager
 
     companion object {
         private const val TAG = "SongsFragment"
@@ -56,8 +63,23 @@ class SongsFragment : Fragment(), HasContentState {
         super.onViewCreated(view, savedInstanceState)
 
         musicRepository = MusicRepository.getInstance(requireContext())
+        downloadManager = SongDownloadManager.getInstance(requireContext())
+
         setupRecyclerView()
+        setupDownloadObservers()
         loadRandomSongs()
+    }
+
+    private fun setupDownloadObservers() {
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                downloadManager.downloadStates.collect { states ->
+                    states.values.forEach { state ->
+                        songAdapter.updateDownloadState(state)
+                    }
+                }
+            }
+        }
     }
 
     private fun setupRecyclerView() {

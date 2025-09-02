@@ -141,6 +141,16 @@ class SongAdapter(
                     containerDownload.visibility = View.GONE
                 }
 
+                // Icono de descargado: visible cuando la canción está descargada
+                try {
+                    val dm = com.arantec.castafiore.data.download.SongDownloadManager.getInstance(root.context)
+                    val isDownloaded = dm.isSongDownloaded(song.id)
+                        || (dState?.status == com.arantec.castafiore.data.download.SongDownloadManager.DownloadStatus.COMPLETED)
+                    ivDownloaded.visibility = if (isDownloaded) View.VISIBLE else View.GONE
+                } catch (_: Exception) {
+                    ivDownloaded.visibility = View.GONE
+                }
+
                 // Click handlers
                 root.setOnClickListener {
                     onSongClick(song, adapterPosition)

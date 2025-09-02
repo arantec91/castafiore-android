@@ -13,6 +13,8 @@ import android.view.View
 import android.view.ViewGroup
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
+import androidx.lifecycle.Lifecycle
 import androidx.navigation.fragment.findNavController
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.arantec.castafiore.R
@@ -51,6 +53,8 @@ class AlbumDetailFragment : Fragment(), HasContentState {
     private var isBound = false
     private var currentAlbum: Album? = null
     private var albumSongs = mutableListOf<Song>()
+
+    private lateinit var downloadManager: com.arantec.castafiore.data.download.SongDownloadManager
 
     private var dominantNavIconColor: Int? = null
     private var isPlaying = false
@@ -111,6 +115,7 @@ class AlbumDetailFragment : Fragment(), HasContentState {
         super.onViewCreated(view, savedInstanceState)
 
         musicRepository = MusicRepository.getInstance(requireContext())
+        downloadManager = com.arantec.castafiore.data.download.SongDownloadManager.getInstance(requireContext())
 
         // Establecer inmediatamente el color de fondo y status bar para evitar parpadeos
         setStaticBackground(null)
@@ -132,6 +137,7 @@ class AlbumDetailFragment : Fragment(), HasContentState {
         // Configurar UI básica
         setupBasicUI()
         setupRecyclerView()
+        setupDownloadObservers()
 
         // Diferir operaciones pesadas para evitar bloqueo de la animación
         view.post {
@@ -1032,5 +1038,17 @@ class AlbumDetailFragment : Fragment(), HasContentState {
             .setMessage(message)
             .setPositiveButton("Cerrar", null)
             .show()
+    }
+
+    private fun setupDownloadObservers() {
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                downloadManager.downloadStates.collect { states ->
+                    states.values.forEach { state ->
+                        songAdapter.updateDownloadState(state)
+                    }
+                }
+            }
+        }
     }
 }
