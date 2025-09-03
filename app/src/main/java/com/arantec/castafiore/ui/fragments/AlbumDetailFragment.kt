@@ -41,6 +41,7 @@ import android.graphics.drawable.GradientDrawable
 import androidx.core.graphics.toColorInt
 import com.arantec.castafiore.utils.snack
 import com.arantec.castafiore.ui.helpers.HasContentState
+import kotlinx.coroutines.FlowPreview
 
 class AlbumDetailFragment : Fragment(), HasContentState {
 
@@ -121,7 +122,12 @@ class AlbumDetailFragment : Fragment(), HasContentState {
         setStaticBackground(null)
 
         // Obtener álbum de los argumentos
-        currentAlbum = requireArguments().getParcelable<Album>("album")
+        currentAlbum = if (Build.VERSION.SDK_INT >= 33) {
+            requireArguments().getParcelable("album", com.arantec.castafiore.data.models.Album::class.java)
+        } else {
+            @Suppress("DEPRECATION")
+            requireArguments().getParcelable("album")
+        }
 
         if (currentAlbum == null) {
             findNavController().popBackStack()
@@ -422,7 +428,7 @@ class AlbumDetailFragment : Fragment(), HasContentState {
             }
 
             val ordered = albumSongs.sortedWith(compareBy({ it.track ?: Int.MAX_VALUE }, { it.title }))
-            val toQueue = ordered.filter { !downloadManager.isSongDownloaded(it.id) }
+            val toQueue = ordered.filter { !downloadManager.isSongDownloadedFast(it.id) }
             if (toQueue.isEmpty()) {
                 // Nada para descargar (posible estado de carrera): mostrar confirmación de eliminación
                 showDeleteDownloadsConfirm()
@@ -458,7 +464,8 @@ class AlbumDetailFragment : Fragment(), HasContentState {
                                 albumSongs.clear()
                                 albumSongs.addAll(songsToUse)
                                 songAdapter.updateSongs(albumSongs)
-                                songAdapter.notifyDataSetChanged()
+                                // Removed redundant notifyDataSetChanged to avoid extra rebinds
+                                // songAdapter.notifyDataSetChanged()
                                 // Aplicar estado del botón si todo ya está descargado
                                 maybeApplyAllDownloadedEffects(applyTintOnly = true)
                             } else {
@@ -800,7 +807,12 @@ class AlbumDetailFragment : Fragment(), HasContentState {
                                 if (downloadedIds.isNotEmpty()) {
                                     val removed = downloadManager.deleteMultipleSongs(downloadedIds)
                                     if (removed > 0) {
-                                        setDownloadButtonTintSecondary()
+                                        // Inline tint to secondary color
+                                        try {
+                                            binding.btnDownload.imageTintList = ColorStateList.valueOf(requireContext().getColor(R.color.text_secondary))
+                                        } catch (_: Exception) {
+                                            binding.btnDownload.setColorFilter(requireContext().getColor(R.color.text_secondary))
+                                        }
                                         snack("$removed descargas eliminadas")
                                     }
                                 }
@@ -1085,38 +1097,41 @@ class AlbumDetailFragment : Fragment(), HasContentState {
             .show()
     }
 
+    @OptIn(FlowPreview::class)
     private fun setupDownloadObservers() {
         viewLifecycleOwner.lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
-                downloadManager.downloadStates.collect { states ->
-                    states.values.forEach { state ->
-                        songAdapter.updateDownloadState(state)
+                // Throttle updates to reduce UI churn during batch downloads
+                downloadManager.downloadStates
+                    .sample(250)
+                    .collect { states ->
+                        states.values.forEach { state ->
+                            songAdapter.updateDownloadState(state)
+                        }
+                        // Verificar si todas las canciones del álbum están descargadas
+                        maybeApplyAllDownloadedEffects(applyTintOnly = false, latestStates = states)
                     }
-                    // Verificar si todas las canciones del álbum están descargadas
-                    maybeApplyAllDownloadedEffects(applyTintOnly = false, latestStates = states)
-                }
             }
         }
     }
 
+
     private fun isAlbumFullyDownloaded(): Boolean {
         if (albumSongs.isEmpty()) return false
-        return albumSongs.all { song -> downloadManager.isSongDownloaded(song.id) }
-    }
-
-    private fun setDownloadButtonTintSecondary() {
-        try {
-            binding.btnDownload.imageTintList = ColorStateList.valueOf(requireContext().getColor(R.color.text_secondary))
-        } catch (_: Exception) {
-            binding.btnDownload.setColorFilter(requireContext().getColor(R.color.text_secondary))
-        }
+        // Prefer fast prefs-based check to avoid I/O on main thread
+        return albumSongs.all { song -> downloadManager.isSongDownloadedFast(song.id) }
     }
 
     private fun showDeleteDownloadsConfirm() {
-        val downloadedIds = albumSongs.filter { downloadManager.isSongDownloaded(it.id) }.map { it.id }
+        val downloadedIds = albumSongs.filter { downloadManager.isSongDownloadedFast(it.id) }.map { it.id }
         if (downloadedIds.isEmpty()) {
             snack("No hay descargas que eliminar")
-            setDownloadButtonTintSecondary()
+            // Inline tint to secondary color
+            try {
+                binding.btnDownload.imageTintList = ColorStateList.valueOf(requireContext().getColor(R.color.text_secondary))
+            } catch (_: Exception) {
+                binding.btnDownload.setColorFilter(requireContext().getColor(R.color.text_secondary))
+            }
             return
         }
         val count = downloadedIds.size
@@ -1127,7 +1142,12 @@ class AlbumDetailFragment : Fragment(), HasContentState {
             .setPositiveButton("Eliminar") { d, _ ->
                 val removed = downloadManager.deleteMultipleSongs(downloadedIds)
                 if (removed > 0) {
-                    setDownloadButtonTintSecondary()
+                    // Inline tint to secondary color
+                    try {
+                        binding.btnDownload.imageTintList = ColorStateList.valueOf(requireContext().getColor(R.color.text_secondary))
+                    } catch (_: Exception) {
+                        binding.btnDownload.setColorFilter(requireContext().getColor(R.color.text_secondary))
+                    }
                     snack("$removed descargas eliminadas")
                 } else {
                     snack("No se eliminaron descargas")
@@ -1143,10 +1163,10 @@ class AlbumDetailFragment : Fragment(), HasContentState {
         val album = currentAlbum ?: return
         if (albumSongs.isEmpty()) return
 
-        // Comprobar descarga completa
+        // Comprobar descarga completa usando estados recientes o prefs rápidas
         val allDownloaded = albumSongs.all { song ->
             val state = latestStates?.get(song.id)
-            downloadManager.isSongDownloaded(song.id) || state?.status == com.arantec.castafiore.data.download.SongDownloadManager.DownloadStatus.COMPLETED
+            downloadManager.isSongDownloadedFast(song.id) || state?.status == com.arantec.castafiore.data.download.SongDownloadManager.DownloadStatus.COMPLETED
         }
 
         if (!allDownloaded) return

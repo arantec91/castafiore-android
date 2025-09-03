@@ -37,7 +37,6 @@ import kotlinx.coroutines.async
 import com.bumptech.glide.Glide
 import java.util.Locale
 import kotlin.random.Random
-import androidx.core.graphics.toColorInt
 import androidx.palette.graphics.Palette
 import android.graphics.Bitmap
 import android.graphics.drawable.GradientDrawable
@@ -47,6 +46,8 @@ import com.bumptech.glide.request.target.CustomTarget
 import com.bumptech.glide.request.transition.Transition
 import android.graphics.drawable.Drawable
 import com.arantec.castafiore.utils.snack
+import android.os.SystemClock
+import kotlinx.coroutines.FlowPreview
 
 class PlaylistDetailFragment : Fragment(), HasContentState {
 
@@ -63,12 +64,12 @@ class PlaylistDetailFragment : Fragment(), HasContentState {
     private var playlistInfo: Playlist? = null
 
     private val playlistSongs = mutableListOf<Song>()
-    // Cached summary to avoid excessive UI updates during downloads
-    private var lastCompletedIds: Set<String> = emptySet()
-    private var lastAnyDownloading: Boolean = false
     private var isPlaying = false
     // Auto-favorite guard to avoid repeated toggles
     private var autoFavApplied: Boolean = false
+
+    // Track last time we updated UI for download states to throttle updates
+    private var lastDownloadUiUpdateMs: Long = 0L
 
     private var playbackStateListener: ((Boolean) -> Unit)? = null
     private var songChangeListener: ((Song?) -> Unit)? = null
@@ -189,6 +190,8 @@ class PlaylistDetailFragment : Fragment(), HasContentState {
             layoutManager = LinearLayoutManager(requireContext())
             adapter = songAdapter
             isNestedScrollingEnabled = false
+            setHasFixedSize(true)
+            itemAnimator = null // disable change animations to avoid jank on frequent state updates
         }
     }
 
@@ -197,7 +200,7 @@ class PlaylistDetailFragment : Fragment(), HasContentState {
             val service = musicService
             if (service != null) {
                 if (isPlaylistQueuePlaying()) service.pause().takeIf { service.isPlaying() } ?: service.play() else if (playlistSongs.isNotEmpty()) {
-                    val startIndex = if (service.getShuffleEnabled() && playlistSongs.size > 1) kotlin.random.Random.nextInt(playlistSongs.size) else 0
+                    val startIndex = if (service.getShuffleEnabled() && playlistSongs.size > 1) Random.nextInt(playlistSongs.size) else 0
                     service.playQueue(
                         playlistSongs,
                         startIndex,
@@ -223,18 +226,38 @@ class PlaylistDetailFragment : Fragment(), HasContentState {
         }
     }
 
+    @OptIn(FlowPreview::class)
     private fun setupDownloadObservers() {
         viewLifecycleOwner.lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
-                downloadManager.downloadStates.collect { states ->
-                    states.values.forEach { state ->
-                        songAdapter.updateDownloadState(state)
+                downloadManager.downloadStates
+                    .sample(250)
+                    .collect { states ->
+                        if (!isAdded || _binding == null) return@collect
+
+                        // Update only visible items to reduce binding churn
+                        val lm = binding.rvSongs.layoutManager as? LinearLayoutManager
+                        val first = lm?.findFirstVisibleItemPosition() ?: -1
+                        val last = lm?.findLastVisibleItemPosition() ?: -1
+                        if (first >= 0 && last >= first && playlistSongs.isNotEmpty()) {
+                            val safeFirst = first.coerceAtLeast(0)
+                            val safeLast = last.coerceAtMost(playlistSongs.size - 1)
+                            val visibleIds = playlistSongs.subList(safeFirst, safeLast + 1).map { it.id }.toSet()
+                            states.values.forEach { state ->
+                                if (state.songId in visibleIds) {
+                                    songAdapter.updateDownloadState(state)
+                                }
+                            }
+                        }
+
+                        // Rate-limit heavier UI work (tint and auto-favorite checks)
+                        val now = SystemClock.elapsedRealtime()
+                        if (now - lastDownloadUiUpdateMs >= 1000L) {
+                            lastDownloadUiUpdateMs = now
+                            updateDownloadButtonTint()
+                            maybeAutoFavorite()
+                        }
                     }
-                    // Update download button tint based on aggregate state
-                    updateDownloadButtonTint()
-                    // If eligible, auto-favorite this public playlist once fully downloaded
-                    maybeAutoFavorite()
-                }
             }
         }
     }
@@ -307,6 +330,12 @@ class PlaylistDetailFragment : Fragment(), HasContentState {
                     playlistSongs.clear()
                     playlistSongs.addAll(songs)
                     songAdapter.updateSongs(playlistSongs)
+                    // Ensure adapter is attached and list refreshes visibly
+                    if (binding.rvSongs.adapter !== songAdapter) {
+                        binding.rvSongs.adapter = songAdapter
+                    }
+                    binding.rvSongs.visibility = View.VISIBLE
+                    binding.rvSongs.post { songAdapter.notifyDataSetChanged() }
 
                     // Info
                     binding.tvInfo.text = buildInfoText(playlistSongs)
@@ -329,7 +358,7 @@ class PlaylistDetailFragment : Fragment(), HasContentState {
                 onFailure = {
                     binding.progressBar.visibility = View.GONE
                     binding.emptyLayout.visibility = View.VISIBLE
-                    binding.tvEmpty.text = getString(R.string.error_loading_favorites)
+                    binding.tvEmpty.text = getString(R.string.error_loading_playlist)
                     updateDownloadButtonTint()
                 }
             )
@@ -729,34 +758,6 @@ class PlaylistDetailFragment : Fragment(), HasContentState {
     }
 
     // --- Download button logic and helpers ---
-    private fun setupDownloadButton() {
-        binding.btnDownload.setOnClickListener {
-            if (playlistSongs.isEmpty()) {
-                snack("No hay canciones para descargar")
-                return@setOnClickListener
-            }
-            // If all are downloaded, offer deletion
-            if (isPlaylistFullyDownloaded()) {
-                showDeletePlaylistDownloadsConfirm()
-                return@setOnClickListener
-            }
-            // Queue non-downloaded songs in current playlist order
-            val toQueue = playlistSongs.filter { !downloadManager.isSongDownloaded(it.id) }
-            if (toQueue.isEmpty()) {
-                // Race: nothing to download now -> offer deletion
-                showDeletePlaylistDownloadsConfirm()
-                return@setOnClickListener
-            }
-            downloadManager.downloadSongsSequentially(toQueue, com.arantec.castafiore.data.download.DownloadOrigin.PLAYLIST)
-            snack("Descargando ${toQueue.size} canciones...")
-        }
-    }
-
-    private fun isPlaylistFullyDownloaded(): Boolean {
-        if (playlistSongs.isEmpty()) return false
-        return playlistSongs.all { song -> downloadManager.isSongDownloaded(song.id) }
-    }
-
     private fun setDownloadButtonTintPrimary() {
         try {
             binding.btnDownload.imageTintList = ColorStateList.valueOf(ContextCompat.getColor(requireContext(), R.color.primary))
@@ -779,26 +780,36 @@ class PlaylistDetailFragment : Fragment(), HasContentState {
         if (isPlaylistFullyDownloaded()) setDownloadButtonTintPrimary() else setDownloadButtonTintSecondary()
     }
 
-    private fun maybeAutoFavorite() {
-        if (!isAdded || _binding == null) return
-        val info = playlistInfo ?: return
-        val id = playlistId ?: return
-        if (!info.public) return
-        if (autoFavApplied) return
-        if (!isPlaylistFullyDownloaded()) return
-        val isFav = PlaylistFavoritesManager.isFavorite(requireContext(), id)
-        if (!isFav) {
-            PlaylistFavoritesManager.toggleFavorite(requireContext(), id)
-            autoFavApplied = true
-            updateFavoriteButtonVisibilityAndState()
-            snack(getString(R.string.added_to_favorites))
-        } else {
-            autoFavApplied = true
+    private fun isPlaylistFullyDownloaded(): Boolean {
+        if (playlistSongs.isEmpty()) return false
+        return playlistSongs.all { song -> downloadManager.isSongDownloadedFast(song.id) }
+    }
+
+    private fun setupDownloadButton() {
+        binding.btnDownload.setOnClickListener {
+            if (playlistSongs.isEmpty()) {
+                snack("No hay canciones para descargar")
+                return@setOnClickListener
+            }
+            // If all are downloaded, offer deletion
+            if (isPlaylistFullyDownloaded()) {
+                showDeletePlaylistDownloadsConfirm()
+                return@setOnClickListener
+            }
+            // Queue non-downloaded songs in current playlist order
+            val toQueue = playlistSongs.filter { !downloadManager.isSongDownloadedFast(it.id) }
+            if (toQueue.isEmpty()) {
+                // Race: nothing to download now -> offer deletion
+                showDeletePlaylistDownloadsConfirm()
+                return@setOnClickListener
+            }
+            downloadManager.downloadSongsSequentially(toQueue, com.arantec.castafiore.data.download.DownloadOrigin.PLAYLIST)
+            snack("Descargando ${toQueue.size} canciones...")
         }
     }
 
     private fun showDeletePlaylistDownloadsConfirm() {
-        val downloadedIds = playlistSongs.filter { downloadManager.isSongDownloaded(it.id) }.map { it.id }
+        val downloadedIds = playlistSongs.filter { downloadManager.isSongDownloadedFast(it.id) }.map { it.id }
         if (downloadedIds.isEmpty()) {
             snack("No hay descargas que eliminar")
             updateDownloadButtonTint()
@@ -820,5 +831,23 @@ class PlaylistDetailFragment : Fragment(), HasContentState {
                 d.dismiss()
             }
             .show()
+    }
+
+    private fun maybeAutoFavorite() {
+        if (!isAdded || _binding == null) return
+        val info = playlistInfo ?: return
+        val id = playlistId ?: return
+        if (!info.public) return
+        if (autoFavApplied) return
+        if (!isPlaylistFullyDownloaded()) return
+        val isFav = PlaylistFavoritesManager.isFavorite(requireContext(), id)
+        if (!isFav) {
+            PlaylistFavoritesManager.toggleFavorite(requireContext(), id)
+            autoFavApplied = true
+            updateFavoriteButtonVisibilityAndState()
+            snack(getString(R.string.added_to_favorites))
+        } else {
+            autoFavApplied = true
+        }
     }
 }

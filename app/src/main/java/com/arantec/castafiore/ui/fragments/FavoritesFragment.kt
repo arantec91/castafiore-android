@@ -30,6 +30,8 @@ import java.util.Locale
 import kotlin.random.Random
 import com.arantec.castafiore.ui.helpers.HasContentState
 import android.content.res.ColorStateList
+import kotlinx.coroutines.flow.*
+import android.os.SystemClock
 
 class FavoritesFragment : Fragment(), HasContentState {
 
@@ -48,6 +50,9 @@ class FavoritesFragment : Fragment(), HasContentState {
     private var songChangeListener: ((Song?) -> Unit)? = null
 
     private lateinit var downloadManager: com.arantec.castafiore.data.download.SongDownloadManager
+
+    // Throttle UI updates from download state flow
+    private var lastDownloadUiUpdateMs: Long = 0L
 
     private val serviceConnection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
@@ -463,13 +468,18 @@ class FavoritesFragment : Fragment(), HasContentState {
     private fun setupDownloadObservers() {
         viewLifecycleOwner.lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
-                downloadManager.downloadStates.collect { states ->
-                    states.values.forEach { state ->
-                        songAdapter.updateDownloadState(state)
+                downloadManager.downloadStates
+                    .collect { states ->
+                        val now = SystemClock.elapsedRealtime()
+                        if (now - lastDownloadUiUpdateMs < 250L) return@collect
+                        lastDownloadUiUpdateMs = now
+
+                        states.values.forEach { state ->
+                            songAdapter.updateDownloadState(state)
+                        }
+                        // Update download button tint based on aggregate state
+                        updateDownloadButtonTint()
                     }
-                    // Update download button tint based on aggregate state
-                    updateDownloadButtonTint()
-                }
             }
         }
     }
@@ -477,7 +487,7 @@ class FavoritesFragment : Fragment(), HasContentState {
     // --- Download button tint helpers ---
     private fun isFavoritesFullyDownloaded(): Boolean {
         if (favoriteSongs.isEmpty()) return false
-        return favoriteSongs.all { song -> downloadManager.isSongDownloaded(song.id) }
+        return favoriteSongs.all { song -> downloadManager.isSongDownloadedFast(song.id) }
     }
 
     private fun setDownloadButtonTintPrimary() {
@@ -514,7 +524,7 @@ class FavoritesFragment : Fragment(), HasContentState {
             }
             // Ordenar de forma estable por artista/álbum/track, luego título
             val ordered = favoriteSongs.sortedWith(compareBy<Song>({ it.artist.lowercase(Locale.getDefault()) }, { it.album.lowercase(Locale.getDefault()) }, { it.track ?: Int.MAX_VALUE }, { it.title.lowercase(Locale.getDefault()) }))
-            val toQueue = ordered.filter { !downloadManager.isSongDownloaded(it.id) }
+            val toQueue = ordered.filter { !downloadManager.isSongDownloadedFast(it.id) }
             if (toQueue.isEmpty()) {
                 // Nada por descargar (posible estado de carrera): ofrecer eliminar
                 showDeleteFavoritesDownloadsConfirm()
@@ -526,7 +536,7 @@ class FavoritesFragment : Fragment(), HasContentState {
     }
 
     private fun showDeleteFavoritesDownloadsConfirm() {
-        val downloadedIds = favoriteSongs.filter { downloadManager.isSongDownloaded(it.id) }.map { it.id }
+        val downloadedIds = favoriteSongs.filter { downloadManager.isSongDownloadedFast(it.id) }.map { it.id }
         if (downloadedIds.isEmpty()) {
             snack("No hay descargas que eliminar")
             updateDownloadButtonTint()

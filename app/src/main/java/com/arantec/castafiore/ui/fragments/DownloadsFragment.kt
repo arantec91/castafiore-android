@@ -26,6 +26,7 @@ import com.arantec.castafiore.utils.StatusBarUtils
 import com.arantec.castafiore.utils.snack
 import kotlinx.coroutines.launch
 import kotlin.random.Random
+import android.os.SystemClock
 
 class DownloadsFragment : Fragment(), HasContentState {
 
@@ -43,6 +44,9 @@ class DownloadsFragment : Fragment(), HasContentState {
     private var songChangeListener: ((Song?) -> Unit)? = null
 
     private lateinit var downloadManager: com.arantec.castafiore.data.download.SongDownloadManager
+
+    // Throttle UI updates for download states
+    private var lastDownloadUiUpdateMs: Long = 0L
 
     private val serviceConnection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
@@ -267,30 +271,35 @@ class DownloadsFragment : Fragment(), HasContentState {
     private fun setupDownloadObservers() {
         viewLifecycleOwner.lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
-                downloadManager.downloadStates.collect { states ->
-                    // Update per-item download UI
-                    states.values.forEach { state ->
-                        songAdapter.updateDownloadState(state)
-                    }
-                    // Remove items that were deleted in real time
-                    val toRemove = states.values
-                        .filter { st ->
-                            (st.status == com.arantec.castafiore.data.download.SongDownloadManager.DownloadStatus.CANCELLED ||
-                             st.status == com.arantec.castafiore.data.download.SongDownloadManager.DownloadStatus.FAILED) &&
-                            downloadedSongs.any { it.id == st.songId } &&
-                            !downloadManager.isSongDownloaded(st.songId)
-                        }
-                        .map { it.songId }
-                        .toSet()
+                downloadManager.downloadStates
+                    .collect { states ->
+                        val now = SystemClock.elapsedRealtime()
+                        if (now - lastDownloadUiUpdateMs < 250L) return@collect
+                        lastDownloadUiUpdateMs = now
 
-                    if (toRemove.isNotEmpty()) {
-                        downloadedSongs.removeAll { it.id in toRemove }
-                        if (isAdded && _binding != null) {
-                            songAdapter.updateSongs(downloadedSongs)
-                            updateInfoAndEmptyState()
+                        // Update per-item download UI
+                        states.values.forEach { state ->
+                            songAdapter.updateDownloadState(state)
+                        }
+                        // Remove items that were deleted in real time
+                        val toRemove = states.values
+                            .filter { st ->
+                                (st.status == com.arantec.castafiore.data.download.SongDownloadManager.DownloadStatus.CANCELLED ||
+                                 st.status == com.arantec.castafiore.data.download.SongDownloadManager.DownloadStatus.FAILED) &&
+                                downloadedSongs.any { it.id == st.songId } &&
+                                !downloadManager.isSongDownloaded(st.songId)
+                            }
+                            .map { it.songId }
+                            .toSet()
+
+                        if (toRemove.isNotEmpty()) {
+                            downloadedSongs.removeAll { it.id in toRemove }
+                            if (isAdded && _binding != null) {
+                                songAdapter.updateSongs(downloadedSongs)
+                                updateInfoAndEmptyState()
+                            }
                         }
                     }
-                }
             }
         }
     }

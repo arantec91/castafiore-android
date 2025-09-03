@@ -28,6 +28,7 @@
     <!-- Favoritos -->
     <string name="favorite_songs_title">Canciones favoritas</string>
     <string name="error_loading_favorites">Error al cargar favoritos</string>
+    <string name="error_loading_playlist">Error al cargar la playlist</string>
 
     <!-- Descargas (removed download-specific strings) -->
     <!--

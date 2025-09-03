@@ -19,6 +19,7 @@ import com.google.android.material.bottomsheet.BottomSheetDialogFragment
 import kotlinx.coroutines.launch
 import com.arantec.castafiore.data.download.SongDownloadManager
 import java.io.File
+import android.os.Build
 
 class PlaylistSelectorBottomSheet : BottomSheetDialogFragment() {
 
@@ -46,7 +47,12 @@ class PlaylistSelectorBottomSheet : BottomSheetDialogFragment() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         arguments?.let {
-            song = it.getParcelable(ARG_SONG)
+            song = if (Build.VERSION.SDK_INT >= 33) {
+                it.getParcelable(ARG_SONG, Song::class.java)
+            } else {
+                @Suppress("DEPRECATION")
+                it.getParcelable(ARG_SONG)
+            }
         }
         musicRepository = MusicRepository.getInstance(requireContext())
     }

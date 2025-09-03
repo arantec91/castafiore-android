@@ -252,9 +252,20 @@ class SongDownloadManager private constructor(private val context: Context) {
         } catch (_: Exception) { false }
     }
 
-    fun isSongDownloading(songId: String): Boolean {
-        val infos = workManager.getWorkInfosByTag(tagForSong(songId)).get()
-        return infos.any { it.state == WorkInfo.State.RUNNING || it.state == WorkInfo.State.ENQUEUED }
+    // Fast, non-blocking check using SharedPreferences only (may be slightly stale but safe for UI)
+    fun isSongDownloadedFast(songId: String): Boolean {
+        return prefs.contains(keyFor(songId))
+    }
+
+    // Quickly return the set of downloaded song IDs using prefs keys only
+    fun getAllDownloadedIdsFast(): Set<String> {
+        val result = mutableSetOf<String>()
+        for (k in prefs.all.keys) {
+            if (k.startsWith(KEY_PREFIX)) {
+                result.add(k.removePrefix(KEY_PREFIX))
+            }
+        }
+        return result
     }
 
     fun getDownloadedFilePath(songId: String): String? {
@@ -486,5 +497,11 @@ class SongDownloadManager private constructor(private val context: Context) {
         artistId?.let { edit.putString(artistKeyFor(songId), it) }
         coverArt?.let { edit.putString(coverArtKeyFor(songId), it) }
         edit.apply()
+    }
+
+    // Indica si una canción está en cola o descargándose actualmente (según el estado en memoria)
+    fun isSongDownloading(songId: String): Boolean {
+        val status = downloadStates.value[songId]?.status
+        return status == DownloadStatus.PENDING || status == DownloadStatus.DOWNLOADING
     }
 }

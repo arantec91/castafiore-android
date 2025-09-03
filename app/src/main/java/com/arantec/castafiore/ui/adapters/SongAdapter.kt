@@ -19,6 +19,9 @@ class SongAdapter(
     private val circularDownloadInIcon: Boolean = false
 ) : RecyclerView.Adapter<SongAdapter.SongViewHolder>() {
 
+    // Enable stable IDs for better change animations and less rebind churn
+    init { setHasStableIds(true) }
+
     private var songs = mutableListOf<Song>()
     private var playingSongId: String? = null
     private val downloadStates = mutableMapOf<String, com.arantec.castafiore.data.download.SongDownloadManager.DownloadState>()
@@ -196,7 +199,8 @@ class SongAdapter(
                 // Icono de descargado: visible cuando la canción está descargada
                 try {
                     val dm = com.arantec.castafiore.data.download.SongDownloadManager.getInstance(root.context)
-                    val isDownloaded = dm.isSongDownloaded(song.id)
+                    // Use fast check to avoid content resolver I/O on main thread
+                    val isDownloaded = dm.isSongDownloadedFast(song.id)
                         || (dState?.status == com.arantec.castafiore.data.download.SongDownloadManager.DownloadStatus.COMPLETED)
                     val isSpinnerVisible = cpiDownload.visibility == View.VISIBLE
                     if (!isSpinnerVisible && isDownloaded) {
@@ -258,4 +262,9 @@ class SongAdapter(
     }
 
     override fun getItemCount(): Int = songs.size
+
+    // Provide stable ID based on song id
+    override fun getItemId(position: Int): Long {
+        return songs.getOrNull(position)?.id?.hashCode()?.toLong() ?: RecyclerView.NO_ID
+    }
 }
