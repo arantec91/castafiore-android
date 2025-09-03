@@ -120,10 +120,10 @@ class SongAdapter(
                     when (dState.status) {
                         com.arantec.castafiore.data.download.SongDownloadManager.DownloadStatus.PENDING -> {
                             if (circularDownloadInIcon) {
+                                // En modo circular en icono, ocultar pendiente para que sólo RUNNING muestre spinner
                                 containerDownload.visibility = View.GONE
-                                containerIconDownload.visibility = View.VISIBLE
-                                cpiDownload.visibility = View.VISIBLE
-                                cpiDownload.isIndeterminate = true
+                                containerIconDownload.visibility = View.GONE
+                                cpiDownload.visibility = View.GONE
                             } else {
                                 containerDownload.visibility = View.VISIBLE
                                 progressDownload.isIndeterminate = true

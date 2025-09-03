@@ -123,6 +123,15 @@
                 android:gravity="center_vertical"
                 android:orientation="horizontal">
 
+                <ImageButton
+                    android:id="@+id/btnDownload"
+                    android:layout_width="32dp"
+                    android:layout_height="32dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="@string/download_to_device"
+                    android:src="@drawable/ic_download"
+                    app:tint="@color/text_secondary" />
+
                 <View
                     android:layout_width="0dp"
                     android:layout_height="1dp"

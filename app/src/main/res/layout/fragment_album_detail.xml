@@ -181,7 +181,18 @@
                     android:src="@drawable/ic_favorite_border"
                     app:tint="@color/text_secondary" />
 
-                <!-- Botón más opciones (now after Download) -->
+                <!-- Botón descargar álbum (nuevo) -->
+                <ImageButton
+                    android:id="@+id/btnDownload"
+                    android:layout_width="32dp"
+                    android:layout_height="32dp"
+                    android:layout_marginStart="16dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="@string/download_to_device"
+                    android:src="@drawable/ic_download"
+                    app:tint="@color/text_secondary" />
+
+                <!-- Botón más opciones -->
                 <ImageButton
                     android:id="@+id/btnMore"
                     android:layout_width="32dp"

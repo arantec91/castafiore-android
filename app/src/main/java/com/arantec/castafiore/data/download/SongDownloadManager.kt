@@ -167,6 +167,7 @@ class SongDownloadManager private constructor(private val context: Context) {
         val requests = songs.filter { !isSongDownloaded(it.id) }.map { song ->
             OneTimeWorkRequestBuilder<SongDownloadWorker>()
                 .setConstraints(constraints)
+                .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
                 .addTag(tagForSong(song.id))
                 .setInputData(workDataOf(
                     SongDownloadWorker.KEY_SONG_ID to song.id,
@@ -179,13 +180,63 @@ class SongDownloadManager private constructor(private val context: Context) {
                     SongDownloadWorker.KEY_ALBUM_ID to song.albumId,
                     SongDownloadWorker.KEY_COVER_ART_ID to song.coverArt
                 ))
-                .build().also {
+                .build().also { req ->
+                    // Inicial: PENDING
                     updateDownloadState(song.id, DownloadState(song.id, song, DownloadStatus.PENDING, origin = origin))
+                    // Observar progreso/estado para esta request
+                    val obs = Observer<WorkInfo> { info ->
+                        when (info.state) {
+                            WorkInfo.State.ENQUEUED -> updateStatus(song, DownloadStatus.PENDING)
+                            WorkInfo.State.RUNNING -> {
+                                val downloaded = info.progress.getLong(SongDownloadWorker.PROG_DOWNLOADED, 0L)
+                                val total = info.progress.getLong(SongDownloadWorker.PROG_TOTAL, 0L)
+                                val prog = if (total > 0) ((downloaded * 100) / total).toInt() else 0
+                                updateDownloadState(song.id, current(song.id)?.copy(
+                                    status = DownloadStatus.DOWNLOADING,
+                                    progress = prog,
+                                    downloadedBytes = downloaded,
+                                    totalBytes = total
+                                ) ?: DownloadState(song.id, song, DownloadStatus.DOWNLOADING, prog, downloaded, total, origin = origin))
+                            }
+                            WorkInfo.State.SUCCEEDED -> {
+                                val uri = info.outputData.getString(SongDownloadWorker.OUT_CONTENT_URI)
+                                if (!uri.isNullOrEmpty()) prefs.edit()
+                                    .putString(keyFor(song.id), uri)
+                                    .putString(albumKeyFor(song.id), song.albumId)
+                                    .putString(artistKeyFor(song.id), song.artistId)
+                                    .putString(coverArtKeyFor(song.id), song.coverArt)
+                                    .apply()
+                                updateDownloadState(song.id, current(song.id)?.copy(
+                                    status = DownloadStatus.COMPLETED,
+                                    progress = 100,
+                                    filePath = uri
+                                ) ?: DownloadState(song.id, song, DownloadStatus.COMPLETED, 100, filePath = uri))
+                                removeObserver(info.id)
+                            }
+                            WorkInfo.State.FAILED -> {
+                                updateDownloadState(song.id, current(song.id)?.copy(status = DownloadStatus.FAILED)
+                                    ?: DownloadState(song.id, song, DownloadStatus.FAILED))
+                                removeObserver(info.id)
+                            }
+                            WorkInfo.State.CANCELLED -> {
+                                updateDownloadState(song.id, current(song.id)?.copy(status = DownloadStatus.CANCELLED)
+                                    ?: DownloadState(song.id, song, DownloadStatus.CANCELLED))
+                                removeObserver(info.id)
+                            }
+                            else -> {}
+                        }
+                    }
+                    workObservers[req.id] = obs
+                    workManager.getWorkInfoByIdLiveData(req.id).observeForever(obs)
                 }
         }
         if (requests.isEmpty()) return
-        workManager.beginUniqueWork("song_download_queue", ExistingWorkPolicy.APPEND_OR_REPLACE, requests.first())
-            .then(requests.drop(1)).enqueue()
+        // Encadenar estrictamente uno por uno para asegurar ejecución secuencial
+        var continuation = workManager.beginUniqueWork("song_download_queue", ExistingWorkPolicy.APPEND_OR_REPLACE, requests.first())
+        requests.drop(1).forEach { req ->
+            continuation = continuation.then(req)
+        }
+        continuation.enqueue()
     }
 
     fun pauseAllDownloads() {

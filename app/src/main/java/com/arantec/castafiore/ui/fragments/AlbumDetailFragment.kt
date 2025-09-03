@@ -146,6 +146,8 @@ class AlbumDetailFragment : Fragment(), HasContentState {
                 setupClickListeners()
                 loadAlbumDetails()
                 checkFavoriteStatus()
+                // Si ya está todo descargado al abrir, aplica el estado del botón
+                maybeApplyAllDownloadedEffects(applyTintOnly = true)
             }
         }
     }
@@ -369,7 +371,7 @@ class AlbumDetailFragment : Fragment(), HasContentState {
                     if (isCurrentAlbumPlaying()) {
                         // Si este álbum es el que se está reproduciendo actualmente
                         if (service.isPlaying()) {
-                            // Si está reproduci����ndose, pausar
+                            // Si está reproduciéndose, pausar
                             service.pause()
                         } else {
                             // Si está pausado, reanudar (no reiniciar la cola)
@@ -406,9 +408,37 @@ class AlbumDetailFragment : Fragment(), HasContentState {
             toggleFavorite()
         }
 
+        // Nuevo: botón de descarga de álbum secuencial o eliminación si ya está descargado
+        binding.btnDownload.setOnClickListener {
+            if (albumSongs.isEmpty()) {
+                snack("No hay canciones para descargar")
+                return@setOnClickListener
+            }
+
+            // Si todo el álbum está descargado, ofrecer eliminar descargas
+            if (isAlbumFullyDownloaded()) {
+                showDeleteDownloadsConfirm()
+                return@setOnClickListener
+            }
+
+            val ordered = albumSongs.sortedWith(compareBy({ it.track ?: Int.MAX_VALUE }, { it.title }))
+            val toQueue = ordered.filter { !downloadManager.isSongDownloaded(it.id) }
+            if (toQueue.isEmpty()) {
+                // Nada para descargar (posible estado de carrera): mostrar confirmación de eliminación
+                showDeleteDownloadsConfirm()
+                return@setOnClickListener
+            }
+            // Reinicia manejador de finalización para esta sesión de descarga
+            albumDownloadCompleteHandled = false
+            downloadManager.downloadSongsSequentially(toQueue, com.arantec.castafiore.data.download.DownloadOrigin.ALBUM)
+            snack("Descargando ${toQueue.size} canciones...")
+        }
+
         // Botón de descarga de álbum deshabilitado en modo streaming
         // binding.btnDownload.setOnClickListener { ... }
     }
+
+    private var albumDownloadCompleteHandled: Boolean = false
 
     private fun loadAlbumDetails() {
         currentAlbum?.let { album ->
@@ -428,8 +458,9 @@ class AlbumDetailFragment : Fragment(), HasContentState {
                                 albumSongs.clear()
                                 albumSongs.addAll(songsToUse)
                                 songAdapter.updateSongs(albumSongs)
-                                // updateDownloadUIState() // disabled in streaming-only mode
                                 songAdapter.notifyDataSetChanged()
+                                // Aplicar estado del botón si todo ya está descargado
+                                maybeApplyAllDownloadedEffects(applyTintOnly = true)
                             } else {
                                 // Si no hay canciones en la respuesta, generar de muestra
                                 generateSampleSongs(detailedAlbum)
@@ -753,14 +784,27 @@ class AlbumDetailFragment : Fragment(), HasContentState {
     private fun toggleFavorite() {
         currentAlbum?.let { album ->
             binding.btnFavorite.isEnabled = false
+            val removingFavorite = isFavorited
             lifecycleScope.launch {
                 try {
-                    val result = if (isFavorited) musicRepository.unstarAlbum(album.id) else musicRepository.starAlbum(album.id)
+                    val result = if (removingFavorite) musicRepository.unstarAlbum(album.id) else musicRepository.starAlbum(album.id)
                     result.fold(
                         onSuccess = {
                             isFavorited = !isFavorited
                             updateFavoriteButton()
                             binding.btnFavorite.isEnabled = true
+
+                            // Si se eliminó de favoritos y el álbum está completamente descargado, borrar descargas sin confirmar
+                            if (removingFavorite && isAlbumFullyDownloaded()) {
+                                val downloadedIds = albumSongs.filter { downloadManager.isSongDownloaded(it.id) }.map { it.id }
+                                if (downloadedIds.isNotEmpty()) {
+                                    val removed = downloadManager.deleteMultipleSongs(downloadedIds)
+                                    if (removed > 0) {
+                                        setDownloadButtonTintSecondary()
+                                        snack("$removed descargas eliminadas")
+                                    }
+                                }
+                            }
                         },
                         onFailure = { error ->
                             binding.btnFavorite.isEnabled = true
@@ -1048,6 +1092,97 @@ class AlbumDetailFragment : Fragment(), HasContentState {
                     states.values.forEach { state ->
                         songAdapter.updateDownloadState(state)
                     }
+                    // Verificar si todas las canciones del álbum están descargadas
+                    maybeApplyAllDownloadedEffects(applyTintOnly = false, latestStates = states)
+                }
+            }
+        }
+    }
+
+    private fun isAlbumFullyDownloaded(): Boolean {
+        if (albumSongs.isEmpty()) return false
+        return albumSongs.all { song -> downloadManager.isSongDownloaded(song.id) }
+    }
+
+    private fun setDownloadButtonTintSecondary() {
+        try {
+            binding.btnDownload.imageTintList = ColorStateList.valueOf(requireContext().getColor(R.color.text_secondary))
+        } catch (_: Exception) {
+            binding.btnDownload.setColorFilter(requireContext().getColor(R.color.text_secondary))
+        }
+    }
+
+    private fun showDeleteDownloadsConfirm() {
+        val downloadedIds = albumSongs.filter { downloadManager.isSongDownloaded(it.id) }.map { it.id }
+        if (downloadedIds.isEmpty()) {
+            snack("No hay descargas que eliminar")
+            setDownloadButtonTintSecondary()
+            return
+        }
+        val count = downloadedIds.size
+        val dialog = androidx.appcompat.app.AlertDialog.Builder(requireContext())
+            .setTitle("Eliminar descargas")
+            .setMessage("Se eliminarán $count canciones descargadas de este álbum. ¿Deseas continuar?")
+            .setNegativeButton("Cancelar", null)
+            .setPositiveButton("Eliminar") { d, _ ->
+                val removed = downloadManager.deleteMultipleSongs(downloadedIds)
+                if (removed > 0) {
+                    setDownloadButtonTintSecondary()
+                    snack("$removed descargas eliminadas")
+                } else {
+                    snack("No se eliminaron descargas")
+                }
+                d.dismiss()
+            }
+            .create()
+        dialog.show()
+    }
+
+    private fun maybeApplyAllDownloadedEffects(applyTintOnly: Boolean, latestStates: Map<String, com.arantec.castafiore.data.download.SongDownloadManager.DownloadState>? = null) {
+        if (!isAdded || _binding == null) return
+        val album = currentAlbum ?: return
+        if (albumSongs.isEmpty()) return
+
+        // Comprobar descarga completa
+        val allDownloaded = albumSongs.all { song ->
+            val state = latestStates?.get(song.id)
+            downloadManager.isSongDownloaded(song.id) || state?.status == com.arantec.castafiore.data.download.SongDownloadManager.DownloadStatus.COMPLETED
+        }
+
+        if (!allDownloaded) return
+
+        // Tintar el botón de descarga a color primario
+        try {
+            binding.btnDownload.imageTintList = ColorStateList.valueOf(requireContext().getColor(R.color.primary))
+        } catch (_: Exception) {
+            binding.btnDownload.setColorFilter(requireContext().getColor(R.color.primary))
+        }
+
+        // Si solo se pidió tintar (por ejemplo al abrir), salir
+        if (applyTintOnly) {
+            albumDownloadCompleteHandled = true
+            return
+        }
+
+        // Evitar repetir acciones
+        if (albumDownloadCompleteHandled) return
+        albumDownloadCompleteHandled = true
+
+        // Añadir a favoritos si aún no lo está
+        if (!isFavorited) {
+            viewLifecycleOwner.lifecycleScope.launch {
+                try {
+                    musicRepository.starAlbum(album.id).fold(
+                        onSuccess = {
+                            isFavorited = true
+                            updateFavoriteButton()
+                        },
+                        onFailure = {
+                            // Fallo silencioso, solo mantener el tintado
+                        }
+                    )
+                } catch (_: Exception) {
+                    // Ignorar error
                 }
             }
         }
