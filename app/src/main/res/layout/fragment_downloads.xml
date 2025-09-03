@@ -190,7 +190,7 @@
         android:layout_height="match_parent"
         android:clickable="true"
         android:focusable="true"
-        android:visibility="visible"
+        android:visibility="gone"
         android:background="#80000000">
 
         <com.google.android.material.progressindicator.CircularProgressIndicator

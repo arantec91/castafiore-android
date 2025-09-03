@@ -49,6 +49,7 @@ import android.graphics.drawable.Drawable
 import com.arantec.castafiore.utils.snack
 import android.os.SystemClock
 import kotlinx.coroutines.FlowPreview
+import android.view.ViewTreeObserver
 
 class PlaylistDetailFragment : Fragment(), HasContentState {
 
@@ -148,7 +149,7 @@ class PlaylistDetailFragment : Fragment(), HasContentState {
                     if (removed > 0) {
                         updateDownloadButtonTint()
                         // Optional feedback without confirmation
-                        snack("Descargas eliminadas: ${removed}")
+                        snack("Descargas eliminadas: ${'$'}{removed}")
                     }
                 }
             }
@@ -264,13 +265,10 @@ class PlaylistDetailFragment : Fragment(), HasContentState {
     }
 
     private fun loadPlaylist() {
-        // Show local loading only if there is already content (refresh behavior)
-        if (hasContent()) {
-            binding.progressBar.visibility = View.VISIBLE
-        }
-        // Do not pre-hide the content on initial loads; rely on global overlay instead
+        // Always show full-screen loading overlay while loading
+        binding.loadingOverlay.visibility = View.VISIBLE
+        binding.progressBar.visibility = View.VISIBLE
         binding.emptyLayout.visibility = View.GONE
-        // Leave rvSongs visibility as-is; it will be toggled after data loads
 
         viewLifecycleOwner.lifecycleScope.launch {
             val id = playlistId ?: return@launch
@@ -341,7 +339,6 @@ class PlaylistDetailFragment : Fragment(), HasContentState {
                     // Info
                     binding.tvInfo.text = buildInfoText(playlistSongs)
 
-                    binding.progressBar.visibility = View.GONE
                     if (playlistSongs.isEmpty()) {
                         binding.emptyLayout.visibility = View.VISIBLE
                         binding.rvSongs.visibility = View.GONE
@@ -355,15 +352,33 @@ class PlaylistDetailFragment : Fragment(), HasContentState {
                     updateDownloadButtonTint()
                     // In case all were already downloaded when entering, attempt auto-favorite
                     maybeAutoFavorite()
+
+                    hideLoadingOverlayAfterNextDraw()
                 },
                 onFailure = {
-                    binding.progressBar.visibility = View.GONE
                     binding.emptyLayout.visibility = View.VISIBLE
                     binding.tvEmpty.text = getString(R.string.error_loading_playlist)
                     updateDownloadButtonTint()
+
+                    hideLoadingOverlayAfterNextDraw()
                 }
             )
         }
+    }
+
+    private fun hideLoadingOverlayAfterNextDraw() {
+        if (!isAdded || _binding == null) return
+        val root = binding.root
+        val listener = object : ViewTreeObserver.OnPreDrawListener {
+            override fun onPreDraw(): Boolean {
+                if (!isAdded || _binding == null) return true
+                root.viewTreeObserver.removeOnPreDrawListener(this)
+                binding.loadingOverlay.visibility = View.GONE
+                binding.progressBar.visibility = View.GONE
+                return true
+            }
+        }
+        root.viewTreeObserver.addOnPreDrawListener(listener)
     }
 
     private fun buildInfoText(list: List<Song>): String {
@@ -372,8 +387,8 @@ class PlaylistDetailFragment : Fragment(), HasContentState {
         val minutes = totalSeconds / 60
         val hours = minutes / 60
         val remMin = minutes % 60
-        val durationText = if (hours > 0) "$hours h ${remMin} min" else "${minutes} min"
-        return "$count canciones • $durationText"
+        val durationText = if (hours > 0) "${'$'}hours h ${'$'}{remMin} min" else "${'$'}minutes min"
+        return "${'$'}count canciones • ${'$'}durationText"
     }
 
     private fun isPlaylistQueuePlaying(): Boolean {
@@ -483,7 +498,7 @@ class PlaylistDetailFragment : Fragment(), HasContentState {
 
         tvInfoGenre.text = song.genre ?: "Desconocido"
         tvInfoYear.text = song.year?.toString() ?: "Desconocido"
-        tvInfoBitrate.text = if (song.bitRate != null) "${song.bitRate} kbps" else "Desconocido"
+        tvInfoBitrate.text = if (song.bitRate != null) "${'$'}{song.bitRate} kbps" else "Desconocido"
         tvInfoFormat.text = song.suffix?.uppercase() ?: "Desconocido"
         tvInfoFileSize.text = song.size?.let { formatFileSize(it) } ?: "Desconocido"
 
@@ -523,7 +538,7 @@ class PlaylistDetailFragment : Fragment(), HasContentState {
             sizeInBytes >= gb -> String.format(Locale.getDefault(), "%.1f GB", sizeInBytes / gb)
             sizeInBytes >= mb -> String.format(Locale.getDefault(), "%.1f MB", sizeInBytes / mb)
             sizeInBytes >= kb -> String.format(Locale.getDefault(), "%.1f KB", sizeInBytes / kb)
-            else -> "$sizeInBytes bytes"
+            else -> "${'$'}sizeInBytes bytes"
         }
     }
 
@@ -813,7 +828,7 @@ class PlaylistDetailFragment : Fragment(), HasContentState {
                 return@setOnClickListener
             }
             downloadManager.downloadSongsSequentially(toQueue, com.arantec.castafiore.data.download.DownloadOrigin.PLAYLIST)
-            snack("Descargando ${toQueue.size} canciones...")
+            snack("Descargando ${'$'}{toQueue.size} canciones...")
         }
     }
 
@@ -827,13 +842,13 @@ class PlaylistDetailFragment : Fragment(), HasContentState {
         val count = downloadedIds.size
         androidx.appcompat.app.AlertDialog.Builder(requireContext())
             .setTitle("Eliminar descargas")
-            .setMessage("Se eliminarán ${count} canciones descargadas de esta playlist. ¿Deseas continuar?")
+            .setMessage("Se eliminarán ${'$'}{count} canciones descargadas de esta playlist. ¿Deseas continuar?")
             .setNegativeButton("Cancelar", null)
             .setPositiveButton("Eliminar") { d, _ ->
                 val removed = downloadManager.deleteMultipleSongs(downloadedIds)
                 if (removed > 0) {
                     setDownloadButtonTintSecondary()
-                    snack("Descargas eliminadas: ${removed}")
+                    snack("Descargas eliminadas: ${'$'}{removed}")
                 } else {
                     snack("No se eliminaron descargas")
                 }

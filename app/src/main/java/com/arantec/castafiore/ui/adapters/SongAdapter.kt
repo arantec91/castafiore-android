@@ -116,7 +116,8 @@ class SongAdapter(
                 val isPlaying = song.id == playingSongId
                 if (isPlaying) {
                     tvSongTitle.setTextColor(root.context.getColor(R.color.primary))
-                    tvSongArtist.setTextColor(root.context.getColor(R.color.primary))
+                    // Mantener el color del artista siempre secundario incluso cuando se esté reproduciendo
+                    tvSongArtist.setTextColor(root.context.getColor(R.color.text_secondary))
                 } else {
                     tvSongTitle.setTextColor(root.context.getColor(R.color.text_primary))
                     tvSongArtist.setTextColor(root.context.getColor(R.color.text_secondary))

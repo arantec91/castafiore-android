@@ -186,4 +186,12 @@
     <string name="storage_castafiore_cache">Caché de Castafiore</string>
     <string name="storage_available">Disponible</string>
     <string name="added_to_favorites">Añadida a favoritos</string>
+    <string name="playing_from">REPRODUCIENDO DESDE</string>
+    <string name="play_pause">Reproducir/Pausar</string>
+    <string name="repeat">Repetir</string>
+    <string name="lyrics">Letras</string>
+    <string name="queue">Cola de reproducción</string>
+    <string name="album_name_placeholder">Álbum</string>
+    <string name="time_zero">0:00</string>
+    <string name="time_sample_total">3:24</string>
 </resources>

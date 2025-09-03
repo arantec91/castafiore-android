@@ -177,13 +177,9 @@ class DownloadsFragment : Fragment(), HasContentState {
     }
 
     private fun loadDownloads() {
-        if (hasContent()) {
-            binding.loadingOverlay.visibility = View.VISIBLE
-            binding.progressBar.visibility = View.VISIBLE
-        } else {
-            binding.loadingOverlay.visibility = View.GONE
-            binding.progressBar.visibility = View.GONE
-        }
+        // Always show loading overlay at the start of a load
+        binding.loadingOverlay.visibility = View.VISIBLE
+        binding.progressBar.visibility = View.VISIBLE
         binding.emptyLayout.visibility = View.GONE
 
         viewLifecycleOwner.lifecycleScope.launch {
