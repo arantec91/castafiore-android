@@ -11,6 +11,7 @@ import com.arantec.castafiore.utils.ImageLoader
 import com.arantec.castafiore.R
 import android.view.View
 import java.io.File
+import androidx.recyclerview.widget.AsyncListDiffer
 
 class SongAdapter(
     private val onSongClick: (Song, Int) -> Unit,
@@ -22,17 +23,26 @@ class SongAdapter(
     // Enable stable IDs for better change animations and less rebind churn
     init { setHasStableIds(true) }
 
-    private var songs = mutableListOf<Song>()
     private var playingSongId: String? = null
     private val downloadStates = mutableMapOf<String, com.arantec.castafiore.data.download.SongDownloadManager.DownloadState>()
 
-    fun updateSongs(newSongs: List<Song>) {
-        val diffCallback = SongDiffCallback(songs, newSongs)
-        val diffResult = DiffUtil.calculateDiff(diffCallback)
+    // Async differ to compute diffs off the main thread
+    private val diffCallback = object : DiffUtil.ItemCallback<Song>() {
+        override fun areItemsTheSame(oldItem: Song, newItem: Song): Boolean = oldItem.id == newItem.id
+        override fun areContentsTheSame(oldItem: Song, newItem: Song): Boolean =
+            oldItem.title == newItem.title &&
+            oldItem.artist == newItem.artist &&
+            oldItem.duration == newItem.duration
+    }
 
-        songs.clear()
-        songs.addAll(newSongs)
-        diffResult.dispatchUpdatesTo(this)
+    private val differ = AsyncListDiffer(this, diffCallback)
+
+    private val songs: List<Song>
+        get() = differ.currentList
+
+    fun updateSongs(newSongs: List<Song>) {
+        // Always submit a new list instance to avoid identity short-circuiting
+        differ.submitList(newSongs.toList())
     }
 
     fun setPlayingSong(songId: String?) {
@@ -206,7 +216,7 @@ class SongAdapter(
                     if (!isSpinnerVisible && isDownloaded) {
                         ivDownloaded.visibility = View.VISIBLE
                         containerIconDownload.visibility = View.VISIBLE
-                    } else if (!isSpinnerVisible && !isDownloaded) {
+                    } else if (!isSpinnerVisible) {
                         // ensure no gap
                         ivDownloaded.visibility = View.GONE
                         containerIconDownload.visibility = View.GONE
@@ -227,28 +237,6 @@ class SongAdapter(
                     onSongMoreClick(song)
                 }
             }
-        }
-    }
-
-    private class SongDiffCallback(
-        private val oldList: List<Song>,
-        private val newList: List<Song>
-    ) : DiffUtil.Callback() {
-
-        override fun getOldListSize(): Int = oldList.size
-
-        override fun getNewListSize(): Int = newList.size
-
-        override fun areItemsTheSame(oldItemPosition: Int, newItemPosition: Int): Boolean {
-            return oldList[oldItemPosition].id == newList[newItemPosition].id
-        }
-
-        override fun areContentsTheSame(oldItemPosition: Int, newItemPosition: Int): Boolean {
-            val oldSong = oldList[oldItemPosition]
-            val newSong = newList[newItemPosition]
-            return oldSong.title == newSong.title &&
-                   oldSong.artist == newSong.artist &&
-                   oldSong.duration == newSong.duration
         }
     }
 

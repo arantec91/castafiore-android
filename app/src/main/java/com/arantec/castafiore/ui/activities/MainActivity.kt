@@ -35,6 +35,10 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import android.content.Context.BIND_AUTO_CREATE
+import com.arantec.castafiore.ui.fragments.DownloadsFragment
+import com.arantec.castafiore.ui.fragments.FavoritesFragment
+import com.arantec.castafiore.ui.fragments.PlaylistDetailFragment
+import androidx.fragment.app.Fragment
 
 class MainActivity : AppCompatActivity(), LoadingHost {
 
@@ -149,6 +153,28 @@ class MainActivity : AppCompatActivity(), LoadingHost {
 
     override fun isGlobalLoadingVisible(): Boolean = overlayVisible
 
+    private fun currentTopFragment(): Fragment? {
+        val navHost = supportFragmentManager.findFragmentById(R.id.nav_host_fragment) as? NavHostFragment
+        return navHost?.childFragmentManager?.fragments?.lastOrNull { it.isVisible }
+    }
+
+    private fun isOverlayAllowedForCurrentFragment(): Boolean {
+        val current = currentTopFragment()
+        return current !is DownloadsFragment &&
+                current !is FavoritesFragment &&
+                current !is PlaylistDetailFragment
+    }
+
+    private fun forceHideOverlayAndClearManualOverride() {
+        pendingShowJob?.cancel()
+        pendingShowJob = null
+        overlayManualOverrideCount = 0
+        if (overlayVisible) {
+            binding.globalLoadingOverlay.visibility = View.GONE
+            overlayVisible = false
+        }
+    }
+
     private fun setupGlobalLoadingObserver() {
         // Recompute when in-flight state changes
         lifecycleScope.launch {
@@ -162,11 +188,22 @@ class MainActivity : AppCompatActivity(), LoadingHost {
         // Recompute when destination changes
         val navHostFragment = supportFragmentManager.findFragmentById(R.id.nav_host_fragment) as NavHostFragment
         navHostFragment.navController.addOnDestinationChangedListener { _, _, _ ->
-            recomputeGlobalOverlay(InFlightTracker.isLoading.value)
+            // On destination change, reset overlay if destination suppresses it; otherwise recompute normally
+            if (!isOverlayAllowedForCurrentFragment()) {
+                forceHideOverlayAndClearManualOverride()
+            } else {
+                recomputeGlobalOverlay(InFlightTracker.isLoading.value)
+            }
         }
     }
 
     private fun recomputeGlobalOverlay(isLoading: Boolean) {
+        // If current destination opts out from global overlay, force-hide and bail early
+        if (!isOverlayAllowedForCurrentFragment()) {
+            android.util.Log.d("GlobalLoader", "Overlay suppressed for current fragment; force-hiding")
+            forceHideOverlayAndClearManualOverride()
+            return
+        }
         // If a fragment requested manual override, keep overlay as-is (visible) until released
         if (overlayManualOverrideCount > 0) {
             android.util.Log.d("GlobalLoader", "Manual override active ($overlayManualOverrideCount), keeping overlay visible")
@@ -188,6 +225,11 @@ class MainActivity : AppCompatActivity(), LoadingHost {
     }
 
     private fun updateOverlayStateFromSources() {
+        // Suppress overlay on certain destinations regardless of sources
+        if (!isOverlayAllowedForCurrentFragment()) {
+            forceHideOverlayAndClearManualOverride()
+            return
+        }
         // Respect manual override first
         if (overlayManualOverrideCount > 0) {
             if (!overlayVisible) {
@@ -207,22 +249,20 @@ class MainActivity : AppCompatActivity(), LoadingHost {
         }
     }
 
-    private fun currentFragmentHasContent(): Boolean {
-        val navHost = supportFragmentManager.findFragmentById(R.id.nav_host_fragment) as? NavHostFragment
-        val current = navHost?.childFragmentManager?.fragments?.lastOrNull { it.isVisible }
-        val provider = current as? HasContentState
-        // Default to false so the overlay appears unless the screen explicitly signals content
-        return provider?.hasContent() ?: false
-    }
-
     private fun maybeShowOverlayWithDebounce() {
         if (overlayVisible) return
         if (pendingShowJob != null) return
+        // Do not show if current destination suppresses overlay
+        if (!isOverlayAllowedForCurrentFragment()) return
         pendingShowJob = lifecycleScope.launch {
             // Debounce to avoid flicker on super fast calls
             delay(150)
-            // Ensure condition still holds and no manual override is active
-            if (overlayManualOverrideCount == 0 && InFlightTracker.isLoading.value && !currentFragmentHasContent()) {
+            // Ensure condition still holds and no manual override is active and destination still allows overlay
+            if (overlayManualOverrideCount == 0 &&
+                isOverlayAllowedForCurrentFragment() &&
+                InFlightTracker.isLoading.value &&
+                !currentFragmentHasContent()
+            ) {
                 android.util.Log.d("GlobalLoader", "Showing overlay")
                 binding.globalLoadingOverlay.visibility = View.VISIBLE
                 overlayVisible = true
@@ -475,6 +515,14 @@ class MainActivity : AppCompatActivity(), LoadingHost {
         } else {
             binding.playerContainer.visibility = View.GONE
         }
+    }
+
+    private fun currentFragmentHasContent(): Boolean {
+        val navHost = supportFragmentManager.findFragmentById(R.id.nav_host_fragment) as? NavHostFragment
+        val current = navHost?.childFragmentManager?.fragments?.lastOrNull { it.isVisible }
+        val provider = current as? HasContentState
+        // Default to false so the overlay appears unless the screen explicitly signals content
+        return provider?.hasContent() ?: false
     }
 
     override fun onResume() {

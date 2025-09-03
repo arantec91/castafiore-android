@@ -16,15 +16,19 @@ import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.navigation.fragment.findNavController
 import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
 import com.arantec.castafiore.R
 import com.arantec.castafiore.data.models.Song
 import com.arantec.castafiore.databinding.FragmentDownloadsBinding
 import com.arantec.castafiore.service.MusicService
 import com.arantec.castafiore.ui.adapters.SongAdapter
 import com.arantec.castafiore.ui.helpers.HasContentState
+import com.arantec.castafiore.ui.helpers.LoadingHost
 import com.arantec.castafiore.utils.StatusBarUtils
 import com.arantec.castafiore.utils.snack
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlin.random.Random
 import android.os.SystemClock
 
@@ -115,11 +119,25 @@ class DownloadsFragment : Fragment(), HasContentState {
             circularDownloadInIcon = true
         )
 
+        val nonScrollableLm = object : LinearLayoutManager(context) {
+            override fun canScrollVertically(): Boolean = false
+        }
+
         binding.rvSongs.apply {
-            layoutManager = LinearLayoutManager(context)
+            layoutManager = nonScrollableLm
             adapter = songAdapter
             isNestedScrollingEnabled = false
+            overScrollMode = View.OVER_SCROLL_NEVER
         }
+
+        // When the differ applies updates, force a layout pass to make sure items are rendered
+        songAdapter.registerAdapterDataObserver(object : RecyclerView.AdapterDataObserver() {
+            override fun onChanged() { binding.rvSongs.requestLayout() }
+            override fun onItemRangeInserted(positionStart: Int, itemCount: Int) { binding.rvSongs.requestLayout() }
+            override fun onItemRangeRemoved(positionStart: Int, itemCount: Int) { binding.rvSongs.requestLayout() }
+            override fun onItemRangeChanged(positionStart: Int, itemCount: Int) { binding.rvSongs.requestLayout() }
+            override fun onItemRangeMoved(fromPosition: Int, toPosition: Int, itemCount: Int) { binding.rvSongs.requestLayout() }
+        })
     }
 
     private fun setupFab() {
@@ -169,12 +187,21 @@ class DownloadsFragment : Fragment(), HasContentState {
         binding.emptyLayout.visibility = View.GONE
 
         viewLifecycleOwner.lifecycleScope.launch {
-            val songs = try { downloadManager.getAllDownloadedSongs() } catch (_: Exception) { emptyList() }
+            // Offload I/O to a background dispatcher to avoid blocking the main thread
+            val songs = withContext(Dispatchers.IO) {
+                try {
+                    downloadManager.getAllDownloadedSongs()
+                } catch (_: Exception) {
+                    emptyList()
+                }
+            }
             if (!isAdded || _binding == null) return@launch
 
             downloadedSongs.clear()
             downloadedSongs.addAll(songs)
             songAdapter.updateSongs(downloadedSongs)
+            // Force a layout pass so RecyclerView measures itself after async diff apply
+            binding.rvSongs.post { binding.rvSongs.requestLayout() }
 
             binding.tvTitle.text = getString(R.string.bottom_downloads)
             updateInfoAndEmptyState()
@@ -441,6 +468,8 @@ class DownloadsFragment : Fragment(), HasContentState {
     override fun onResume() {
         super.onResume()
         StatusBarUtils.setStatusBarColor(this)
+        // Ensure any global overlay is hidden on this screen
+        (activity as? LoadingHost)?.showGlobalLoading(false)
         // refresh downloads in case list changed
         loadDownloads()
     }

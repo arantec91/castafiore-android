@@ -32,6 +32,7 @@ import com.arantec.castafiore.ui.helpers.HasContentState
 import android.content.res.ColorStateList
 import kotlinx.coroutines.flow.*
 import android.os.SystemClock
+import com.arantec.castafiore.ui.helpers.LoadingHost
 
 class FavoritesFragment : Fragment(), HasContentState {
 
@@ -577,6 +578,8 @@ class FavoritesFragment : Fragment(), HasContentState {
         super.onResume()
         // Ensure consistent status bar color on resume
         StatusBarUtils.setStatusBarColor(this)
+        // Ensure any global overlay is hidden on this screen
+        (activity as? LoadingHost)?.showGlobalLoading(false)
     }
 
     override fun onDestroyView() {

@@ -254,7 +254,10 @@ class SongDownloadManager private constructor(private val context: Context) {
 
     // Fast, non-blocking check using SharedPreferences only (may be slightly stale but safe for UI)
     fun isSongDownloadedFast(songId: String): Boolean {
-        return prefs.contains(keyFor(songId))
+        // Prefer persisted flag, but also trust in-memory COMPLETED state to avoid apply() race
+        if (prefs.contains(keyFor(songId))) return true
+        val state = _downloadStates.value[songId]
+        return state?.status == DownloadStatus.COMPLETED
     }
 
     // Quickly return the set of downloaded song IDs using prefs keys only

@@ -30,6 +30,7 @@ import com.arantec.castafiore.utils.ImageLoader
 import com.arantec.castafiore.utils.StatusBarUtils
 import com.arantec.castafiore.utils.PlaylistFavoritesManager
 import com.arantec.castafiore.ui.helpers.HasContentState
+import com.arantec.castafiore.ui.helpers.LoadingHost
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.Dispatchers
@@ -731,6 +732,14 @@ class PlaylistDetailFragment : Fragment(), HasContentState {
         unbindMusicService()
     }
 
+    override fun onResume() {
+        super.onResume()
+        // Ensure any global overlay is hidden on this screen
+        (activity as? LoadingHost)?.showGlobalLoading(false)
+        // Keep status bar consistent with current app bar theme
+        StatusBarUtils.setStatusBarColor(this)
+    }
+
     override fun onDestroy() {
         super.onDestroy()
         unbindMusicService()
@@ -845,7 +854,6 @@ class PlaylistDetailFragment : Fragment(), HasContentState {
             PlaylistFavoritesManager.toggleFavorite(requireContext(), id)
             autoFavApplied = true
             updateFavoriteButtonVisibilityAndState()
-            snack(getString(R.string.added_to_favorites))
         } else {
             autoFavApplied = true
         }
