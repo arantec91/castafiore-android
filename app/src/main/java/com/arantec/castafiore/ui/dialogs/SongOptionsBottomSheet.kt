@@ -9,7 +9,8 @@ import android.os.IBinder
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.widget.Toast
+import androidx.core.graphics.toColorInt
+import androidx.core.os.BundleCompat
 import androidx.lifecycle.lifecycleScope
 import com.arantec.castafiore.R
 import com.arantec.castafiore.data.download.SongDownloadManager
@@ -22,6 +23,7 @@ import com.arantec.castafiore.utils.ImageLoader
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import com.google.android.material.snackbar.Snackbar
 
 class SongOptionsBottomSheet : BottomSheetDialogFragment() {
 
@@ -85,7 +87,7 @@ class SongOptionsBottomSheet : BottomSheetDialogFragment() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         arguments?.let {
-            song = it.getParcelable(ARG_SONG)
+            song = BundleCompat.getParcelable(it, ARG_SONG, Song::class.java)
             isSongFavorited = it.getBoolean(ARG_IS_FAVORITED, false)
         }
         musicRepository = MusicRepository.getInstance(requireContext())
@@ -194,7 +196,7 @@ class SongOptionsBottomSheet : BottomSheetDialogFragment() {
             } else {
                 binding.ivSongCover.setImageResource(R.drawable.ic_music_note)
             }
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             binding.ivSongCover.setImageResource(R.drawable.ic_music_note)
         }
     }
@@ -202,10 +204,10 @@ class SongOptionsBottomSheet : BottomSheetDialogFragment() {
     private fun updateFavoriteButton() {
         if (isSongFavorited) {
             binding.btnSongFavorite.setImageResource(R.drawable.ic_favorite)
-            binding.btnSongFavorite.setColorFilter(android.graphics.Color.parseColor("#FF2D55")) // Color principal
+            binding.btnSongFavorite.setColorFilter("#FF2D55".toColorInt()) // Color principal
         } else {
             binding.btnSongFavorite.setImageResource(R.drawable.ic_favorite_border)
-            binding.btnSongFavorite.setColorFilter(android.graphics.Color.parseColor("#B3FFFFFF")) // Color texto secundario
+            binding.btnSongFavorite.setColorFilter("#B3FFFFFF".toColorInt()) // Color texto secundario
         }
     }
 
@@ -223,6 +225,15 @@ class SongOptionsBottomSheet : BottomSheetDialogFragment() {
         val isDownloaded = downloadManager.isSongDownloaded(currentSong.id)
         binding.optionDownload.visibility = if (isDownloaded) View.GONE else View.VISIBLE
         binding.optionDeleteDownload.visibility = if (isDownloaded) View.VISIBLE else View.GONE
+    }
+
+    // Centraliza la visualización de mensajes usando Snackbar
+    private fun showSnackbar(message: String) {
+        // Preferir la raíz de la Activity para que el mensaje persista si se cierra el BottomSheet
+        val rootView = (activity?.findViewById<View>(android.R.id.content)
+            ?: view)
+            ?: return
+        Snackbar.make(rootView, message, Snackbar.LENGTH_SHORT).show()
     }
 
     private fun setupClickListeners() {
@@ -310,7 +321,7 @@ class SongOptionsBottomSheet : BottomSheetDialogFragment() {
                                 }
                                 dismiss()
                             } else {
-                                Toast.makeText(requireContext(), getString(R.string.error_loading_favorites), Toast.LENGTH_SHORT).show()
+                                showSnackbar(getString(R.string.error_loading_favorites))
                                 // Restore UI when keeping the sheet open
                                 binding.progressSongRadio.visibility = View.GONE
                                 binding.optionSongRadio.isEnabled = true
@@ -318,7 +329,7 @@ class SongOptionsBottomSheet : BottomSheetDialogFragment() {
                             }
                         },
                         onFailure = { e ->
-                            Toast.makeText(requireContext(), "Error al cargar radio: ${e.message}", Toast.LENGTH_SHORT).show()
+                            showSnackbar("Error al cargar radio: ${e.message}")
                             // Restore UI on error
                             binding.progressSongRadio.visibility = View.GONE
                             binding.optionSongRadio.isEnabled = true
@@ -332,10 +343,10 @@ class SongOptionsBottomSheet : BottomSheetDialogFragment() {
             binding.optionDownload.setOnClickListener {
                 if (!downloadManager.isSongDownloaded(currentSong.id)) {
                     downloadManager.downloadSong(currentSong)
-                    Toast.makeText(requireContext(), getString(R.string.download_started), Toast.LENGTH_SHORT).show()
+                    showSnackbar(getString(R.string.download_started))
                     dismiss()
                 } else {
-                    Toast.makeText(requireContext(), getString(R.string.song_already_downloaded), Toast.LENGTH_SHORT).show()
+                    showSnackbar(getString(R.string.song_already_downloaded))
                     setupDownloadOptions()
                 }
             }
@@ -344,11 +355,11 @@ class SongOptionsBottomSheet : BottomSheetDialogFragment() {
             binding.optionDeleteDownload.setOnClickListener {
                 val ok = downloadManager.deleteSong(currentSong.id)
                 if (ok) {
-                    Toast.makeText(requireContext(), getString(R.string.download_deleted), Toast.LENGTH_SHORT).show()
+                    showSnackbar(getString(R.string.download_deleted))
                     setupDownloadOptions()
                     dismiss()
                 } else {
-                    Toast.makeText(requireContext(), getString(R.string.download_delete_error), Toast.LENGTH_SHORT).show()
+                    showSnackbar(getString(R.string.download_delete_error))
                 }
             }
         }
@@ -373,19 +384,15 @@ class SongOptionsBottomSheet : BottomSheetDialogFragment() {
                         // Streaming-only: remove auto-download behavior when favorites were fully downloaded
                     },
                     onFailure = { error ->
-                        Toast.makeText(
-                            requireContext(),
-                            "Error al actualizar favoritos: ${error.message}",
-                            Toast.LENGTH_SHORT
-                        ).show()
+                        showSnackbar(
+                            "Error al actualizar favoritos: ${error.message}"
+                        )
                     }
                 )
             } catch (e: Exception) {
-                Toast.makeText(
-                    requireContext(),
-                    "Error: ${e.message}",
-                    Toast.LENGTH_SHORT
-                ).show()
+                showSnackbar(
+                    "Error: ${e.message}"
+                )
             }
         }
     }
@@ -409,7 +416,7 @@ class SongOptionsBottomSheet : BottomSheetDialogFragment() {
                             updateFavoriteButton()
                         }
                     )
-                } catch (e: Exception) {
+                } catch (_: Exception) {
                     isSongFavorited = false
                     updateFavoriteButton()
                 }

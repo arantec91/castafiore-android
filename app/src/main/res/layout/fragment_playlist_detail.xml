@@ -50,6 +50,7 @@
                     android:scaleType="centerCrop"
                     android:contentDescription="@string/album_icon"
                     android:outlineProvider="background"
+                    android:clipToOutline="true"
                     android:background="@drawable/rounded_corners_8dp"
                     tools:src="@drawable/ic_album_placeholder" />
 

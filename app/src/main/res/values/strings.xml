@@ -194,4 +194,23 @@
     <string name="album_name_placeholder">Álbum</string>
     <string name="time_zero">0:00</string>
     <string name="time_sample_total">3:24</string>
+    <string name="cd_drag_handle">Arrastrar para reordenar</string>
+
+    <!-- Plurals and formats for playlist info and downloads -->
+    <plurals name="songs_count">
+        <item quantity="one">%d canción</item>
+        <item quantity="other">%d canciones</item>
+    </plurals>
+    <string name="playlist_info">%1$s • %2$s</string>
+
+    <plurals name="delete_playlist_downloads_message">
+        <item quantity="one">Se eliminará %d canción descargada de esta playlist. ¿Deseas continuar?</item>
+        <item quantity="other">Se eliminarán %d canciones descargadas de esta playlist. ¿Deseas continuar?</item>
+    </plurals>
+    <string name="delete_downloads_title">Eliminar descargas</string>
+
+    <plurals name="downloading_count">
+        <item quantity="one">Descargando %d canción…</item>
+        <item quantity="other">Descargando %d canciones…</item>
+    </plurals>
 </resources>

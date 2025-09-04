@@ -31,7 +31,7 @@ import kotlin.random.Random
 import com.arantec.castafiore.ui.helpers.HasContentState
 import android.content.res.ColorStateList
 import kotlinx.coroutines.flow.*
-import android.os.SystemClock
+import kotlinx.coroutines.FlowPreview
 import com.arantec.castafiore.ui.helpers.LoadingHost
 
 class FavoritesFragment : Fragment(), HasContentState {
@@ -51,9 +51,6 @@ class FavoritesFragment : Fragment(), HasContentState {
     private var songChangeListener: ((Song?) -> Unit)? = null
 
     private lateinit var downloadManager: com.arantec.castafiore.data.download.SongDownloadManager
-
-    // Throttle UI updates from download state flow
-    private var lastDownloadUiUpdateMs: Long = 0L
 
     private val serviceConnection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
@@ -466,14 +463,14 @@ class FavoritesFragment : Fragment(), HasContentState {
         }
     }
 
+    @OptIn(FlowPreview::class)
     private fun setupDownloadObservers() {
         viewLifecycleOwner.lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 downloadManager.downloadStates
-                    .collect { states ->
-                        val now = SystemClock.elapsedRealtime()
-                        if (now - lastDownloadUiUpdateMs < 250L) return@collect
-                        lastDownloadUiUpdateMs = now
+                    .debounce(200L) // ensure trailing updates are delivered and avoid UI spam
+                    .collectLatest { states ->
+                        if (!isAdded || _binding == null) return@collectLatest
 
                         states.values.forEach { state ->
                             songAdapter.updateDownloadState(state)
@@ -509,7 +506,15 @@ class FavoritesFragment : Fragment(), HasContentState {
 
     private fun updateDownloadButtonTint() {
         if (!isAdded || _binding == null) return
-        if (isFavoritesFullyDownloaded()) setDownloadButtonTintPrimary() else setDownloadButtonTintSecondary()
+        if (Thread.currentThread() == requireActivity().mainLooper.thread) {
+            if (!isAdded || _binding == null) return
+            if (isFavoritesFullyDownloaded()) setDownloadButtonTintPrimary() else setDownloadButtonTintSecondary()
+        } else {
+            requireActivity().runOnUiThread {
+                if (!isAdded || _binding == null) return@runOnUiThread
+                if (isFavoritesFullyDownloaded()) setDownloadButtonTintPrimary() else setDownloadButtonTintSecondary()
+            }
+        }
     }
 
     private fun setupDownloadButton() {
@@ -532,6 +537,8 @@ class FavoritesFragment : Fragment(), HasContentState {
                 return@setOnClickListener
             }
             downloadManager.downloadSongsSequentially(toQueue, com.arantec.castafiore.data.download.DownloadOrigin.PLAYLIST)
+            // Provide immediate visual feedback that downloads are in-progress
+            setDownloadButtonTintSecondary()
             snack("Descargando: ${toQueue.size} canciones")
         }
     }

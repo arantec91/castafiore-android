@@ -149,7 +149,7 @@ class PlaylistDetailFragment : Fragment(), HasContentState {
                     if (removed > 0) {
                         updateDownloadButtonTint()
                         // Optional feedback without confirmation
-                        snack("Descargas eliminadas: ${'$'}{removed}")
+                        snack("Descargas eliminadas: ${removed}")
                     }
                 }
             }
@@ -387,8 +387,13 @@ class PlaylistDetailFragment : Fragment(), HasContentState {
         val minutes = totalSeconds / 60
         val hours = minutes / 60
         val remMin = minutes % 60
-        val durationText = if (hours > 0) "${'$'}hours h ${'$'}{remMin} min" else "${'$'}minutes min"
-        return "${'$'}count canciones • ${'$'}durationText"
+        val durationText = when {
+            hours > 0 && remMin > 0 -> String.format(Locale.getDefault(), "%d h %d min", hours, remMin)
+            hours > 0 -> String.format(Locale.getDefault(), "%d h", hours)
+            else -> String.format(Locale.getDefault(), "%d min", minutes)
+        }
+        val songsText = resources.getQuantityString(R.plurals.songs_count, count, count)
+        return getString(R.string.playlist_info, songsText, durationText)
     }
 
     private fun isPlaylistQueuePlaying(): Boolean {
@@ -498,7 +503,7 @@ class PlaylistDetailFragment : Fragment(), HasContentState {
 
         tvInfoGenre.text = song.genre ?: "Desconocido"
         tvInfoYear.text = song.year?.toString() ?: "Desconocido"
-        tvInfoBitrate.text = if (song.bitRate != null) "${'$'}{song.bitRate} kbps" else "Desconocido"
+        tvInfoBitrate.text = if (song.bitRate != null) "${song.bitRate} kbps" else "Desconocido"
         tvInfoFormat.text = song.suffix?.uppercase() ?: "Desconocido"
         tvInfoFileSize.text = song.size?.let { formatFileSize(it) } ?: "Desconocido"
 
@@ -538,7 +543,7 @@ class PlaylistDetailFragment : Fragment(), HasContentState {
             sizeInBytes >= gb -> String.format(Locale.getDefault(), "%.1f GB", sizeInBytes / gb)
             sizeInBytes >= mb -> String.format(Locale.getDefault(), "%.1f MB", sizeInBytes / mb)
             sizeInBytes >= kb -> String.format(Locale.getDefault(), "%.1f KB", sizeInBytes / kb)
-            else -> "${'$'}sizeInBytes bytes"
+            else -> "$sizeInBytes bytes"
         }
     }
 
@@ -828,7 +833,8 @@ class PlaylistDetailFragment : Fragment(), HasContentState {
                 return@setOnClickListener
             }
             downloadManager.downloadSongsSequentially(toQueue, com.arantec.castafiore.data.download.DownloadOrigin.PLAYLIST)
-            snack("Descargando ${'$'}{toQueue.size} canciones...")
+            val msg = resources.getQuantityString(R.plurals.downloading_count, toQueue.size, toQueue.size)
+            snack(msg)
         }
     }
 
@@ -841,14 +847,14 @@ class PlaylistDetailFragment : Fragment(), HasContentState {
         }
         val count = downloadedIds.size
         androidx.appcompat.app.AlertDialog.Builder(requireContext())
-            .setTitle("Eliminar descargas")
-            .setMessage("Se eliminarán ${'$'}{count} canciones descargadas de esta playlist. ¿Deseas continuar?")
-            .setNegativeButton("Cancelar", null)
-            .setPositiveButton("Eliminar") { d, _ ->
+            .setTitle(getString(R.string.delete_downloads_title))
+            .setMessage(resources.getQuantityString(R.plurals.delete_playlist_downloads_message, count, count))
+            .setNegativeButton(getString(R.string.cancel), null)
+            .setPositiveButton(getString(R.string.delete)) { d, _ ->
                 val removed = downloadManager.deleteMultipleSongs(downloadedIds)
                 if (removed > 0) {
                     setDownloadButtonTintSecondary()
-                    snack("Descargas eliminadas: ${'$'}{removed}")
+                    snack("Descargas eliminadas: ${removed}")
                 } else {
                     snack("No se eliminaron descargas")
                 }
