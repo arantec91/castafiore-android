@@ -207,7 +207,13 @@ class PlaylistDetailFragment : Fragment(), HasContentState {
         binding.fabPlay.setOnClickListener {
             val service = musicService
             if (service != null) {
-                if (isPlaylistQueuePlaying()) service.pause().takeIf { service.isPlaying() } ?: service.play() else if (playlistSongs.isNotEmpty()) {
+                if (isPlaylistQueuePlaying()) {
+                    if (service.isPlaying()) {
+                        service.pause()
+                    } else {
+                        service.play()
+                    }
+                } else if (playlistSongs.isNotEmpty()) {
                     val startIndex = if (service.getShuffleEnabled() && playlistSongs.size > 1) Random.nextInt(playlistSongs.size) else 0
                     service.playQueue(
                         playlistSongs,
