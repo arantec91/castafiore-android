@@ -78,6 +78,10 @@ class PlaylistDetailFragment : Fragment(), HasContentState {
 
     private lateinit var downloadManager: com.arantec.castafiore.data.download.SongDownloadManager
 
+    // Keep last known download states to compute aggregate status accurately in real-time
+    private var latestDownloadStates: Map<String, com.arantec.castafiore.data.download.SongDownloadManager.DownloadState> = emptyMap()
+    private var lastAllDownloaded: Boolean = false
+
     private val serviceConnection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
             val binder = service as MusicService.MusicBinder
@@ -192,7 +196,9 @@ class PlaylistDetailFragment : Fragment(), HasContentState {
             layoutManager = LinearLayoutManager(requireContext())
             adapter = songAdapter
             isNestedScrollingEnabled = false
-            setHasFixedSize(true)
+            // Important: do NOT mark fixed size when inside NestedScrollView with wrap_content height,
+            // otherwise RecyclerView may not expand after async data is set.
+            setHasFixedSize(false)
             itemAnimator = null // disable change animations to avoid jank on frequent state updates
         }
     }
@@ -237,6 +243,9 @@ class PlaylistDetailFragment : Fragment(), HasContentState {
                     .collect { states ->
                         if (!isAdded || _binding == null) return@collect
 
+                        // Cache full map for aggregate checks
+                        latestDownloadStates = states
+
                         // Update only visible items to reduce binding churn
                         val lm = binding.rvSongs.layoutManager as? LinearLayoutManager
                         val first = lm?.findFirstVisibleItemPosition() ?: -1
@@ -252,7 +261,15 @@ class PlaylistDetailFragment : Fragment(), HasContentState {
                             }
                         }
 
-                        // Rate-limit heavier UI work (tint and auto-favorite checks)
+                        // Immediate update if we just transitioned to fully downloaded
+                        val nowAll = isPlaylistFullyDownloaded()
+                        if (nowAll != lastAllDownloaded) {
+                            lastAllDownloaded = nowAll
+                            updateDownloadButtonTint()
+                            if (nowAll) maybeAutoFavorite()
+                        }
+
+                        // Rate-limit periodic UI refresh as a safety net
                         val now = SystemClock.elapsedRealtime()
                         if (now - lastDownloadUiUpdateMs >= 1000L) {
                             lastDownloadUiUpdateMs = now
@@ -334,7 +351,8 @@ class PlaylistDetailFragment : Fragment(), HasContentState {
                         binding.rvSongs.adapter = songAdapter
                     }
                     binding.rvSongs.visibility = View.VISIBLE
-                    binding.rvSongs.post { songAdapter.notifyDataSetChanged() }
+                    // Force a layout pass so the NestedScrollView recalculates height after async diff commit
+                    binding.rvSongs.post { binding.rvSongs.requestLayout() }
 
                     // Info
                     binding.tvInfo.text = buildInfoText(playlistSongs)
@@ -350,6 +368,8 @@ class PlaylistDetailFragment : Fragment(), HasContentState {
                     isPlaying = musicService?.isPlaying() == true && isPlaylistQueuePlaying()
                     updatePlayButton()
                     updateDownloadButtonTint()
+                    // Initialize transition baseline
+                    lastAllDownloaded = isPlaylistFullyDownloaded()
                     // In case all were already downloaded when entering, attempt auto-favorite
                     maybeAutoFavorite()
 
@@ -466,6 +486,8 @@ class PlaylistDetailFragment : Fragment(), HasContentState {
                     // Update local list and UI
                     playlistSongs.removeAt(index)
                     songAdapter.updateSongs(playlistSongs)
+                    // Ensure the container recalculates height
+                    binding.rvSongs.post { binding.rvSongs.requestLayout() }
                     binding.tvInfo.text = buildInfoText(playlistSongs)
                     if (playlistSongs.isEmpty()) {
                         binding.emptyLayout.visibility = View.VISIBLE
@@ -811,6 +833,17 @@ class PlaylistDetailFragment : Fragment(), HasContentState {
 
     private fun isPlaylistFullyDownloaded(): Boolean {
         if (playlistSongs.isEmpty()) return false
+        // Prefer live states for accuracy; fall back to fast cache
+        val states = latestDownloadStates
+        if (states.isNotEmpty()) {
+            for (song in playlistSongs) {
+                val st = states[song.id]
+                val completedByState = st?.status == com.arantec.castafiore.data.download.SongDownloadManager.DownloadStatus.COMPLETED
+                val completedByCache = downloadManager.isSongDownloadedFast(song.id)
+                if (!completedByState && !completedByCache) return false
+            }
+            return true
+        }
         return playlistSongs.all { song -> downloadManager.isSongDownloadedFast(song.id) }
     }
 
