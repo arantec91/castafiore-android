@@ -41,6 +41,8 @@ import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
 import android.net.Uri
+import androidx.core.app.TaskStackBuilder
+import com.arantec.castafiore.ui.activities.MainActivity
 
 class MusicService : Service() {
 
@@ -85,6 +87,9 @@ class MusicService : Service() {
     private val playbackStateListeners = mutableListOf<(Boolean) -> Unit>()
     private val songChangeListeners = mutableListOf<(Song?) -> Unit>()
 
+    // Track favorite state for the current song to reflect it in the notification
+    private var isCurrentSongFavorite: Boolean = false
+
     companion object {
         private const val TAG = "MusicService"
         private const val MEDIA_SESSION_TAG = "CastafioreMediaSession"
@@ -95,6 +100,7 @@ class MusicService : Service() {
         private const val ACTION_NEXT = "com.arantec.castafiore.action.NEXT"
         private const val ACTION_PREV = "com.arantec.castafiore.action.PREV"
         private const val ACTION_STOP = "com.arantec.castafiore.action.STOP"
+        private const val ACTION_TOGGLE_FAVORITE = "com.arantec.castafiore.action.TOGGLE_FAVORITE"
     }
 
     inner class MusicBinder : Binder() {
@@ -220,6 +226,8 @@ class MusicService : Service() {
                 }
                 // Enqueue próximo track para preparación anticipada
                 enqueueNextMediaItem()
+                // Refresh favorite state for the new current song
+                refreshFavoriteStateForCurrentSong()
             }
             override fun onIsPlayingChanged(isPlaying: Boolean) {
                 // Mantener sincronizado el estado interno ante cambios por audio focus (llamadas, notificaciones) u otros
@@ -271,6 +279,10 @@ class MusicService : Service() {
             }
             ACTION_STOP -> {
                 stop()
+                return START_NOT_STICKY
+            }
+            ACTION_TOGGLE_FAVORITE -> {
+                toggleFavoriteFromNotification()
                 return START_NOT_STICKY
             }
         }
@@ -377,6 +389,8 @@ class MusicService : Service() {
         try {
             com.arantec.castafiore.data.cache.RecentPlaysStore.getInstance(this).add(song)
         } catch (_: Exception) { }
+        // Refresh favorite state for current song
+        refreshFavoriteStateForCurrentSong()
         updateMediaMetadata()
         showOrUpdateNotification()
         startProgressUpdates()
@@ -587,14 +601,12 @@ class MusicService : Service() {
     }
 
     private fun getContentPendingIntent(): PendingIntent? {
-        // Abrir directamente PlayerActivity al tocar la notificación
-        val intent = Intent(this, PlayerActivity::class.java).apply {
-            addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
-        }
-        return PendingIntent.getActivity(
-            this,
+        // Build a proper back stack: MainActivity -> PlayerActivity
+        val stackBuilder = TaskStackBuilder.create(this)
+            .addNextIntent(Intent(this, MainActivity::class.java))
+            .addNextIntent(Intent(this, PlayerActivity::class.java))
+        return stackBuilder.getPendingIntent(
             0,
-            intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
     }
@@ -642,9 +654,17 @@ class MusicService : Service() {
             getString(R.string.next),
             pendingService(ACTION_NEXT, /*requestCode*/ 102)
         )
+        val favoriteIcon = if (isCurrentSongFavorite) R.drawable.ic_favorite_36 else R.drawable.ic_favorite_border_36
+        val favoriteTitle = if (isCurrentSongFavorite) getString(R.string.remove_favorite) else getString(R.string.add_to_favorites)
+        val favoriteAction = NotificationCompat.Action(
+            favoriteIcon,
+            favoriteTitle,
+            pendingService(ACTION_TOGGLE_FAVORITE, /*requestCode*/ 103)
+        )
 
         val style = MediaStyle()
             .setMediaSession(mediaSession.sessionToken)
+            // Keep compact view with prev, play/pause, next; favorite appears in expanded
             .setShowActionsInCompactView(0, 1, 2)
 
         val builder = NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID)
@@ -660,6 +680,7 @@ class MusicService : Service() {
             .addAction(prevAction)
             .addAction(playPauseAction)
             .addAction(nextAction)
+            .addAction(favoriteAction)
 
         if (largeIcon != null) builder.setLargeIcon(largeIcon)
 
@@ -1166,5 +1187,50 @@ class MusicService : Service() {
             player.removeMediaItems(currentIdxInPlayer + 1, total)
         }
         player.addMediaItem(nextItem)
+    }
+
+    private fun refreshFavoriteStateForCurrentSong() {
+        val song = currentSong ?: run {
+            isCurrentSongFavorite = false
+            showOrUpdateNotification()
+            return
+        }
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                val result = musicRepository.isSongStarred(song.id)
+                val favorite = result.getOrElse { false }
+                withContext(Dispatchers.Main) {
+                    isCurrentSongFavorite = favorite
+                    showOrUpdateNotification()
+                }
+            } catch (_: Exception) {
+                withContext(Dispatchers.Main) {
+                    isCurrentSongFavorite = false
+                    showOrUpdateNotification()
+                }
+            }
+        }
+    }
+
+    private fun toggleFavoriteFromNotification() {
+        val song = currentSong ?: return
+        // Optimistic UI
+        isCurrentSongFavorite = !isCurrentSongFavorite
+        showOrUpdateNotification()
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                if (isCurrentSongFavorite) {
+                    musicRepository.starSong(song.id)
+                } else {
+                    musicRepository.unstarSong(song.id)
+                }
+            } catch (_: Exception) {
+                withContext(Dispatchers.Main) {
+                    // Revert on failure
+                    isCurrentSongFavorite = !isCurrentSongFavorite
+                    showOrUpdateNotification()
+                }
+            }
+        }
     }
 }

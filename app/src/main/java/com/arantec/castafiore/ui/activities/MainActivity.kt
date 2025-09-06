@@ -64,6 +64,8 @@ class MainActivity : AppCompatActivity(), LoadingHost {
 
             // Ensure mini player UI is populated even if song didn't change
             updateMiniPlayer(musicService?.getCurrentSong())
+            // Sync play/pause icon immediately with current state (avoids race on resume)
+            updatePlayPauseButton(musicService?.isPlaying() == true)
         }
 
         override fun onServiceDisconnected(name: ComponentName?) {
@@ -452,6 +454,10 @@ class MainActivity : AppCompatActivity(), LoadingHost {
 
     private fun bindMusicService() {
         val intent = Intent(this, MusicService::class.java)
+        // Ensure the service is started so it survives unbind when user presses back
+        try {
+            startService(intent)
+        } catch (_: Exception) { }
         bindService(intent, serviceConnection, BIND_AUTO_CREATE)
     }
 
@@ -477,6 +483,10 @@ class MainActivity : AppCompatActivity(), LoadingHost {
             binding.playerContainer.visibility = View.VISIBLE
             binding.tvSongTitle.text = song.title
             binding.tvArtistName.text = song.artist
+
+            // Also sync the play/pause icon to current state whenever we refresh the mini player
+            val playing = musicService?.isPlaying() == true
+            updatePlayPauseButton(playing)
 
             // Preferir portada local si disponible; fallback a URL con ImageLoader
             try {

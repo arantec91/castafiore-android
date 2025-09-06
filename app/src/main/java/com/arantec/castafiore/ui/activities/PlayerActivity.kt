@@ -265,6 +265,10 @@ class PlayerActivity : AppCompatActivity() {
 
     private fun bindMusicService() {
         val intent = Intent(this, MusicService::class.java)
+        // Ensure the service is started so playback keeps running even after unbinding
+        try {
+            startService(intent)
+        } catch (_: Exception) { }
         bindService(intent, serviceConnection, BIND_AUTO_CREATE)
     }
 

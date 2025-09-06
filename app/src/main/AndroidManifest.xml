@@ -51,8 +51,13 @@
             android:name=".ui.activities.PlayerActivity"
             android:exported="false"
             android:theme="@style/Theme.Castafiore.Player"
-            android:launchMode="singleTask"
-            android:screenOrientation="portrait" />
+            android:screenOrientation="portrait"
+            android:parentActivityName=".ui.activities.MainActivity">
+            <!-- For API < 16 support of parent relationship -->
+            <meta-data
+                android:name="android.support.PARENT_ACTIVITY"
+                android:value=".ui.activities.MainActivity" />
+        </activity>
 
         <!-- Actividad de cola de reproducción -->
         <activity
