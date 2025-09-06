@@ -35,7 +35,7 @@
             android:id="@+id/tvSongTitle"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:textColor="@color/text_primary"
+            android:textColor="@color/text_on_primary"
             android:textSize="16sp"
             android:maxLines="1"
             android:ellipsize="end"

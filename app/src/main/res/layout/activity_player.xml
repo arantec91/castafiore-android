@@ -226,9 +226,9 @@
             <com.google.android.material.card.MaterialCardView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginBottom="8dp"
+                android:layout_marginBottom="4dp"
                 app:cardCornerRadius="16dp"
-                app:cardElevation="8dp"
+                app:cardElevation="0dp"
                 app:cardBackgroundColor="#121212"
                 app:useCompatPadding="true">
 
