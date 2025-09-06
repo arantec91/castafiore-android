@@ -145,6 +145,11 @@ class AlbumDetailFragment : Fragment(), HasContentState {
         setupRecyclerView()
         setupDownloadObservers()
 
+        // Botón cancelar descargas de grupo
+        binding.btnCancelGroupDownload.setOnClickListener {
+            cancelAlbumGroupDownloads()
+        }
+
         // Diferir operaciones pesadas para evitar bloqueo de la animación
         view.post {
             if (isAdded && _binding != null) {
@@ -154,6 +159,8 @@ class AlbumDetailFragment : Fragment(), HasContentState {
                 checkFavoriteStatus()
                 // Si ya está todo descargado al abrir, aplica el estado del botón
                 maybeApplyAllDownloadedEffects(applyTintOnly = true)
+                // Asegurar estado inicial del grupo de progreso
+                updateAlbumGroupDownloadUi(downloadManager.downloadStates.value)
             }
         }
     }
@@ -437,6 +444,9 @@ class AlbumDetailFragment : Fragment(), HasContentState {
             // Reinicia manejador de finalización para esta sesión de descarga
             albumDownloadCompleteHandled = false
             downloadManager.downloadSongsSequentially(toQueue, com.arantec.castafiore.data.download.DownloadOrigin.ALBUM)
+            // UI inmediata: ocultar botón y mostrar progreso
+            binding.btnDownload.visibility = View.GONE
+            binding.groupDownloadProgress.visibility = View.VISIBLE
             snack("Descargando ${toQueue.size} canciones...")
         }
 
@@ -794,6 +804,7 @@ class AlbumDetailFragment : Fragment(), HasContentState {
             val removingFavorite = isFavorited
             lifecycleScope.launch {
                 try {
+                    musicRepository.isAlbumStarred(album.id).fold(onSuccess = { /* touch cache */ }, onFailure = { })
                     val result = if (removingFavorite) musicRepository.unstarAlbum(album.id) else musicRepository.starAlbum(album.id)
                     result.fold(
                         onSuccess = {
@@ -803,7 +814,7 @@ class AlbumDetailFragment : Fragment(), HasContentState {
 
                             // Si se eliminó de favoritos y el álbum está completamente descargado, borrar descargas sin confirmar
                             if (removingFavorite && isAlbumFullyDownloaded()) {
-                                val downloadedIds = albumSongs.filter { downloadManager.isSongDownloaded(it.id) }.map { it.id }
+                                val downloadedIds = albumSongs.filter { downloadManager.isSongDownloadedFast(it.id) }.map { it.id }
                                 if (downloadedIds.isNotEmpty()) {
                                     val removed = downloadManager.deleteMultipleSongs(downloadedIds)
                                     if (removed > 0) {
@@ -1110,6 +1121,8 @@ class AlbumDetailFragment : Fragment(), HasContentState {
                         }
                         // Verificar si todas las canciones del álbum están descargadas
                         maybeApplyAllDownloadedEffects(applyTintOnly = false, latestStates = states)
+                        // Actualizar progreso de grupo (álbum)
+                        updateAlbumGroupDownloadUi(states)
                     }
             }
         }
@@ -1206,5 +1219,65 @@ class AlbumDetailFragment : Fragment(), HasContentState {
                 }
             }
         }
+    }
+
+    // --- Group download UI helpers ---
+    private fun updateAlbumGroupDownloadUi(states: Map<String, com.arantec.castafiore.data.download.SongDownloadManager.DownloadState>) {
+        if (!isAdded || _binding == null) return
+        if (albumSongs.isEmpty()) {
+            binding.groupDownloadProgress.visibility = View.GONE
+            binding.btnDownload.visibility = View.VISIBLE
+            return
+        }
+        val ids = albumSongs.map { it.id }.toSet()
+        val active = states.values.any { it.songId in ids && (it.status == com.arantec.castafiore.data.download.SongDownloadManager.DownloadStatus.PENDING || it.status == com.arantec.castafiore.data.download.SongDownloadManager.DownloadStatus.DOWNLOADING) }
+
+        if (!active) {
+            binding.groupDownloadProgress.visibility = View.GONE
+            binding.btnDownload.visibility = View.VISIBLE
+            return
+        }
+
+        binding.btnDownload.visibility = View.GONE
+        binding.groupDownloadProgress.visibility = View.VISIBLE
+
+        // Global percent across all album songs
+        val totalCount = albumSongs.size.coerceAtLeast(1)
+        var units = 0.0
+        var hasDeterminate = false
+        albumSongs.forEach { song ->
+            val st = states[song.id]
+            when (st?.status) {
+                com.arantec.castafiore.data.download.SongDownloadManager.DownloadStatus.COMPLETED -> units += 1.0
+                com.arantec.castafiore.data.download.SongDownloadManager.DownloadStatus.DOWNLOADING -> {
+                    val p = st.progress.coerceIn(0, 100) / 100.0
+                    units += p
+                    if (st.progress > 0) hasDeterminate = true
+                }
+                com.arantec.castafiore.data.download.SongDownloadManager.DownloadStatus.PENDING -> { /* +0 */ }
+                else -> {
+                    // Count completed if already downloaded (from cache)
+                    if (downloadManager.isSongDownloadedFast(song.id)) units += 1.0
+                }
+            }
+        }
+        val percent = ((units / totalCount) * 100.0).toInt().coerceIn(0, 100)
+        if (hasDeterminate || percent > 0) {
+            binding.cpiGroupDownload.isIndeterminate = false
+            try { binding.cpiGroupDownload.setProgressCompat(percent, true) } catch (_: Exception) { binding.cpiGroupDownload.progress = percent }
+        } else {
+            binding.cpiGroupDownload.isIndeterminate = true
+        }
+    }
+
+    private fun cancelAlbumGroupDownloads() {
+        if (albumSongs.isEmpty()) return
+        val states = downloadManager.downloadStates.value
+        val ids = albumSongs.map { it.id }.toSet()
+        states.values.filter { it.songId in ids }
+            .filter { it.status == com.arantec.castafiore.data.download.SongDownloadManager.DownloadStatus.PENDING || it.status == com.arantec.castafiore.data.download.SongDownloadManager.DownloadStatus.DOWNLOADING }
+            .forEach { st -> downloadManager.cancelDownload(st.songId) }
+        binding.groupDownloadProgress.visibility = View.GONE
+        binding.btnDownload.visibility = View.VISIBLE
     }
 }

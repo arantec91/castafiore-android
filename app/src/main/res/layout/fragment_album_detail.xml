@@ -181,7 +181,7 @@
                     android:src="@drawable/ic_favorite_border"
                     app:tint="@color/text_secondary" />
 
-                <!-- Botón descargar álbum (nuevo) -->
+                <!-- Botón descargar álbum (inicio) -->
                 <ImageButton
                     android:id="@+id/btnDownload"
                     android:layout_width="32dp"
@@ -191,6 +191,41 @@
                     android:contentDescription="@string/download_to_device"
                     android:src="@drawable/ic_download"
                     app:tint="@color/text_secondary" />
+
+                <!-- Indicador de progreso global de descarga (sustituye al botón durante la descarga) -->
+                <FrameLayout
+                    android:id="@+id/groupDownloadProgress"
+                    android:layout_width="32dp"
+                    android:layout_height="32dp"
+                    android:layout_marginStart="16dp"
+                    android:visibility="gone">
+
+                    <com.google.android.material.progressindicator.CircularProgressIndicator
+                        android:id="@+id/cpiGroupDownload"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_gravity="center"
+                        app:indicatorSize="22dp"
+                        app:trackThickness="2dp"
+                        app:indicatorInset="0dp"
+                        app:indicatorDirectionCircular="clockwise"
+                        app:trackColor="@color/text_secondary"
+                        app:indicatorColor="@color/primary"
+                        app:showAnimationBehavior="inward"
+                        app:hideAnimationBehavior="outward"
+                        tools:indeterminate="true" />
+
+                    <ImageButton
+                        android:id="@+id/btnCancelGroupDownload"
+                        android:layout_width="8dp"
+                        android:layout_height="8dp"
+                        android:layout_gravity="center"
+                        android:padding="0dp"
+                        android:background="?attr/selectableItemBackgroundBorderless"
+                        android:contentDescription="@string/cancel"
+                        android:src="@drawable/ic_stop"
+                        app:tint="@color/white" />
+                </FrameLayout>
 
                 <!-- Botón más opciones -->
                 <ImageButton

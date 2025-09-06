@@ -108,7 +108,12 @@ class SongDownloadManager private constructor(private val context: Context) {
 
         updateDownloadState(song.id, DownloadState(song.id, song, DownloadStatus.PENDING, origin = origin))
 
-        val obs = Observer<WorkInfo> { info ->
+        val workId = req.id
+        val obs = Observer<WorkInfo?> { info: WorkInfo? ->
+            if (info == null) {
+                removeObserver(workId)
+                return@Observer
+            }
             when (info.state) {
                 WorkInfo.State.ENQUEUED -> updateStatus(song, DownloadStatus.PENDING)
                 WorkInfo.State.RUNNING -> {
@@ -135,23 +140,23 @@ class SongDownloadManager private constructor(private val context: Context) {
                         progress = 100,
                         filePath = uri
                     ) ?: DownloadState(song.id, song, DownloadStatus.COMPLETED, 100, filePath = uri))
-                    removeObserver(info.id)
+                    removeObserver(workId)
                 }
                 WorkInfo.State.FAILED -> {
                     updateDownloadState(song.id, current(song.id)?.copy(status = DownloadStatus.FAILED)
                         ?: DownloadState(song.id, song, DownloadStatus.FAILED))
-                    removeObserver(info.id)
+                    removeObserver(workId)
                 }
                 WorkInfo.State.CANCELLED -> {
                     updateDownloadState(song.id, current(song.id)?.copy(status = DownloadStatus.CANCELLED)
                         ?: DownloadState(song.id, song, DownloadStatus.CANCELLED))
-                    removeObserver(info.id)
+                    removeObserver(workId)
                 }
                 else -> {}
             }
         }
-        workObservers[req.id] = obs
-        workManager.getWorkInfoByIdLiveData(req.id).observeForever(obs)
+        workObservers[workId] = obs as Observer<WorkInfo>
+        workManager.getWorkInfoByIdLiveData(workId).observeForever(obs)
 
         workManager.enqueue(req)
     }
@@ -183,8 +188,13 @@ class SongDownloadManager private constructor(private val context: Context) {
                 .build().also { req ->
                     // Inicial: PENDING
                     updateDownloadState(song.id, DownloadState(song.id, song, DownloadStatus.PENDING, origin = origin))
+                    val workId = req.id
                     // Observar progreso/estado para esta request
-                    val obs = Observer<WorkInfo> { info ->
+                    val obs = Observer<WorkInfo?> { info: WorkInfo? ->
+                        if (info == null) {
+                            removeObserver(workId)
+                            return@Observer
+                        }
                         when (info.state) {
                             WorkInfo.State.ENQUEUED -> updateStatus(song, DownloadStatus.PENDING)
                             WorkInfo.State.RUNNING -> {
@@ -211,23 +221,23 @@ class SongDownloadManager private constructor(private val context: Context) {
                                     progress = 100,
                                     filePath = uri
                                 ) ?: DownloadState(song.id, song, DownloadStatus.COMPLETED, 100, filePath = uri))
-                                removeObserver(info.id)
+                                removeObserver(workId)
                             }
                             WorkInfo.State.FAILED -> {
                                 updateDownloadState(song.id, current(song.id)?.copy(status = DownloadStatus.FAILED)
                                     ?: DownloadState(song.id, song, DownloadStatus.FAILED))
-                                removeObserver(info.id)
+                                removeObserver(workId)
                             }
                             WorkInfo.State.CANCELLED -> {
                                 updateDownloadState(song.id, current(song.id)?.copy(status = DownloadStatus.CANCELLED)
                                     ?: DownloadState(song.id, song, DownloadStatus.CANCELLED))
-                                removeObserver(info.id)
+                                removeObserver(workId)
                             }
                             else -> {}
                         }
                     }
-                    workObservers[req.id] = obs
-                    workManager.getWorkInfoByIdLiveData(req.id).observeForever(obs)
+                    workObservers[workId] = obs as Observer<WorkInfo>
+                    workManager.getWorkInfoByIdLiveData(workId).observeForever(obs)
                 }
         }
         if (requests.isEmpty()) return

@@ -138,8 +138,8 @@
                 <!-- Favorite button: only visible for public playlists -->
                 <ImageButton
                     android:id="@+id/btnFavorite"
-                    android:layout_width="40dp"
-                    android:layout_height="40dp"
+                    android:layout_width="32dp"
+                    android:layout_height="32dp"
                     android:background="?attr/selectableItemBackgroundBorderless"
                     android:contentDescription="@string/add_to_favorites"
                     android:src="@drawable/ic_favorite_border"
@@ -152,8 +152,8 @@
                 <!-- New: Download button -->
                 <ImageButton
                     android:id="@+id/btnDownload"
-                    android:layout_width="40dp"
-                    android:layout_height="40dp"
+                    android:layout_width="32dp"
+                    android:layout_height="32dp"
                     android:layout_marginStart="8dp"
                     android:background="?attr/selectableItemBackgroundBorderless"
                     android:contentDescription="@string/download_to_device"
@@ -162,6 +162,44 @@
                     app:layout_constraintStart_toEndOf="@id/btnFavorite"
                     app:layout_constraintTop_toTopOf="parent"
                     app:layout_constraintBottom_toBottomOf="parent" />
+
+                <!-- Group download progress replaces button while active -->
+                <FrameLayout
+                    android:id="@+id/groupDownloadProgress"
+                    android:layout_width="32dp"
+                    android:layout_height="32dp"
+                    android:layout_marginStart="8dp"
+                    android:visibility="gone"
+                    app:layout_constraintStart_toEndOf="@+id/btnFavorite"
+                    app:layout_constraintTop_toTopOf="parent"
+                    app:layout_constraintBottom_toBottomOf="parent"
+                    >
+
+                    <com.google.android.material.progressindicator.CircularProgressIndicator
+                        android:id="@+id/cpiGroupDownload"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_gravity="center"
+                        app:indicatorSize="22dp"
+                        app:trackThickness="2dp"
+                        app:indicatorInset="0dp"
+                        app:indicatorDirectionCircular="clockwise"
+                        app:trackColor="@color/white"
+                        app:indicatorColor="@color/primary"
+                        app:showAnimationBehavior="inward"
+                        app:hideAnimationBehavior="outward"
+                        tools:indeterminate="true" />
+
+                    <ImageButton
+                        android:id="@+id/btnCancelGroupDownload"
+                        android:layout_width="8dp"
+                        android:layout_height="8dp"
+                        android:layout_gravity="center"
+                        android:background="?attr/selectableItemBackgroundBorderless"
+                        android:contentDescription="@string/cancel"
+                        android:src="@drawable/ic_stop"
+                        app:tint="@color/white" />
+                </FrameLayout>
 
                 <com.google.android.material.floatingactionbutton.FloatingActionButton
                     android:id="@+id/fabPlay"

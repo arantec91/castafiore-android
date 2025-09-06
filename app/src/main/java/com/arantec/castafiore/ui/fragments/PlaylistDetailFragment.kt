@@ -134,6 +134,9 @@ class PlaylistDetailFragment : Fragment(), HasContentState {
         setupMoreButton()
         setupDownloadObservers()
 
+        // Cancel group downloads (playlist)
+        binding.btnCancelGroupDownload.setOnClickListener { cancelPlaylistGroupDownloads() }
+
         // Defer binding to onStart so only visible fragment attaches listeners
         loadPlaylist()
 
@@ -163,6 +166,8 @@ class PlaylistDetailFragment : Fragment(), HasContentState {
         setupDownloadButton()
         // Apply initial tint if songs already downloaded
         updateDownloadButtonTint()
+        // Initialize group progress UI state
+        updatePlaylistGroupDownloadUi(downloadManager.downloadStates.value)
     }
 
     private fun setupToolbar() {
@@ -274,6 +279,9 @@ class PlaylistDetailFragment : Fragment(), HasContentState {
                             updateDownloadButtonTint()
                             if (nowAll) maybeAutoFavorite()
                         }
+
+                        // Update group progress UI for playlist
+                        updatePlaylistGroupDownloadUi(states)
 
                         // Rate-limit periodic UI refresh as a safety net
                         val now = SystemClock.elapsedRealtime()
@@ -872,9 +880,73 @@ class PlaylistDetailFragment : Fragment(), HasContentState {
                 return@setOnClickListener
             }
             downloadManager.downloadSongsSequentially(toQueue, com.arantec.castafiore.data.download.DownloadOrigin.PLAYLIST)
+            // Toggle to progress UI immediately
+            binding.btnDownload.visibility = View.GONE
+            binding.groupDownloadProgress.visibility = View.VISIBLE
             val msg = resources.getQuantityString(R.plurals.downloading_count, toQueue.size, toQueue.size)
             snack(msg)
         }
+    }
+
+    // --- Group download UI helpers ---
+    private fun updatePlaylistGroupDownloadUi(states: Map<String, com.arantec.castafiore.data.download.SongDownloadManager.DownloadState>) {
+        if (!isAdded || _binding == null) return
+        if (playlistSongs.isEmpty()) {
+            binding.groupDownloadProgress.visibility = View.GONE
+            binding.btnDownload.visibility = View.VISIBLE
+            return
+        }
+        val ids = playlistSongs.map { it.id }.toSet()
+        val hasActive = states.values.any { it.songId in ids && (it.status == com.arantec.castafiore.data.download.SongDownloadManager.DownloadStatus.PENDING || it.status == com.arantec.castafiore.data.download.SongDownloadManager.DownloadStatus.DOWNLOADING) }
+
+        if (!hasActive) {
+            binding.groupDownloadProgress.visibility = View.GONE
+            binding.btnDownload.visibility = View.VISIBLE
+            return
+        }
+
+        binding.btnDownload.visibility = View.GONE
+        binding.groupDownloadProgress.visibility = View.VISIBLE
+
+        // Aggregate progress across the whole playlist
+        val totalCount = playlistSongs.size.coerceAtLeast(1)
+        var units = 0.0
+        var hasDeterminate = false
+        playlistSongs.forEach { song ->
+            val st = states[song.id]
+            when (st?.status) {
+                com.arantec.castafiore.data.download.SongDownloadManager.DownloadStatus.COMPLETED -> units += 1.0
+                com.arantec.castafiore.data.download.SongDownloadManager.DownloadStatus.DOWNLOADING -> {
+                    val p = st.progress.coerceIn(0, 100) / 100.0
+                    units += p
+                    if (st.progress > 0) hasDeterminate = true
+                }
+                com.arantec.castafiore.data.download.SongDownloadManager.DownloadStatus.PENDING -> { /* +0 */ }
+                else -> {
+                    // Count as completed if already downloaded (fast cache)
+                    if (downloadManager.isSongDownloadedFast(song.id)) units += 1.0
+                }
+            }
+        }
+        val percent = ((units / totalCount) * 100.0).toInt().coerceIn(0, 100)
+        if (hasDeterminate || percent > 0) {
+            binding.cpiGroupDownload.isIndeterminate = false
+            try { binding.cpiGroupDownload.setProgressCompat(percent, true) } catch (_: Exception) { binding.cpiGroupDownload.progress = percent }
+        } else {
+            binding.cpiGroupDownload.isIndeterminate = true
+        }
+    }
+
+    private fun cancelPlaylistGroupDownloads() {
+        if (playlistSongs.isEmpty()) return
+        val states = downloadManager.downloadStates.value
+        val ids = playlistSongs.map { it.id }.toSet()
+        states.values
+            .filter { it.songId in ids }
+            .filter { it.status == com.arantec.castafiore.data.download.SongDownloadManager.DownloadStatus.PENDING || it.status == com.arantec.castafiore.data.download.SongDownloadManager.DownloadStatus.DOWNLOADING }
+            .forEach { st -> downloadManager.cancelDownload(st.songId) }
+        binding.groupDownloadProgress.visibility = View.GONE
+        binding.btnDownload.visibility = View.VISIBLE
     }
 
     private fun showDeletePlaylistDownloadsConfirm() {

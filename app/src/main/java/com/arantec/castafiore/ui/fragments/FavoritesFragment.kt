@@ -30,6 +30,7 @@ import java.util.Locale
 import kotlin.random.Random
 import com.arantec.castafiore.ui.helpers.HasContentState
 import android.content.res.ColorStateList
+import com.arantec.castafiore.data.download.SongDownloadManager
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.FlowPreview
 import com.arantec.castafiore.ui.helpers.LoadingHost
@@ -50,7 +51,7 @@ class FavoritesFragment : Fragment(), HasContentState {
     private var playbackStateListener: ((Boolean) -> Unit)? = null
     private var songChangeListener: ((Song?) -> Unit)? = null
 
-    private lateinit var downloadManager: com.arantec.castafiore.data.download.SongDownloadManager
+    private lateinit var downloadManager: SongDownloadManager
 
     private val serviceConnection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
@@ -89,7 +90,7 @@ class FavoritesFragment : Fragment(), HasContentState {
         super.onViewCreated(view, savedInstanceState)
 
         musicRepository = MusicRepository.getInstance(requireContext())
-        downloadManager = com.arantec.castafiore.data.download.SongDownloadManager.getInstance(requireContext())
+        downloadManager = SongDownloadManager.getInstance(requireContext())
 
         setupToolbar()
         setupRecyclerView()
@@ -97,8 +98,12 @@ class FavoritesFragment : Fragment(), HasContentState {
         setupFab()
         setupDownloadObservers()
         setupDownloadButton()
+        // New: group cancel button inside circular progress
+        setupGroupCancelButton()
         // Initial tint in case favorites are already downloaded
         updateDownloadButtonTint()
+        // Initialize group progress visibility based on current state
+        updateFavoritesGroupDownloadUi(downloadManager.downloadStates.value)
     }
 
     private fun setupToolbar() {
@@ -468,8 +473,8 @@ class FavoritesFragment : Fragment(), HasContentState {
         viewLifecycleOwner.lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 downloadManager.downloadStates
-                    .debounce(200L) // ensure trailing updates are delivered and avoid UI spam
-                    .collectLatest { states ->
+                    .debounce(200L)
+                    .collectLatest { states: Map<String, SongDownloadManager.DownloadState> ->
                         if (!isAdded || _binding == null) return@collectLatest
 
                         states.values.forEach { state ->
@@ -477,9 +482,125 @@ class FavoritesFragment : Fragment(), HasContentState {
                         }
                         // Update download button tint based on aggregate state
                         updateDownloadButtonTint()
+                        // Update group progress UI for favorites
+                        updateFavoritesGroupDownloadUi(states)
                     }
             }
         }
+    }
+
+    // Update group circular progress and toggle visibility like in AlbumDetail
+    private fun updateFavoritesGroupDownloadUi(states: Map<String, SongDownloadManager.DownloadState>) {
+        if (!isAdded || _binding == null) return
+        if (favoriteSongs.isEmpty()) {
+            binding.groupDownloadProgressFav.visibility = View.GONE
+            binding.btnDownload.visibility = View.VISIBLE
+            return
+        }
+        val ids = favoriteSongs.map { it.id }.toSet()
+        val active = states.values.any { it.songId in ids && (it.status == SongDownloadManager.DownloadStatus.PENDING || it.status == SongDownloadManager.DownloadStatus.DOWNLOADING) }
+
+        if (!active) {
+            binding.groupDownloadProgressFav.visibility = View.GONE
+            binding.btnDownload.visibility = View.VISIBLE
+            return
+        }
+
+        binding.btnDownload.visibility = View.GONE
+        binding.groupDownloadProgressFav.visibility = View.VISIBLE
+
+        val totalCount = favoriteSongs.size.coerceAtLeast(1)
+        var units = 0.0
+        var hasDeterminate = false
+        favoriteSongs.forEach { song ->
+            val st = states[song.id]
+            when (st?.status) {
+                SongDownloadManager.DownloadStatus.COMPLETED -> units += 1.0
+                SongDownloadManager.DownloadStatus.DOWNLOADING -> {
+                    val p = st.progress.coerceIn(0, 100) / 100.0
+                    units += p
+                    if (st.progress > 0) hasDeterminate = true
+                }
+                SongDownloadManager.DownloadStatus.PENDING -> { /* +0 */ }
+                else -> {
+                    if (downloadManager.isSongDownloadedFast(song.id)) units += 1.0
+                }
+            }
+        }
+        val percent = ((units / totalCount) * 100.0).toInt().coerceIn(0, 100)
+        if (hasDeterminate || percent > 0) {
+            binding.cpiGroupDownloadFav.isIndeterminate = false
+            try { binding.cpiGroupDownloadFav.setProgressCompat(percent, true) } catch (_: Exception) { binding.cpiGroupDownloadFav.progress = percent }
+        } else {
+            binding.cpiGroupDownloadFav.isIndeterminate = true
+        }
+    }
+
+    private fun setupGroupCancelButton() {
+        binding.btnCancelGroupDownloadFav.setOnClickListener {
+            if (favoriteSongs.isEmpty()) return@setOnClickListener
+            val ids = favoriteSongs.map { it.id }.toSet()
+            val states = downloadManager.downloadStates.value
+            states.values.filter { it.songId in ids }
+                .filter { it.status == SongDownloadManager.DownloadStatus.PENDING || it.status == SongDownloadManager.DownloadStatus.DOWNLOADING }
+                .forEach { st -> downloadManager.cancelDownload(st.songId) }
+            binding.groupDownloadProgressFav.visibility = View.GONE
+            binding.btnDownload.visibility = View.VISIBLE
+        }
+    }
+
+    private fun setupDownloadButton() {
+        binding.btnDownload.setOnClickListener {
+            if (favoriteSongs.isEmpty()) {
+                snack("No hay canciones para descargar")
+                return@setOnClickListener
+            }
+            // Si todas están descargadas, ofrecer eliminar
+            if (isFavoritesFullyDownloaded()) {
+                showDeleteFavoritesDownloadsConfirm()
+                return@setOnClickListener
+            }
+            // Ordenar de forma estable por artista/álbum/track, luego título
+            val ordered = favoriteSongs.sortedWith(compareBy<Song>({ it.artist.lowercase(Locale.getDefault()) }, { it.album.lowercase(Locale.getDefault()) }, { it.track ?: Int.MAX_VALUE }, { it.title.lowercase(Locale.getDefault()) }))
+            val toQueue = ordered.filter { !downloadManager.isSongDownloadedFast(it.id) }
+            if (toQueue.isEmpty()) {
+                // Nada por descargar (posible estado de carrera): ofrecer eliminar
+                showDeleteFavoritesDownloadsConfirm()
+                return@setOnClickListener
+            }
+            downloadManager.downloadSongsSequentially(toQueue, com.arantec.castafiore.data.download.DownloadOrigin.PLAYLIST)
+            // Provide immediate visual feedback that downloads are in-progress
+            setDownloadButtonTintSecondary()
+            binding.btnDownload.visibility = View.GONE
+            binding.groupDownloadProgressFav.visibility = View.VISIBLE
+            snack("Descargando: ${toQueue.size} canciones")
+        }
+    }
+
+    private fun showDeleteFavoritesDownloadsConfirm() {
+        val downloadedIds = favoriteSongs.filter { downloadManager.isSongDownloadedFast(it.id) }.map { it.id }
+        if (downloadedIds.isEmpty()) {
+            snack("No hay descargas que eliminar")
+            updateDownloadButtonTint()
+            return
+        }
+        val count = downloadedIds.size
+        val dialog = androidx.appcompat.app.AlertDialog.Builder(requireContext())
+            .setTitle("Eliminar descargas")
+            .setMessage("¿Eliminar las descargas de $count canciones favoritas?")
+            .setNegativeButton("Cancelar", null)
+            .setPositiveButton("Eliminar") { d, _ ->
+                val removed = downloadManager.deleteMultipleSongs(downloadedIds)
+                if (removed > 0) {
+                    setDownloadButtonTintSecondary()
+                    snack("Se eliminaron ${removed} descargas")
+                } else {
+                    snack("No se eliminaron descargas")
+                }
+                d.dismiss()
+            }
+            .create()
+        dialog.show()
     }
 
     // --- Download button tint helpers ---
@@ -515,58 +636,6 @@ class FavoritesFragment : Fragment(), HasContentState {
                 if (isFavoritesFullyDownloaded()) setDownloadButtonTintPrimary() else setDownloadButtonTintSecondary()
             }
         }
-    }
-
-    private fun setupDownloadButton() {
-        binding.btnDownload.setOnClickListener {
-            if (favoriteSongs.isEmpty()) {
-                snack("No hay canciones para descargar")
-                return@setOnClickListener
-            }
-            // Si todas están descargadas, ofrecer eliminar
-            if (isFavoritesFullyDownloaded()) {
-                showDeleteFavoritesDownloadsConfirm()
-                return@setOnClickListener
-            }
-            // Ordenar de forma estable por artista/álbum/track, luego título
-            val ordered = favoriteSongs.sortedWith(compareBy<Song>({ it.artist.lowercase(Locale.getDefault()) }, { it.album.lowercase(Locale.getDefault()) }, { it.track ?: Int.MAX_VALUE }, { it.title.lowercase(Locale.getDefault()) }))
-            val toQueue = ordered.filter { !downloadManager.isSongDownloadedFast(it.id) }
-            if (toQueue.isEmpty()) {
-                // Nada por descargar (posible estado de carrera): ofrecer eliminar
-                showDeleteFavoritesDownloadsConfirm()
-                return@setOnClickListener
-            }
-            downloadManager.downloadSongsSequentially(toQueue, com.arantec.castafiore.data.download.DownloadOrigin.PLAYLIST)
-            // Provide immediate visual feedback that downloads are in-progress
-            setDownloadButtonTintSecondary()
-            snack("Descargando: ${toQueue.size} canciones")
-        }
-    }
-
-    private fun showDeleteFavoritesDownloadsConfirm() {
-        val downloadedIds = favoriteSongs.filter { downloadManager.isSongDownloadedFast(it.id) }.map { it.id }
-        if (downloadedIds.isEmpty()) {
-            snack("No hay descargas que eliminar")
-            updateDownloadButtonTint()
-            return
-        }
-        val count = downloadedIds.size
-        val dialog = androidx.appcompat.app.AlertDialog.Builder(requireContext())
-            .setTitle("Eliminar descargas")
-            .setMessage("¿Eliminar las descargas de $count canciones favoritas?")
-            .setNegativeButton("Cancelar", null)
-            .setPositiveButton("Eliminar") { d, _ ->
-                val removed = downloadManager.deleteMultipleSongs(downloadedIds)
-                if (removed > 0) {
-                    setDownloadButtonTintSecondary()
-                    snack("Se eliminaron ${removed} descargas")
-                } else {
-                    snack("No se eliminaron descargas")
-                }
-                d.dismiss()
-            }
-            .create()
-        dialog.show()
     }
 
     override fun onStart() {
