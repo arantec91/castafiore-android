@@ -654,7 +654,7 @@ class MusicService : Service() {
             getString(R.string.next),
             pendingService(ACTION_NEXT, /*requestCode*/ 102)
         )
-        val favoriteIcon = if (isCurrentSongFavorite) R.drawable.ic_favorite_36 else R.drawable.ic_favorite_border_36
+        val favoriteIcon = if (isCurrentSongFavorite) R.drawable.ic_favorite else R.drawable.ic_favorite_border
         val favoriteTitle = if (isCurrentSongFavorite) getString(R.string.remove_favorite) else getString(R.string.add_to_favorites)
         val favoriteAction = NotificationCompat.Action(
             favoriteIcon,

@@ -308,7 +308,7 @@ class PlaylistDetailFragment : Fragment(), HasContentState {
             val infoDeferred = async(Dispatchers.IO) { musicRepository.getPlaylistInfo(id) }
             val songsDeferred = async(Dispatchers.IO) { musicRepository.getPlaylistSongs(id) }
 
-            // Apply playlist info as soon as it’s available
+            // Apply playlist info as soon as it's available
             infoDeferred.await().onSuccess { info ->
                 playlistInfo = info
                 binding.tvTitle.text = info.name
@@ -318,7 +318,7 @@ class PlaylistDetailFragment : Fragment(), HasContentState {
                 // Update favorites button for public playlists
                 updateFavoriteButtonVisibilityAndState()
 
-                // Cover art - Cargar tanto para mostrar como para extraer Palette
+                // Cover art loading - defer heavy Palette processing
                 val (username, token, salt) = musicRepository.getAuthParams()
                 val coverUrl = info.getCoverArtUrl(
                     musicRepository.serverUrl ?: "",
@@ -328,76 +328,101 @@ class PlaylistDetailFragment : Fragment(), HasContentState {
                     300
                 )
 
-                // Cargar imagen para mostrar
+                // Load image for display immediately
                 ImageLoader.loadAlbumCover(requireContext(), binding.ivHeaderCover, coverUrl)
 
-                // Cargar como Bitmap para extraer Palette y aplicar gradiente dinámico
-                if (!coverUrl.isNullOrEmpty()) {
-                    Glide.with(this@PlaylistDetailFragment)
-                        .asBitmap()
-                        .load(coverUrl)
-                        .into(object : CustomTarget<Bitmap>() {
-                            override fun onResourceReady(resource: Bitmap, transition: Transition<in Bitmap>?) {
-                                if (!isAdded || _binding == null) return
-                                applyDynamicAppBarGradientFromBitmap(resource)
-                            }
+                // Set static background immediately, then load dynamic one in background
+                setStaticBackground()
 
-                            override fun onLoadCleared(placeholder: Drawable?) { /* no-op */ }
-                            override fun onLoadFailed(errorDrawable: Drawable?) {
-                                // Mantener gradiente estático si la imagen falla
-                                setStaticBackground()
-                            }
-                        })
-                } else {
-                    // No hay imagen, usar gradiente estático
-                    setStaticBackground()
+                // Load dynamic gradient asynchronously without blocking UI
+                if (!coverUrl.isNullOrEmpty()) {
+                    launch(Dispatchers.IO) {
+                        try {
+                            Glide.with(this@PlaylistDetailFragment)
+                                .asBitmap()
+                                .load(coverUrl)
+                                .into(object : CustomTarget<Bitmap>() {
+                                    override fun onResourceReady(resource: Bitmap, transition: Transition<in Bitmap>?) {
+                                        if (!isAdded || _binding == null) return
+                                        launch(Dispatchers.Main) {
+                                            applyDynamicAppBarGradientFromBitmap(resource)
+                                        }
+                                    }
+                                    override fun onLoadCleared(placeholder: Drawable?) { /* no-op */ }
+                                    override fun onLoadFailed(errorDrawable: Drawable?) { /* Already using static background */ }
+                                })
+                        } catch (_: Exception) {
+                            // Ignore - static background already set
+                        }
+                    }
                 }
             }
 
-            // Then apply songs result
+            // Process songs result
             songsDeferred.await().fold(
                 onSuccess = { songs ->
+                    // Batch UI updates to reduce redraws
                     playlistSongs.clear()
                     playlistSongs.addAll(songs)
+
+                    // Update adapter with new data
                     songAdapter.updateSongs(playlistSongs)
-                    // Ensure adapter is attached and list refreshes visibly
-                    if (binding.rvSongs.adapter !== songAdapter) {
-                        binding.rvSongs.adapter = songAdapter
-                    }
-                    binding.rvSongs.visibility = View.VISIBLE
-                    // Force a layout pass so the NestedScrollView recalculates height after async diff commit
-                    binding.rvSongs.post { binding.rvSongs.requestLayout() }
 
-                    // Info
-                    binding.tvInfo.text = buildInfoText(playlistSongs)
-
+                    // Batch visibility and layout updates
                     if (playlistSongs.isEmpty()) {
                         binding.emptyLayout.visibility = View.VISIBLE
                         binding.rvSongs.visibility = View.GONE
                     } else {
                         binding.rvSongs.visibility = View.VISIBLE
                         binding.emptyLayout.visibility = View.GONE
+
+                        // Ensure adapter is attached
+                        if (binding.rvSongs.adapter !== songAdapter) {
+                            binding.rvSongs.adapter = songAdapter
+                        }
                     }
 
+                    // Update info text
+                    binding.tvInfo.text = buildInfoText(playlistSongs)
+
+                    // Update UI state
                     isPlaying = musicService?.isPlaying() == true && isPlaylistQueuePlaying()
                     updatePlayButton()
-                    updateDownloadButtonTint()
-                    // Initialize transition baseline
-                    lastAllDownloaded = isPlaylistFullyDownloaded()
-                    // In case all were already downloaded when entering, attempt auto-favorite
-                    maybeAutoFavorite()
 
-                    hideLoadingOverlayAfterNextDraw()
+                    // Hide loading immediately after UI is set
+                    hideLoadingOverlay()
+
+                    // Defer expensive operations until after UI is shown
+                    launch(Dispatchers.IO) {
+                        // Cache download states for performance
+                        val downloadStates = playlistSongs.associateWith { song ->
+                            downloadManager.isSongDownloadedFast(song.id)
+                        }
+
+                        launch(Dispatchers.Main) {
+                            // Update download-related UI with cached data
+                            updateDownloadButtonTint()
+                            lastAllDownloaded = downloadStates.values.all { it }
+                            maybeAutoFavorite()
+
+                            // Initialize group download UI
+                            updatePlaylistGroupDownloadUi(downloadManager.downloadStates.value)
+                        }
+                    }
                 },
                 onFailure = {
                     binding.emptyLayout.visibility = View.VISIBLE
                     binding.tvEmpty.text = getString(R.string.error_loading_playlist)
-                    updateDownloadButtonTint()
-
-                    hideLoadingOverlayAfterNextDraw()
+                    hideLoadingOverlay()
                 }
             )
         }
+    }
+
+    private fun hideLoadingOverlay() {
+        if (!isAdded || _binding == null) return
+        binding.loadingOverlay.visibility = View.GONE
+        binding.progressBar.visibility = View.GONE
     }
 
     private fun hideLoadingOverlayAfterNextDraw() {

@@ -34,6 +34,10 @@ class AlbumHorizontalAdapter(
         return getItem(position).id.hashCode().toLong()
     }
 
+    override fun getItemViewType(position: Int): Int {
+        return VIEW_TYPE_ALBUM
+    }
+
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): AlbumViewHolder {
         val binding = ItemAlbumHorizontalBinding.inflate(
             LayoutInflater.from(parent.context), parent, false
@@ -42,7 +46,10 @@ class AlbumHorizontalAdapter(
     }
 
     override fun onBindViewHolder(holder: AlbumViewHolder, position: Int) {
-        holder.bind(getItem(position))
+        // Add type safety check to prevent ClassCastException
+        if (holder is AlbumViewHolder && position < itemCount) {
+            holder.bind(getItem(position))
+        }
     }
 
     inner class AlbumViewHolder(
@@ -98,6 +105,8 @@ class AlbumHorizontalAdapter(
     }
 
     companion object {
+        private const val VIEW_TYPE_ALBUM = 1002 // Unique view type for album items
+
         private val DIFF = object : DiffUtil.ItemCallback<Album>() {
             override fun areItemsTheSame(oldItem: Album, newItem: Album): Boolean =
                 oldItem.id == newItem.id

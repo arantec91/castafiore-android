@@ -16,9 +16,17 @@ class ArtistAlbumHorizontalAdapter(
 
     private var albums = listOf<Album>()
 
+    companion object {
+        private const val VIEW_TYPE_ARTIST_ALBUM = 1003 // Unique view type for artist album items
+    }
+
     fun updateAlbums(newAlbums: List<Album>) {
         albums = newAlbums
         notifyDataSetChanged()
+    }
+
+    override fun getItemViewType(position: Int): Int {
+        return VIEW_TYPE_ARTIST_ALBUM
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ArtistAlbumViewHolder {
@@ -29,7 +37,10 @@ class ArtistAlbumHorizontalAdapter(
     }
 
     override fun onBindViewHolder(holder: ArtistAlbumViewHolder, position: Int) {
-        holder.bind(albums[position])
+        // Add type safety check to prevent ClassCastException
+        if (holder is ArtistAlbumViewHolder && position < albums.size) {
+            holder.bind(albums[position])
+        }
     }
 
     override fun getItemCount(): Int = albums.size
