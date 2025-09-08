@@ -214,4 +214,5 @@
         <item quantity="other">Descargando %d canciones…</item>
     </plurals>
     <string name="remove_favorite">Quitar de favoritos</string>
+    <string name="retry">Reintentar</string>
 </resources>

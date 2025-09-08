@@ -130,6 +130,9 @@ dependencies {
     // Added: Kotlin Coroutines for Android (provides Dispatchers.Main, launch, etc.)
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
 
+    // Shimmer for skeleton loading
+    implementation("com.facebook.shimmer:shimmer:0.5.0")
+
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)

@@ -86,6 +86,9 @@ class PlaylistDetailFragment : Fragment(), HasContentState {
     // Track whether we've successfully applied a dynamic gradient to avoid redundant work
     private var gradientApplied: Boolean = false
 
+    // Track if loading was triggered by pull-to-refresh to adjust UX
+    private var isManualRefresh: Boolean = false
+
     private val serviceConnection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
             val binder = service as MusicService.MusicBinder
@@ -137,12 +140,13 @@ class PlaylistDetailFragment : Fragment(), HasContentState {
         setupFab()
         setupMoreButton()
         setupDownloadObservers()
+        setupRefreshAndRetry()
 
         // Cancel group downloads (playlist)
         binding.btnCancelGroupDownload.setOnClickListener { cancelPlaylistGroupDownloads() }
 
-        // Defer binding to onStart so only visible fragment attaches listeners
-        loadPlaylist()
+        // Initial load
+        loadPlaylist(isRefresh = false)
 
         // Favorite button toggling
         binding.btnFavorite.setOnClickListener {
@@ -249,6 +253,26 @@ class PlaylistDetailFragment : Fragment(), HasContentState {
         }
     }
 
+    private fun setupRefreshAndRetry() {
+        // Swipe-to-refresh colors and listener
+        binding.swipeRefreshLayout.setColorSchemeResources(
+            R.color.primary,
+            R.color.primary_dark,
+            R.color.secondary
+        )
+        binding.swipeRefreshLayout.setOnRefreshListener {
+            isManualRefresh = true
+            // Do not hide existing content; just refresh data
+            loadPlaylist(isRefresh = true)
+        }
+        // Retry button in error state
+        binding.btnRetry.setOnClickListener {
+            // Show shimmer for a clean retry
+            isManualRefresh = false
+            loadPlaylist(isRefresh = false)
+        }
+    }
+
     @OptIn(FlowPreview::class)
     private fun setupDownloadObservers() {
         viewLifecycleOwner.lifecycleScope.launch {
@@ -299,11 +323,29 @@ class PlaylistDetailFragment : Fragment(), HasContentState {
         }
     }
 
-    private fun loadPlaylist() {
-        // Always show full-screen loading overlay while loading
-        binding.loadingOverlay.visibility = View.VISIBLE
-        binding.progressBar.visibility = View.VISIBLE
-        binding.emptyLayout.visibility = View.GONE
+    private fun showShimmer(show: Boolean) {
+        if (!isAdded || _binding == null) return
+        val shimmer = binding.shimmerSongs
+        if (show) {
+            shimmer.visibility = View.VISIBLE
+            try { shimmer.startShimmer() } catch (_: Exception) {}
+        } else {
+            try { shimmer.stopShimmer() } catch (_: Exception) {}
+            shimmer.visibility = View.GONE
+        }
+    }
+
+    private fun loadPlaylist(isRefresh: Boolean = false) {
+        // Loading UX
+        if (!isRefresh) {
+            // Use shimmer instead of full-screen overlay for a lighter feel
+            showShimmer(true)
+            binding.emptyLayout.visibility = View.GONE
+            binding.btnRetry.visibility = View.GONE
+            binding.rvSongs.visibility = View.GONE
+            binding.loadingOverlay.visibility = View.GONE
+            binding.progressBar.visibility = View.GONE
+        }
 
         viewLifecycleOwner.lifecycleScope.launch {
             val id = playlistId ?: return@launch
@@ -378,10 +420,13 @@ class PlaylistDetailFragment : Fragment(), HasContentState {
                     // Batch visibility and layout updates
                     if (playlistSongs.isEmpty()) {
                         binding.emptyLayout.visibility = View.VISIBLE
+                        binding.tvEmpty.text = getString(R.string.no_songs)
+                        binding.btnRetry.visibility = View.GONE
                         binding.rvSongs.visibility = View.GONE
                     } else {
                         binding.rvSongs.visibility = View.VISIBLE
                         binding.emptyLayout.visibility = View.GONE
+                        binding.btnRetry.visibility = View.GONE
 
                         // Ensure adapter is attached
                         if (binding.rvSongs.adapter !== songAdapter) {
@@ -396,7 +441,12 @@ class PlaylistDetailFragment : Fragment(), HasContentState {
                     isPlaying = musicService?.isPlaying() == true && isPlaylistQueuePlaying()
                     updatePlayButton()
 
-                    // Hide loading immediately after UI is set
+                    // Hide loading
+                    showShimmer(false)
+                    if (isRefresh || isManualRefresh) {
+                        binding.swipeRefreshLayout.isRefreshing = false
+                        isManualRefresh = false
+                    }
                     hideLoadingOverlay()
 
                     // Defer expensive operations until after UI is shown
@@ -420,6 +470,13 @@ class PlaylistDetailFragment : Fragment(), HasContentState {
                 onFailure = {
                     binding.emptyLayout.visibility = View.VISIBLE
                     binding.tvEmpty.text = getString(R.string.error_loading_playlist)
+                    binding.btnRetry.visibility = View.VISIBLE
+                    binding.rvSongs.visibility = View.GONE
+                    showShimmer(false)
+                    if (isRefresh || isManualRefresh) {
+                        binding.swipeRefreshLayout.isRefreshing = false
+                        isManualRefresh = false
+                    }
                     hideLoadingOverlay()
                 }
             )
