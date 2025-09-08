@@ -52,6 +52,9 @@ class DownloadsFragment : Fragment(), HasContentState {
     // Throttle UI updates for download states
     private var lastDownloadUiUpdateMs: Long = 0L
 
+    // Track if loading was triggered by pull-to-refresh
+    private var isManualRefresh: Boolean = false
+
     private val serviceConnection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
             val binder = service as? MusicService.MusicBinder ?: return
@@ -87,9 +90,11 @@ class DownloadsFragment : Fragment(), HasContentState {
 
         setupToolbar()
         setupRecyclerView()
-        loadDownloads()
         setupFab()
         setupDownloadObservers()
+        setupRefreshAndRetry()
+        // Initial load with shimmer
+        loadDownloads(isRefresh = false)
     }
 
     private fun setupToolbar() {
@@ -176,11 +181,43 @@ class DownloadsFragment : Fragment(), HasContentState {
         }
     }
 
-    private fun loadDownloads() {
-        // Always show loading overlay at the start of a load
-        binding.loadingOverlay.visibility = View.VISIBLE
-        binding.progressBar.visibility = View.VISIBLE
-        binding.emptyLayout.visibility = View.GONE
+    private fun setupRefreshAndRetry() {
+        binding.swipeRefreshLayout.setColorSchemeResources(
+            R.color.primary,
+            R.color.primary_dark,
+            R.color.secondary
+        )
+        binding.swipeRefreshLayout.setOnRefreshListener {
+            isManualRefresh = true
+            loadDownloads(isRefresh = true)
+        }
+        binding.btnRetry.setOnClickListener {
+            isManualRefresh = false
+            loadDownloads(isRefresh = false)
+        }
+    }
+
+    private fun showShimmer(show: Boolean) {
+        if (!isAdded || _binding == null) return
+        val shimmer = binding.shimmerSongs
+        if (show) {
+            shimmer.visibility = View.VISIBLE
+            try { shimmer.startShimmer() } catch (_: Exception) {}
+        } else {
+            try { shimmer.stopShimmer() } catch (_: Exception) {}
+            shimmer.visibility = View.GONE
+        }
+    }
+
+    private fun loadDownloads(isRefresh: Boolean = false) {
+        // Loading UX
+        if (!isRefresh) {
+            showShimmer(true)
+            binding.emptyLayout.visibility = View.GONE
+            binding.rvSongs.visibility = View.GONE
+            binding.loadingOverlay.visibility = View.GONE
+            binding.progressBar.visibility = View.GONE
+        }
 
         viewLifecycleOwner.lifecycleScope.launch {
             // Offload I/O to a background dispatcher to avoid blocking the main thread
@@ -205,11 +242,19 @@ class DownloadsFragment : Fragment(), HasContentState {
             isPlaying = musicService?.isPlaying() == true && isDownloadsQueuePlaying()
             updatePlayButton()
 
-            hideLoadingOverlayAfterNextDraw()
+            // Stop loading visuals
+            showShimmer(false)
+            if (binding.swipeRefreshLayout.isRefreshing || isManualRefresh) {
+                binding.swipeRefreshLayout.isRefreshing = false
+                isManualRefresh = false
+            }
+            binding.loadingOverlay.visibility = View.GONE
+            binding.progressBar.visibility = View.GONE
         }
     }
 
     private fun hideLoadingOverlayAfterNextDraw() {
+        // Retained for compatibility; shimmer now handles loading UX
         if (!isAdded || _binding == null) return
         val root = binding.root
         val listener = object : ViewTreeObserver.OnPreDrawListener {
@@ -332,10 +377,12 @@ class DownloadsFragment : Fragment(), HasContentState {
         binding.tvInfo.text = buildInfoText(downloadedSongs)
         if (downloadedSongs.isEmpty()) {
             binding.emptyLayout.visibility = View.VISIBLE
+            binding.btnRetry.visibility = View.GONE
             binding.rvSongs.visibility = View.GONE
         } else {
             binding.rvSongs.visibility = View.VISIBLE
             binding.emptyLayout.visibility = View.GONE
+            binding.btnRetry.visibility = View.GONE
         }
     }
 
@@ -466,8 +513,12 @@ class DownloadsFragment : Fragment(), HasContentState {
         StatusBarUtils.setStatusBarColor(this)
         // Ensure any global overlay is hidden on this screen
         (activity as? LoadingHost)?.showGlobalLoading(false)
-        // refresh downloads in case list changed
-        loadDownloads()
+        // Refresh downloads without disrupting visible content
+        if (!binding.swipeRefreshLayout.isRefreshing) {
+            binding.swipeRefreshLayout.isRefreshing = true
+        }
+        isManualRefresh = true
+        loadDownloads(isRefresh = true)
     }
 
     override fun onDestroyView() {

@@ -53,6 +53,9 @@ class FavoritesFragment : Fragment(), HasContentState {
 
     private lateinit var downloadManager: SongDownloadManager
 
+    // Track if loading was triggered by pull-to-refresh
+    private var isManualRefresh: Boolean = false
+
     private val serviceConnection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
             val binder = service as? MusicService.MusicBinder ?: return
@@ -94,14 +97,15 @@ class FavoritesFragment : Fragment(), HasContentState {
 
         setupToolbar()
         setupRecyclerView()
-        loadFavorites()
         setupFab()
         setupDownloadObservers()
         setupDownloadButton()
-        // New: group cancel button inside circular progress
         setupGroupCancelButton()
+        setupRefreshAndRetry()
         // Initial tint in case favorites are already downloaded
         updateDownloadButtonTint()
+        // Initial load
+        loadFavorites(isRefresh = false)
         // Initialize group progress visibility based on current state
         updateFavoritesGroupDownloadUi(downloadManager.downloadStates.value)
     }
@@ -178,18 +182,47 @@ class FavoritesFragment : Fragment(), HasContentState {
         }
     }
 
-    private fun loadFavorites() {
-        // Show local loading only if there is already content on screen (refresh behavior)
-        if (hasContent()) {
-            binding.loadingOverlay.visibility = View.VISIBLE
-            binding.progressBar.visibility = View.VISIBLE
+    private fun setupRefreshAndRetry() {
+        binding.swipeRefreshLayout.setColorSchemeResources(
+            R.color.primary,
+            R.color.primary_dark,
+            R.color.secondary
+        )
+        binding.swipeRefreshLayout.setOnRefreshListener {
+            isManualRefresh = true
+            loadFavorites(isRefresh = true)
+        }
+        binding.btnRetry.setOnClickListener {
+            isManualRefresh = false
+            loadFavorites(isRefresh = false)
+        }
+    }
+
+    private fun showShimmer(show: Boolean) {
+        if (!isAdded || _binding == null) return
+        val shimmer = binding.shimmerSongs
+        if (show) {
+            shimmer.visibility = View.VISIBLE
+            try { shimmer.startShimmer() } catch (_: Exception) {}
         } else {
-            // Keep content as-is for initial loading; global overlay will handle blocking UI
+            try { shimmer.stopShimmer() } catch (_: Exception) {}
+            shimmer.visibility = View.GONE
+        }
+    }
+
+    private fun loadFavorites(isRefresh: Boolean = false) {
+        // Loading UX
+        if (!isRefresh) {
+            // Use shimmer for initial/retry load
+            showShimmer(true)
+            binding.emptyLayout.visibility = View.GONE
+            binding.rvSongs.visibility = View.GONE
             binding.loadingOverlay.visibility = View.GONE
             binding.progressBar.visibility = View.GONE
+        } else {
+            // For manual refresh, rely on SwipeRefreshLayout spinner
+            // Keep current content visible
         }
-        binding.emptyLayout.visibility = View.GONE
-        // Do not pre-hide rvSongs; will be toggled after data loads
 
         viewLifecycleOwner.lifecycleScope.launch {
             musicRepository.getStarredSongs().fold(
@@ -205,23 +238,45 @@ class FavoritesFragment : Fragment(), HasContentState {
 
                     if (favoriteSongs.isEmpty()) {
                         binding.emptyLayout.visibility = View.VISIBLE
+                        binding.tvEmpty.text = getString(R.string.empty_favorites)
+                        binding.btnRetry.visibility = View.GONE
                         binding.rvSongs.visibility = View.GONE
                     } else {
                         binding.rvSongs.visibility = View.VISIBLE
                         binding.emptyLayout.visibility = View.GONE
+                        binding.btnRetry.visibility = View.GONE
                     }
 
                     isPlaying = musicService?.isPlaying() == true && isFavoritesQueuePlaying()
                     updatePlayButton()
                     updateDownloadButtonTint()
 
-                    hideLoadingOverlayAfterNextDraw()
+                    // Stop loading visuals
+                    showShimmer(false)
+                    if (binding.swipeRefreshLayout.isRefreshing || isManualRefresh) {
+                        binding.swipeRefreshLayout.isRefreshing = false
+                        isManualRefresh = false
+                    }
+                    // Ensure overlay is hidden
+                    binding.loadingOverlay.visibility = View.GONE
+                    binding.progressBar.visibility = View.GONE
                 },
                 onFailure = {
                     if (!isAdded || _binding == null) return@fold
                     binding.emptyLayout.visibility = View.VISIBLE
                     binding.tvEmpty.text = getString(R.string.error_loading_favorites)
-                    hideLoadingOverlayAfterNextDraw()
+                    binding.btnRetry.visibility = View.VISIBLE
+                    binding.rvSongs.visibility = View.GONE
+
+                    // Stop loading visuals
+                    showShimmer(false)
+                    if (binding.swipeRefreshLayout.isRefreshing || isManualRefresh) {
+                        binding.swipeRefreshLayout.isRefreshing = false
+                        isManualRefresh = false
+                    }
+                    binding.loadingOverlay.visibility = View.GONE
+                    binding.progressBar.visibility = View.GONE
+
                     updateDownloadButtonTint()
                 }
             )
@@ -229,6 +284,7 @@ class FavoritesFragment : Fragment(), HasContentState {
     }
 
     private fun hideLoadingOverlayAfterNextDraw() {
+        // Unused with shimmer-based loading; keep for compatibility if needed
         if (!isAdded || _binding == null) return
         val root = binding.root
         val listener = object : ViewTreeObserver.OnPreDrawListener {

@@ -66,164 +66,306 @@
 
     </com.google.android.material.appbar.AppBarLayout>
 
-    <androidx.core.widget.NestedScrollView
+    <!-- Wrap scrollable content with SwipeRefreshLayout -->
+    <androidx.swiperefreshlayout.widget.SwipeRefreshLayout
+        android:id="@+id/swipeRefreshLayout"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:background="@android:color/transparent"
         app:layout_behavior="@string/appbar_scrolling_view_behavior">
 
-        <LinearLayout
+        <androidx.core.widget.NestedScrollView
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:paddingBottom="100dp">
+            android:layout_height="match_parent"
+            android:background="@android:color/transparent">
 
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
-                android:paddingStart="16dp"
-                android:paddingEnd="16dp"
-                android:paddingTop="16dp"
-                android:paddingBottom="8dp">
-
-                <TextView
-                    android:id="@+id/tvTitle"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginBottom="8dp"
-                    android:fontFamily="sans-serif-black"
-                    android:textColor="@color/text_primary"
-                    android:textSize="28sp"
-                    android:textStyle="bold"
-                    tools:text="Canciones favoritas" />
+                android:paddingBottom="100dp">
 
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:orientation="horizontal"
-                    android:gravity="center_vertical">
+                    android:orientation="vertical"
+                    android:paddingStart="16dp"
+                    android:paddingEnd="16dp"
+                    android:paddingTop="16dp"
+                    android:paddingBottom="8dp">
 
                     <TextView
-                        android:id="@+id/tvInfo"
+                        android:id="@+id/tvTitle"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:textColor="#B3B3B3"
-                        android:textSize="13sp"
-                        android:fontFamily="sans-serif"
-                        tools:text="25 canciones • 1 h 35 min" />
+                        android:layout_marginBottom="8dp"
+                        android:fontFamily="sans-serif-black"
+                        android:textColor="@color/text_primary"
+                        android:textSize="28sp"
+                        android:textStyle="bold"
+                        tools:text="Canciones favoritas" />
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:gravity="center_vertical">
+
+                        <TextView
+                            android:id="@+id/tvInfo"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:textColor="#B3B3B3"
+                            android:textSize="13sp"
+                            android:fontFamily="sans-serif"
+                            tools:text="25 canciones • 1 h 35 min" />
+                    </LinearLayout>
                 </LinearLayout>
-            </LinearLayout>
 
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginHorizontal="16dp"
-                android:layout_marginBottom="24dp"
-                android:gravity="center_vertical"
-                android:orientation="horizontal">
-
-                <ImageButton
-                    android:id="@+id/btnDownload"
-                    android:layout_width="32dp"
-                    android:layout_height="32dp"
-                    android:background="?attr/selectableItemBackgroundBorderless"
-                    android:contentDescription="@string/download_to_device"
-                    android:src="@drawable/ic_download"
-                    app:tint="@color/text_secondary" />
-
-                <FrameLayout
-                    android:id="@+id/groupDownloadProgressFav"
-                    android:layout_width="32dp"
-                    android:layout_height="32dp"
-                    android:visibility="gone">
-
-                    <com.google.android.material.progressindicator.CircularProgressIndicator
-                        android:id="@+id/cpiGroupDownloadFav"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_gravity="center"
-                        app:indicatorSize="22dp"
-                        app:trackThickness="2dp"
-                        app:indicatorInset="0dp"
-                        app:indicatorDirectionCircular="clockwise"
-                        app:trackColor="@color/text_secondary"
-                        app:indicatorColor="@color/primary"
-                        app:showAnimationBehavior="inward"
-                        app:hideAnimationBehavior="outward"
-                        tools:indeterminate="true" />
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginHorizontal="16dp"
+                    android:layout_marginBottom="24dp"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
 
                     <ImageButton
-                        android:id="@+id/btnCancelGroupDownloadFav"
-                        android:layout_width="8dp"
-                        android:layout_height="8dp"
-                        android:layout_gravity="center"
-                        android:padding="0dp"
+                        android:id="@+id/btnDownload"
+                        android:layout_width="32dp"
+                        android:layout_height="32dp"
                         android:background="?attr/selectableItemBackgroundBorderless"
-                        android:contentDescription="@string/cancel"
-                        android:src="@drawable/ic_stop"
-                        app:tint="@color/white" />
-                </FrameLayout>
+                        android:contentDescription="@string/download_to_device"
+                        android:src="@drawable/ic_download"
+                        app:tint="@color/text_secondary" />
 
-                <View
-                    android:layout_width="0dp"
-                    android:layout_height="1dp"
-                    android:layout_weight="1" />
+                    <FrameLayout
+                        android:id="@+id/groupDownloadProgressFav"
+                        android:layout_width="32dp"
+                        android:layout_height="32dp"
+                        android:visibility="gone">
 
-                <com.google.android.material.floatingactionbutton.FloatingActionButton
-                    android:id="@+id/fabPlay"
-                    android:layout_width="56dp"
-                    android:layout_height="56dp"
-                    android:contentDescription="@string/play"
-                    android:src="@drawable/ic_play"
-                    app:backgroundTint="@color/primary"
-                    app:tint="@color/white"
-                    app:borderWidth="0dp"
-                    app:elevation="0dp"
-                    app:fabSize="normal"
-                    app:maxImageSize="32dp" />
-            </LinearLayout>
+                        <com.google.android.material.progressindicator.CircularProgressIndicator
+                            android:id="@+id/cpiGroupDownloadFav"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_gravity="center"
+                            app:indicatorSize="22dp"
+                            app:trackThickness="2dp"
+                            app:indicatorInset="0dp"
+                            app:indicatorDirectionCircular="clockwise"
+                            app:trackColor="@color/text_secondary"
+                            app:indicatorColor="@color/primary"
+                            app:showAnimationBehavior="inward"
+                            app:hideAnimationBehavior="outward"
+                            tools:indeterminate="true" />
 
-            <androidx.recyclerview.widget.RecyclerView
-                android:id="@+id/rvSongs"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:nestedScrollingEnabled="false"
-                android:paddingHorizontal="16dp"
-                tools:itemCount="10"
-                tools:listitem="@layout/item_song" />
+                        <ImageButton
+                            android:id="@+id/btnCancelGroupDownloadFav"
+                            android:layout_width="8dp"
+                            android:layout_height="8dp"
+                            android:layout_gravity="center"
+                            android:padding="0dp"
+                            android:background="?attr/selectableItemBackgroundBorderless"
+                            android:contentDescription="@string/cancel"
+                            android:src="@drawable/ic_stop"
+                            app:tint="@color/white" />
+                    </FrameLayout>
 
-            <LinearLayout
-                android:id="@+id/emptyLayout"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:gravity="center"
-                android:padding="16dp"
-                android:visibility="gone">
+                    <View
+                        android:layout_width="0dp"
+                        android:layout_height="1dp"
+                        android:layout_weight="1" />
 
-                <ImageView
-                    android:layout_width="80dp"
-                    android:layout_height="80dp"
-                    android:src="@drawable/ic_favorite"
-                    app:tint="#404040"
-                    android:layout_marginBottom="16dp"
-                    android:contentDescription="@string/favorites_icon_desc" />
+                    <com.google.android.material.floatingactionbutton.FloatingActionButton
+                        android:id="@+id/fabPlay"
+                        android:layout_width="56dp"
+                        android:layout_height="56dp"
+                        android:contentDescription="@string/play"
+                        android:src="@drawable/ic_play"
+                        app:backgroundTint="@color/primary"
+                        app:tint="@color/white"
+                        app:borderWidth="0dp"
+                        app:elevation="0dp"
+                        app:fabSize="normal"
+                        app:maxImageSize="32dp" />
+                </LinearLayout>
 
-                <TextView
-                    android:id="@+id/tvEmpty"
-                    android:layout_width="wrap_content"
+                <!-- Shimmer skeleton for list -->
+                <com.facebook.shimmer.ShimmerFrameLayout
+                    android:id="@+id/shimmerSongs"
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="@string/empty_favorites"
-                    android:textColor="#B3B3B3"
-                    android:textSize="16sp"
+                    android:layout_marginHorizontal="16dp"
+                    android:layout_marginBottom="8dp"
+                    android:visibility="gone"
+                    app:shimmer_auto_start="false"
+                    app:shimmer_base_alpha="0.6"
+                    app:shimmer_highlight_alpha="1.0"
+                    app:shimmer_duration="1200">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical">
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="64dp"
+                            android:layout_marginBottom="12dp"
+                            android:orientation="horizontal">
+                            <View
+                                android:layout_width="56dp"
+                                android:layout_height="56dp"
+                                android:layout_gravity="center_vertical"
+                                android:background="@drawable/skeleton_rect_8dp" />
+                            <LinearLayout
+                                android:layout_width="0dp"
+                                android:layout_height="match_parent"
+                                android:layout_weight="1"
+                                android:orientation="vertical"
+                                android:paddingStart="12dp"
+                                android:gravity="center_vertical">
+                                <View
+                                    android:layout_width="match_parent"
+                                    android:layout_height="12dp"
+                                    android:layout_marginEnd="100dp"
+                                    android:layout_marginBottom="8dp"
+                                    android:background="@drawable/skeleton_rect_8dp" />
+                                <View
+                                    android:layout_width="match_parent"
+                                    android:layout_height="10dp"
+                                    android:layout_marginEnd="230dp"
+                                    android:background="@drawable/skeleton_rect_8dp" />
+                            </LinearLayout>
+                        </LinearLayout>
+
+                        <View android:layout_width="match_parent" android:layout_height="1dp" android:background="#1FFFFFFF" />
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="64dp"
+                            android:layout_marginTop="12dp"
+                            android:layout_marginBottom="12dp"
+                            android:orientation="horizontal">
+                            <View
+                                android:layout_width="56dp"
+                                android:layout_height="56dp"
+                                android:layout_gravity="center_vertical"
+                                android:background="@drawable/skeleton_rect_8dp" />
+                            <LinearLayout
+                                android:layout_width="0dp"
+                                android:layout_height="match_parent"
+                                android:layout_weight="1"
+                                android:orientation="vertical"
+                                android:paddingStart="12dp"
+                                android:gravity="center_vertical">
+                                <View
+                                    android:layout_width="match_parent"
+                                    android:layout_height="12dp"
+                                    android:layout_marginEnd="150dp"
+                                    android:layout_marginBottom="8dp"
+                                    android:background="@drawable/skeleton_rect_8dp" />
+                                <View
+                                    android:layout_width="match_parent"
+                                    android:layout_height="10dp"
+                                    android:layout_marginEnd="260dp"
+                                    android:background="@drawable/skeleton_rect_8dp" />
+                            </LinearLayout>
+                        </LinearLayout>
+
+                        <View android:layout_width="match_parent" android:layout_height="1dp" android:background="#1FFFFFFF" />
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="64dp"
+                            android:layout_marginTop="12dp"
+                            android:layout_marginBottom="12dp"
+                            android:orientation="horizontal">
+                            <View
+                                android:layout_width="56dp"
+                                android:layout_height="56dp"
+                                android:layout_gravity="center_vertical"
+                                android:background="@drawable/skeleton_rect_8dp" />
+                            <LinearLayout
+                                android:layout_width="0dp"
+                                android:layout_height="match_parent"
+                                android:layout_weight="1"
+                                android:orientation="vertical"
+                                android:paddingStart="12dp"
+                                android:gravity="center_vertical">
+                                <View
+                                    android:layout_width="match_parent"
+                                    android:layout_height="12dp"
+                                    android:layout_marginEnd="130dp"
+                                    android:layout_marginBottom="8dp"
+                                    android:background="@drawable/skeleton_rect_8dp" />
+                                <View
+                                    android:layout_width="match_parent"
+                                    android:layout_height="10dp"
+                                    android:layout_marginEnd="250dp"
+                                    android:background="@drawable/skeleton_rect_8dp" />
+                            </LinearLayout>
+                        </LinearLayout>
+
+                    </LinearLayout>
+                </com.facebook.shimmer.ShimmerFrameLayout>
+
+                <androidx.recyclerview.widget.RecyclerView
+                    android:id="@+id/rvSongs"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:nestedScrollingEnabled="false"
+                    android:paddingHorizontal="16dp"
+                    tools:itemCount="10"
+                    tools:listitem="@layout/item_song" />
+
+                <LinearLayout
+                    android:id="@+id/emptyLayout"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
                     android:gravity="center"
-                    android:lineSpacingExtra="4dp" />
+                    android:padding="16dp"
+                    android:visibility="gone">
+
+                    <ImageView
+                        android:layout_width="80dp"
+                        android:layout_height="80dp"
+                        android:src="@drawable/ic_favorite"
+                        app:tint="#404040"
+                        android:layout_marginBottom="16dp"
+                        android:contentDescription="@string/favorites_icon_desc" />
+
+                    <TextView
+                        android:id="@+id/tvEmpty"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/empty_favorites"
+                        android:textColor="#B3B3B3"
+                        android:textSize="16sp"
+                        android:gravity="center"
+                        android:lineSpacingExtra="4dp" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnRetry"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="16dp"
+                        android:text="@string/retry"
+                        style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                        app:strokeColor="@color/primary"
+                        app:strokeWidth="1dp"
+                        app:icon="@drawable/ic_refresh"
+                        app:iconTint="@color/primary"
+                        app:rippleColor="@color/primary"
+                        android:visibility="gone" />
+                </LinearLayout>
+
             </LinearLayout>
 
-        </LinearLayout>
+        </androidx.core.widget.NestedScrollView>
 
-    </androidx.core.widget.NestedScrollView>
+    </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
 
     <FrameLayout
         android:id="@+id/loadingOverlay"
@@ -231,7 +373,7 @@
         android:layout_height="match_parent"
         android:clickable="true"
         android:focusable="true"
-        android:visibility="visible"
+        android:visibility="gone"
         android:background="#80000000">
 
         <com.google.android.material.progressindicator.CircularProgressIndicator
