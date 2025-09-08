@@ -50,6 +50,7 @@ import com.arantec.castafiore.utils.snack
 import android.os.SystemClock
 import kotlinx.coroutines.FlowPreview
 import android.view.ViewTreeObserver
+import android.util.Log
 
 class PlaylistDetailFragment : Fragment(), HasContentState {
 
@@ -81,6 +82,9 @@ class PlaylistDetailFragment : Fragment(), HasContentState {
     // Keep last known download states to compute aggregate status accurately in real-time
     private var latestDownloadStates: Map<String, com.arantec.castafiore.data.download.SongDownloadManager.DownloadState> = emptyMap()
     private var lastAllDownloaded: Boolean = false
+
+    // Track whether we've successfully applied a dynamic gradient to avoid redundant work
+    private var gradientApplied: Boolean = false
 
     private val serviceConnection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
@@ -336,25 +340,28 @@ class PlaylistDetailFragment : Fragment(), HasContentState {
 
                 // Load dynamic gradient asynchronously without blocking UI
                 if (!coverUrl.isNullOrEmpty()) {
-                    launch(Dispatchers.IO) {
-                        try {
-                            Glide.with(this@PlaylistDetailFragment)
-                                .asBitmap()
-                                .load(coverUrl)
-                                .into(object : CustomTarget<Bitmap>() {
-                                    override fun onResourceReady(resource: Bitmap, transition: Transition<in Bitmap>?) {
-                                        if (!isAdded || _binding == null) return
-                                        launch(Dispatchers.Main) {
-                                            applyDynamicAppBarGradientFromBitmap(resource)
-                                        }
-                                    }
-                                    override fun onLoadCleared(placeholder: Drawable?) { /* no-op */ }
-                                    override fun onLoadFailed(errorDrawable: Drawable?) { /* Already using static background */ }
-                                })
-                        } catch (_: Exception) {
-                            // Ignore - static background already set
-                        }
+                    try {
+                        Glide.with(this@PlaylistDetailFragment)
+                            .asBitmap()
+                            .load(coverUrl)
+                            .into(object : CustomTarget<Bitmap>() {
+                                override fun onResourceReady(resource: Bitmap, transition: Transition<in Bitmap>?) {
+                                    if (!isAdded || _binding == null) return
+                                    applyDynamicAppBarGradientFromBitmap(resource)
+                                }
+                                override fun onLoadCleared(placeholder: Drawable?) { /* no-op */ }
+                                override fun onLoadFailed(errorDrawable: Drawable?) {
+                                    // Try a fallback based on the first song cover if available
+                                    tryApplyGradientFromFirstAvailableArt()
+                                }
+                            })
+                    } catch (_: Exception) {
+                        // Fallback to first song cover if possible
+                        tryApplyGradientFromFirstAvailableArt()
                     }
+                } else {
+                    // No playlist cover -> try using the first song cover
+                    tryApplyGradientFromFirstAvailableArt()
                 }
             }
 
@@ -680,12 +687,42 @@ class PlaylistDetailFragment : Fragment(), HasContentState {
         Palette.from(bitmap).generate { palette ->
             if (!isAdded || _binding == null) return@generate
 
-            val darkMuted = palette?.darkVibrantSwatch?.rgb
+            // Prefer more vibrant swatches first to avoid near-black gradients
+            val topColor = palette?.darkVibrantSwatch?.rgb
                 ?: palette?.vibrantSwatch?.rgb
                 ?: palette?.darkMutedSwatch?.rgb
                 ?: 0xFF2A2A2A.toInt()
 
-            applyAppBarGradient(darkMuted)
+            requireActivity().runOnUiThread {
+                if (!isAdded || _binding == null) return@runOnUiThread
+                applyAppBarGradient(topColor)
+            }
+        }
+    }
+
+    private fun tryApplyGradientFromFirstAvailableArt() {
+        if (!isAdded || _binding == null) return
+        if (gradientApplied) return
+        val first = playlistSongs.firstOrNull() ?: return
+        if (first.coverArt == null) return
+        val server = musicRepository.serverUrl ?: return
+        val (username, token, salt) = musicRepository.getAuthParams()
+        val url = first.getCoverArtUrl(server, username, token, salt)
+        if (url.isNullOrEmpty()) return
+        try {
+            Glide.with(this)
+                .asBitmap()
+                .load(url)
+                .into(object : CustomTarget<Bitmap>() {
+                    override fun onResourceReady(resource: Bitmap, transition: Transition<in Bitmap>?) {
+                        if (!isAdded || _binding == null) return
+                        applyDynamicAppBarGradientFromBitmap(resource)
+                    }
+                    override fun onLoadCleared(placeholder: Drawable?) { /* no-op */ }
+                    override fun onLoadFailed(errorDrawable: Drawable?) { /* no-op */ }
+                })
+        } catch (_: Exception) {
+            // no-op
         }
     }
 
@@ -697,6 +734,9 @@ class PlaylistDetailFragment : Fragment(), HasContentState {
         // Construir un degradado suave para el fondo
         val bgGradient = buildSmoothGradient(baseColor, topColor)
         binding.gradientBackground.background = bgGradient
+        // Force a redraw in case we're mid-layout
+        binding.gradientBackground.post { binding.gradientBackground.invalidate() }
+        Log.d("PlaylistDetail", "Applied gradient topColor=" + String.format("#%08X", topColor))
 
         // Para el AppBar, usar colores sólidos estables
         binding.appBarLayout.background = android.graphics.drawable.ColorDrawable(baseColor)
@@ -704,6 +744,8 @@ class PlaylistDetailFragment : Fragment(), HasContentState {
         binding.collapsingToolbar.setStatusBarScrimColor(baseColor)
         binding.toolbar.navigationIcon?.setTint(android.graphics.Color.WHITE)
         StatusBarUtils.setStatusBarColor(this)
+
+        gradientApplied = true
     }
 
     private fun buildSmoothGradient(baseColor: Int, topColor: Int): GradientDrawable {
