@@ -75,6 +75,27 @@
 
                 </LinearLayout>
 
+                <!-- Nueva sección: Tus artistas favoritos -->
+                <TextView
+                    android:id="@+id/tvFavoriteArtistsTitle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="16dp"
+                    android:text="@string/favorite_artists_title"
+                    android:textColor="@color/text_primary"
+                    android:textSize="22sp"
+                    android:textStyle="bold"
+                    android:visibility="gone" />
+
+                <androidx.recyclerview.widget.RecyclerView
+                    android:id="@+id/rvFavoriteArtists"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="40dp"
+                    android:clipToPadding="false"
+                    android:orientation="horizontal"
+                    android:visibility="gone" />
+
                 <!-- Sección: Agregados recientemente -->
                 <TextView
                     android:id="@+id/tvRecentlyAddedTitle"

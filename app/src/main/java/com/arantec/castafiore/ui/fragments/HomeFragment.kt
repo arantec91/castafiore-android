@@ -46,6 +46,7 @@ class HomeFragment : Fragment(), HasContentState {
     private lateinit var recentlyPlayedAdapter: AlbumHorizontalAdapter
     private lateinit var mostPlayedAdapter: AlbumHorizontalAdapter
     private lateinit var similarArtistsAdapter: ArtistHorizontalAdapter
+    private lateinit var favoriteArtistsAdapter: ArtistHorizontalAdapter
     private var musicService: MusicService? = null
     private var isBound = false
 
@@ -233,6 +234,27 @@ class HomeFragment : Fragment(), HasContentState {
             setRecycledViewPool(sharedPool)
             (itemAnimator as? androidx.recyclerview.widget.SimpleItemAnimator)?.supportsChangeAnimations = false
         }
+
+        // Configurar adaptador para Tus artistas favoritos
+        favoriteArtistsAdapter = ArtistHorizontalAdapter(
+            onArtistClick = { artist -> onArtistClick(artist) },
+            imageSizeDp = 96,
+            textWidthDp = 96,
+            textSizeSp = 14f,
+            centerText = true
+        )
+        binding.rvFavoriteArtists.apply {
+            val lm = LinearLayoutManager(context, LinearLayoutManager.HORIZONTAL, false)
+            lm.isItemPrefetchEnabled = true
+            lm.initialPrefetchItemCount = 6
+            layoutManager = lm
+            adapter = favoriteArtistsAdapter
+            setHasFixedSize(true)
+            setItemViewCacheSize(10)
+            isNestedScrollingEnabled = false
+            setRecycledViewPool(sharedPool)
+            (itemAnimator as? androidx.recyclerview.widget.SimpleItemAnimator)?.supportsChangeAnimations = false
+        }
     }
 
     private fun setupRefreshSystem() {
@@ -383,6 +405,13 @@ class HomeFragment : Fragment(), HasContentState {
                 loadSimilarArtists()
             } catch (_: Exception) {
                 // Ignorar; loadSimilarArtists maneja su propia visibilidad
+            }
+
+            // Cargar Tus artistas favoritos
+            try {
+                loadFavoriteArtists()
+            } catch (_: Exception) {
+                // Ignorar; loadFavoriteArtists maneja su propia visibilidad
             }
 
             android.util.Log.d("HomeFragment", "Carga de datos completada")
@@ -646,6 +675,37 @@ class HomeFragment : Fragment(), HasContentState {
         }
     }
 
+    private suspend fun loadFavoriteArtists() {
+        try {
+            musicRepository.getStarredArtists().fold(
+                onSuccess = { artists ->
+                    val list = artists.distinctBy { it.id }.take(10)
+                    viewLifecycleOwner.lifecycleScope.launch(Dispatchers.Main) {
+                        if (list.isNotEmpty()) {
+                            favoriteArtistsAdapter.submit(list)
+                            binding.tvFavoriteArtistsTitle.visibility = View.VISIBLE
+                            binding.rvFavoriteArtists.visibility = View.VISIBLE
+                        } else {
+                            binding.tvFavoriteArtistsTitle.visibility = View.GONE
+                            binding.rvFavoriteArtists.visibility = View.GONE
+                        }
+                    }
+                },
+                onFailure = {
+                    viewLifecycleOwner.lifecycleScope.launch(Dispatchers.Main) {
+                        binding.tvFavoriteArtistsTitle.visibility = View.GONE
+                        binding.rvFavoriteArtists.visibility = View.GONE
+                    }
+                }
+            )
+        } catch (_: Exception) {
+            viewLifecycleOwner.lifecycleScope.launch(Dispatchers.Main) {
+                binding.tvFavoriteArtistsTitle.visibility = View.GONE
+                binding.rvFavoriteArtists.visibility = View.GONE
+            }
+        }
+    }
+
     private fun onAlbumClick(album: Album) {
         // Por ahora, navegar usando Bundle hasta que se generen las clases de Navigation
         val bundle = Bundle().apply {
@@ -686,9 +746,11 @@ class HomeFragment : Fragment(), HasContentState {
             binding.tvMostPlayedTitle.visibility = View.INVISIBLE
             binding.rvMostPlayed.visibility = View.INVISIBLE
 
-            // Similar artists oculto durante loading
+            // Similar artists y favoritos ocultos durante loading
             binding.similarHeaderContainer.visibility = View.GONE
             binding.rvSimilarArtists.visibility = View.GONE
+            binding.tvFavoriteArtistsTitle.visibility = View.GONE
+            binding.rvFavoriteArtists.visibility = View.GONE
         } else {
             binding.tvRecentlyAddedTitle.visibility = View.VISIBLE
             binding.rvRecentlyAdded.visibility = View.VISIBLE

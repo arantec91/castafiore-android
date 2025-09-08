@@ -220,7 +220,8 @@ class ArtistDetailFragment : Fragment(), HasContentState {
 
         // Setup similar artists RecyclerView
         similarAdapter = com.arantec.castafiore.ui.adapters.ArtistHorizontalAdapter(
-            onArtistClick = { artist -> navigateToArtistDetail(artist) }
+            onArtistClick = { artist -> navigateToArtistDetail(artist) },
+            centerText = true
         )
         binding.rvSimilarArtists.apply {
             adapter = similarAdapter
@@ -1067,10 +1068,10 @@ class ArtistDetailFragment : Fragment(), HasContentState {
         // Guard against destroyed view
         if (!isAdded || _binding == null) return
         if (isFollowing) {
-            _binding?.btnFollow?.setImageResource(R.drawable.ic_favorite)
+            _binding?.btnFollow?.setImageResource(R.drawable.ic_favorite_36)
             _binding?.btnFollow?.setColorFilter("#FF2D55".toColorInt()) // Color principal
         } else {
-            _binding?.btnFollow?.setImageResource(R.drawable.ic_favorite_border)
+            _binding?.btnFollow?.setImageResource(R.drawable.ic_favorite_border_36)
             _binding?.btnFollow?.setColorFilter("#B3FFFFFF".toColorInt()) // Color texto secundario
         }
     }
