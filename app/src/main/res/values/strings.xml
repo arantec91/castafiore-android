@@ -79,7 +79,7 @@
     <string name="show_less">Mostrar menos</string>
 
     <!-- Login / Setup -->
-    <string name="login_title">Iniciar sesión</string>
+    <string name="login_title">Bienvenido</string>
     <string name="login_subtitle">Ingresa tu usuario y contraseña</string>
     <string name="login">Iniciar sesión</string>
     <string name="logging_in">Iniciando sesión…</string>
@@ -215,4 +215,5 @@
     </plurals>
     <string name="remove_favorite">Quitar de favoritos</string>
     <string name="retry">Reintentar</string>
+    <string name="invalid_credentials">Credenciales inválidas</string>
 </resources>

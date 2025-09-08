@@ -108,7 +108,8 @@
                     android:layout_height="wrap_content"
                     android:inputType="text"
                     android:textColor="@color/text_primary"
-                    android:textCursorDrawable="@drawable/cursor_accent" />
+                    android:textCursorDrawable="@drawable/cursor_accent"
+                    android:imeOptions="actionNext" />
 
             </com.google.android.material.textfield.TextInputLayout>
 
@@ -132,7 +133,8 @@
                     android:layout_height="wrap_content"
                     android:inputType="textPassword"
                     android:textColor="@color/text_primary"
-                    android:textCursorDrawable="@drawable/cursor_accent" />
+                    android:textCursorDrawable="@drawable/cursor_accent"
+                    android:imeOptions="actionDone" />
 
             </com.google.android.material.textfield.TextInputLayout>
 
@@ -147,6 +149,32 @@
                 android:textColor="@color/text_secondary"
                 android:gravity="center"
                 android:visibility="gone" />
+
+            <!-- Retry action (text button) -->
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnRetry"
+                style="@style/Widget.MaterialComponents.Button.TextButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center_horizontal"
+                android:layout_marginTop="4dp"
+                android:text="@string/retry"
+                android:textAllCaps="false"
+                android:visibility="gone"
+                app:iconGravity="textStart"
+                app:iconPadding="0dp" />
+
+            <!-- Small progress indicator for loading state -->
+            <com.google.android.material.progressindicator.CircularProgressIndicator
+                android:id="@+id/progress"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:layout_marginTop="8dp"
+                android:layout_gravity="center_horizontal"
+                android:visibility="gone"
+                app:indicatorSize="32dp"
+                app:trackThickness="4dp"
+                app:indicatorColor="@color/accent" />
 
             <!-- Login button -->
             <com.google.android.material.button.MaterialButton
@@ -163,5 +191,6 @@
 
         </LinearLayout>
     </com.google.android.material.card.MaterialCardView>
+
 
 </androidx.constraintlayout.widget.ConstraintLayout>

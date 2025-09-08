@@ -15,6 +15,11 @@ import com.arantec.castafiore.databinding.ActivitySetupBinding
 import com.arantec.castafiore.utils.StatusBarUtils
 import android.view.WindowInsetsController
 import kotlinx.coroutines.launch
+import android.view.inputmethod.EditorInfo
+import android.view.inputmethod.InputMethodManager
+import android.content.Context
+import androidx.core.widget.doOnTextChanged
+import androidx.core.view.isVisible
 
 class SetupActivity : AppCompatActivity() {
 
@@ -22,6 +27,7 @@ class SetupActivity : AppCompatActivity() {
     private lateinit var musicRepository: MusicRepository
 
     private val FIXED_SERVER_URL = "http://65.109.23.109:4533"
+    private var isLoading: Boolean = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -85,8 +91,53 @@ class SetupActivity : AppCompatActivity() {
 
         binding.btnConnect.text = getString(R.string.login)
         binding.btnConnect.setOnClickListener {
-            testConnection()
+            submit()
         }
+        binding.btnRetry.setOnClickListener { submit() }
+
+        // Improve form UX: clear errors as user types
+        binding.etUsername.doOnTextChanged { _, _, _, _ ->
+            binding.tilUsername.error = null
+            if (binding.tvStatus.isVisible) showStatus("", false)
+            updateLoginEnabled()
+        }
+        binding.etPassword.doOnTextChanged { _, _, _, _ ->
+            binding.tilPassword.error = null
+            if (binding.tvStatus.isVisible) showStatus("", false)
+            updateLoginEnabled()
+        }
+
+        // Submit from keyboard on password done
+        binding.etPassword.setOnEditorActionListener { _, actionId, _ ->
+            if (actionId == EditorInfo.IME_ACTION_DONE) {
+                submit()
+                true
+            } else false
+        }
+
+        // Initial button enabled state
+        updateLoginEnabled()
+    }
+
+    private fun updateLoginEnabled() {
+        val hasUser = binding.etUsername.text?.isNotBlank() == true
+        val hasPass = binding.etPassword.text?.isNotBlank() == true
+        binding.btnConnect.isEnabled = !isLoading && hasUser && hasPass
+    }
+
+    private fun submit() {
+        hideKeyboard()
+        testConnection()
+    }
+
+    private fun setLoading(loading: Boolean) {
+        isLoading = loading
+        binding.etUsername.isEnabled = !loading
+        binding.etPassword.isEnabled = !loading
+        binding.progress.visibility = if (loading) View.VISIBLE else View.GONE
+        binding.btnRetry.isVisible = false
+        binding.btnConnect.text = if (loading) getString(R.string.logging_in) else getString(R.string.login)
+        updateLoginEnabled()
     }
 
     private fun testConnection() {
@@ -94,23 +145,24 @@ class SetupActivity : AppCompatActivity() {
         val username = binding.etUsername.text.toString().trim()
         val password = binding.etPassword.text.toString().trim()
 
-        // Validación simple: solo mensaje principal
+        // Validación con errores inline
         if (username.isEmpty()) {
-            showStatus("El nombre de usuario es requerido", true)
+            binding.tilUsername.error = "El nombre de usuario es requerido"
             binding.etUsername.requestFocus()
             return
         }
         if (password.isEmpty()) {
-            showStatus("La contraseña es requerida", true)
+            binding.tilPassword.error = "La contraseña es requerida"
             binding.etPassword.requestFocus()
             return
         }
 
         // Limpiar estado previo
+        binding.tilUsername.error = null
+        binding.tilPassword.error = null
         showStatus("", false)
 
-        binding.btnConnect.isEnabled = false
-        binding.btnConnect.text = getString(R.string.logging_in)
+        setLoading(true)
         showStatus("Verificando credenciales...", false)
 
         lifecycleScope.launch {
@@ -145,14 +197,22 @@ class SetupActivity : AppCompatActivity() {
                     } else {
                         val errorMessage = body?.subsonicResponse?.error?.message ?: "Error desconocido"
                         when (body?.subsonicResponse?.error?.code) {
-                            40 -> showStatus("Usuario o contraseña incorrectos", true)
+                            40 -> {
+                                binding.tilUsername.error = getString(R.string.invalid_credentials)
+                                binding.tilPassword.error = getString(R.string.invalid_credentials)
+                                showStatus("Usuario o contraseña incorrectos", true)
+                            }
                             50 -> showStatus("Usuario no autorizado para esta operación", true)
                             else -> showStatus("Error del servidor: $errorMessage", true)
                         }
                     }
                 } else {
                     when (response.code()) {
-                        401 -> showStatus("Credenciales inválidas", true)
+                        401 -> {
+                            binding.tilUsername.error = getString(R.string.invalid_credentials)
+                            binding.tilPassword.error = getString(R.string.invalid_credentials)
+                            showStatus("Credenciales inválidas", true)
+                        }
                         403 -> showStatus("Acceso denegado", true)
                         404 -> showStatus("Servidor no disponible", true)
                         500 -> showStatus("Error interno del servidor", true)
@@ -171,8 +231,7 @@ class SetupActivity : AppCompatActivity() {
             } catch (e: Exception) {
                 showStatus("Error inesperado: ${e.message}", true)
             } finally {
-                binding.btnConnect.isEnabled = true
-                binding.btnConnect.text = getString(R.string.login)
+                setLoading(false)
             }
         }
     }
@@ -181,6 +240,7 @@ class SetupActivity : AppCompatActivity() {
         binding.tvStatus.text = message
         if (message.isEmpty()) {
             binding.tvStatus.visibility = View.GONE
+            binding.btnRetry.isVisible = false
         } else {
             binding.tvStatus.visibility = View.VISIBLE
             binding.tvStatus.setTextColor(
@@ -189,6 +249,12 @@ class SetupActivity : AppCompatActivity() {
                     if (isError) R.color.error else R.color.success
                 )
             )
+            binding.btnRetry.isVisible = isError && !isLoading
         }
+    }
+
+    private fun hideKeyboard() {
+        val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+        imm.hideSoftInputFromWindow(binding.root.windowToken, 0)
     }
 }
