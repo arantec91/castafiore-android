@@ -88,6 +88,9 @@ class MainActivity : AppCompatActivity(), LoadingHost {
     // Reference-counted manual override so fragments can force the overlay without flicker
     private var overlayManualOverrideCount = 0
 
+    // Job for updating mini player progress bar
+    private var miniPlayerProgressJob: Job? = null
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -372,6 +375,38 @@ class MainActivity : AppCompatActivity(), LoadingHost {
                     navigateToArtistDetail(artistId, artistName)
                 }
             }
+            "playlist_detail" -> {
+                val playlistId = intent.getStringExtra("playlist_id")
+                val playlistName = intent.getStringExtra("playlist_name")
+                if (!playlistId.isNullOrEmpty() && !playlistName.isNullOrEmpty()) {
+                    try {
+                        val navController = findNavController(R.id.nav_host_fragment)
+                        val bundle = Bundle().apply {
+                            putString("playlistId", playlistId)
+                            putString("playlistName", playlistName)
+                        }
+                        navController.navigate(R.id.playlistDetailFragment, bundle)
+                    } catch (e: Exception) {
+                        android.util.Log.e("MainActivity", "Error navigating to playlist detail: ${e.message}", e)
+                    }
+                }
+            }
+            "favorites" -> {
+                try {
+                    val navController = findNavController(R.id.nav_host_fragment)
+                    navController.navigate(R.id.favoritesFragment)
+                } catch (e: Exception) {
+                    android.util.Log.e("MainActivity", "Error navigating to favorites: ${e.message}", e)
+                }
+            }
+            "downloads" -> {
+                try {
+                    val navController = findNavController(R.id.nav_host_fragment)
+                    navController.navigate(R.id.downloadsFragment)
+                } catch (e: Exception) {
+                    android.util.Log.e("MainActivity", "Error navigating to downloads: ${e.message}", e)
+                }
+            }
         }
     }
 
@@ -478,6 +513,43 @@ class MainActivity : AppCompatActivity(), LoadingHost {
         binding.btnPlayPause.setImageResource(iconRes)
     }
 
+    private fun startMiniPlayerProgressUpdater(song: Song?) {
+        miniPlayerProgressJob?.cancel()
+        val svc = musicService
+        if (song == null || svc == null) {
+            binding.miniSongProgressBar.visibility = View.GONE
+            return
+        }
+        // Normalized fixed max (0..1000)
+        binding.miniSongProgressBar.max = 1000
+        miniPlayerProgressJob = lifecycleScope.launch {
+            while (true) {
+                val service = musicService ?: break
+                val durationMs = service.getDuration()
+                val positionMs = service.getCurrentPosition()
+                if (durationMs > 0) {
+                    if (binding.miniSongProgressBar.visibility != View.VISIBLE) {
+                        binding.miniSongProgressBar.visibility = View.VISIBLE
+                    }
+                    val percent = ((positionMs * 1000L) / durationMs).coerceIn(0L, 1000L)
+                    binding.miniSongProgressBar.progress = percent.toInt()
+                } else {
+                    // Hide while duration still unknown (e.g., preparing)
+                    if (binding.miniSongProgressBar.visibility != View.GONE) {
+                        binding.miniSongProgressBar.visibility = View.GONE
+                    }
+                }
+                delay(500)
+            }
+        }
+    }
+
+    private fun stopMiniPlayerProgressUpdater() {
+        miniPlayerProgressJob?.cancel()
+        miniPlayerProgressJob = null
+        binding.miniSongProgressBar.visibility = View.GONE
+    }
+
     private fun updateMiniPlayer(song: Song?) {
         if (song != null) {
             binding.playerContainer.visibility = View.VISIBLE
@@ -522,8 +594,11 @@ class MainActivity : AppCompatActivity(), LoadingHost {
                 // Si falla, usar placeholder
                 binding.ivAlbumArt.setImageResource(R.drawable.ic_album_placeholder)
             }
+            // Start progress updater
+            startMiniPlayerProgressUpdater(song)
         } else {
             binding.playerContainer.visibility = View.GONE
+            stopMiniPlayerProgressUpdater()
         }
     }
 

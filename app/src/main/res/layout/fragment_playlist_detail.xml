@@ -52,6 +52,7 @@
                     android:outlineProvider="background"
                     android:clipToOutline="true"
                     android:background="@drawable/rounded_corners_8dp"
+                    android:src="@drawable/ic_album_placeholder"
                     tools:src="@drawable/ic_album_placeholder" />
 
             </RelativeLayout>
@@ -95,6 +96,23 @@
                     android:paddingTop="16dp"
                     android:paddingBottom="8dp">
 
+                    <!-- New shimmer placeholder for title -->
+                    <com.facebook.shimmer.ShimmerFrameLayout
+                        android:id="@+id/shimmerTitle"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:visibility="gone"
+                        app:shimmer_auto_start="false"
+                        app:shimmer_base_alpha="0.6"
+                        app:shimmer_highlight_alpha="1.0"
+                        app:shimmer_duration="1200">
+                        <View
+                            android:layout_width="220dp"
+                            android:layout_height="32dp"
+                            android:layout_marginBottom="8dp"
+                            android:background="@drawable/skeleton_rect_8dp" />
+                    </com.facebook.shimmer.ShimmerFrameLayout>
+
                     <TextView
                         android:id="@+id/tvTitle"
                         android:layout_width="wrap_content"
@@ -112,6 +130,22 @@
                         android:orientation="horizontal"
                         android:gravity="center_vertical">
 
+                        <!-- New shimmer placeholder for info -->
+                        <com.facebook.shimmer.ShimmerFrameLayout
+                            android:id="@+id/shimmerInfo"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:visibility="gone"
+                            app:shimmer_auto_start="false"
+                            app:shimmer_base_alpha="0.6"
+                            app:shimmer_highlight_alpha="1.0"
+                            app:shimmer_duration="1200">
+                            <View
+                                android:layout_width="180dp"
+                                android:layout_height="14dp"
+                                android:background="@drawable/skeleton_rect_8dp" />
+                        </com.facebook.shimmer.ShimmerFrameLayout>
+
                         <TextView
                             android:id="@+id/tvInfo"
                             android:layout_width="wrap_content"
@@ -127,7 +161,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginHorizontal="16dp"
-                    android:layout_marginBottom="24dp">
+                    android:layout_marginBottom="12dp">
 
                     <ImageButton
                         android:id="@+id/btnMore"

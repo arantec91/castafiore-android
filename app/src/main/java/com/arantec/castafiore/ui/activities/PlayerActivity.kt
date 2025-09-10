@@ -242,6 +242,11 @@ class PlayerActivity : AppCompatActivity() {
             } ?: showMessage("No hay canción reproduciéndose")
         }
 
+        // Nueva navegación desde el texto de origen de reproducción
+        binding.tvPlayingFrom.setOnClickListener {
+            navigateToPlaybackSource()
+        }
+
         // Slider listeners para el progreso (reemplaza SeekBar)
         binding.seekBarProgress.addOnChangeListener { _: Slider, value: Float, fromUser: Boolean ->
             if (fromUser) {
@@ -720,6 +725,54 @@ class PlayerActivity : AppCompatActivity() {
         } else {
             showMessage("Información del artista no disponible")
         }
+    }
+
+    // Navegar según la fuente actual (álbum, artista, playlist, favoritos, descargas)
+    private fun navigateToPlaybackSource() {
+        val source = musicService?.getPlaybackSource()
+        when (source?.type) {
+            MusicService.SourceType.ALBUM -> currentSong?.let { navigateToAlbum(it) }
+            MusicService.SourceType.ARTIST -> currentSong?.let { navigateToArtist(it) }
+            MusicService.SourceType.PLAYLIST -> navigateToPlaylist(source)
+            MusicService.SourceType.FAVORITES -> navigateToFavorites()
+            MusicService.SourceType.DOWNLOADS -> navigateToDownloads()
+            else -> { /* No acción para SONGS o UNKNOWN */ }
+        }
+    }
+
+    private fun navigateToPlaylist(source: MusicService.PlaybackSource) {
+        val playlistId = source.id
+        val playlistName = source.name
+        if (playlistId.isNullOrEmpty() || playlistName.isNullOrEmpty()) {
+            showMessage("Información de playlist no disponible")
+            return
+        }
+        val intent = Intent(this, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+            putExtra("navigate_to", "playlist_detail")
+            putExtra("playlist_id", playlistId)
+            putExtra("playlist_name", playlistName)
+        }
+        startActivity(intent)
+        finish()
+    }
+
+    private fun navigateToFavorites() {
+        val intent = Intent(this, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+            putExtra("navigate_to", "favorites")
+        }
+        startActivity(intent)
+        finish()
+    }
+
+    private fun navigateToDownloads() {
+        val intent = Intent(this, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+            putExtra("navigate_to", "downloads")
+        }
+        startActivity(intent)
+        finish()
     }
 
     private fun showSongInfoDialog(song: Song) {

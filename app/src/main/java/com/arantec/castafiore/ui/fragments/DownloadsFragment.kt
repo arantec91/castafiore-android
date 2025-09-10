@@ -513,11 +513,8 @@ class DownloadsFragment : Fragment(), HasContentState {
         StatusBarUtils.setStatusBarColor(this)
         // Ensure any global overlay is hidden on this screen
         (activity as? LoadingHost)?.showGlobalLoading(false)
-        // Refresh downloads without disrupting visible content
-        if (!binding.swipeRefreshLayout.isRefreshing) {
-            binding.swipeRefreshLayout.isRefreshing = true
-        }
-        isManualRefresh = true
+        // Silent refresh to avoid showing the SwipeRefresh spinner (which can appear centered briefly)
+        isManualRefresh = false
         loadDownloads(isRefresh = true)
     }
 

@@ -23,8 +23,6 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.recyclerview.widget.LinearSmoothScroller
 import androidx.recyclerview.widget.RecyclerView
-import kotlin.math.abs
-import kotlin.math.max
 
 class LyricsActivity : AppCompatActivity() {
 
@@ -43,6 +41,10 @@ class LyricsActivity : AppCompatActivity() {
     private var autoScrollEnabled = true
     private var userIsDragging = false
     private var programmaticScrollInProgress = false
+
+    // Anchor scroll configuration (similar feeling to Spotify)
+    private val anchorRatio = 0.40f // 40% desde la parte superior del área visible
+    private val comfortZoneDp = 32f // zona muerta alrededor del ancla para evitar micro-ajustes
 
     private val serviceConnection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
@@ -75,6 +77,14 @@ class LyricsActivity : AppCompatActivity() {
         // Back
         binding.btnBack.setOnClickListener { finish() }
 
+        // Follow button
+        binding.btnFollow.setOnClickListener {
+            autoScrollEnabled = true
+            binding.btnFollow.visibility = android.view.View.GONE
+            val idx = adapter.getActiveIndex()
+            if (idx >= 0) smoothScrollActiveToAnchor(idx)
+        }
+
         // Recycler setup
         val lm = LinearLayoutManager(this)
         binding.rvLyrics.layoutManager = lm
@@ -85,31 +95,26 @@ class LyricsActivity : AppCompatActivity() {
                 when (newState) {
                     RecyclerView.SCROLL_STATE_DRAGGING -> {
                         userIsDragging = true
-                        autoScrollEnabled = false
+                        if (autoScrollEnabled) {
+                            autoScrollEnabled = false
+                            showFollowButtonIfNeeded()
+                        }
                     }
                     RecyclerView.SCROLL_STATE_IDLE -> {
-                        // End of any scroll (user or programmatic)
                         if (programmaticScrollInProgress) {
                             programmaticScrollInProgress = false
                         }
-                        // User is no longer dragging; re-enable will be handled by progress crossing logic
                         userIsDragging = false
                     }
-                    RecyclerView.SCROLL_STATE_SETTLING -> {
-                        // Keep current flags; if settling resulted from user fling, autoScroll stays disabled
-                    }
+                    RecyclerView.SCROLL_STATE_SETTLING -> { /* no-op */ }
                 }
-            }
-
-            override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
-                // No-op: re-enable handled based on lyric progress crossing center during ticks
             }
         })
 
-        // Auto-center active line only when auto-scroll is enabled
+        // Auto-scroll anchored behavior
         adapter.onActiveIndexChanged = { index ->
             if (autoScrollEnabled && index >= 0) {
-                smoothScrollActiveToCenterIfNeeded(index)
+                ensureActiveWithinAnchorZone(index)
             }
         }
 
@@ -117,10 +122,9 @@ class LyricsActivity : AppCompatActivity() {
         adapter.onLineClick = { index, line ->
             val pos = line.timeMs
             musicService?.seekTo(pos)
-            // Update UI immediately instead of waiting for the next tick
             adapter.updateProgress(pos)
-            // Ensure auto-scroll is enabled so the clicked line recenters
             autoScrollEnabled = true
+            if (binding.btnFollow.visibility == android.view.View.VISIBLE) binding.btnFollow.visibility = android.view.View.GONE
         }
 
         // Bind service
@@ -194,11 +198,10 @@ class LyricsActivity : AppCompatActivity() {
                 val lines = result.getOrNull().orEmpty()
                 adapter.setLines(lines)
                 binding.tvStatus.visibility = android.view.View.GONE
-                // Enable auto-scroll on new lyrics and center current active line
                 autoScrollEnabled = true
+                if (binding.btnFollow.visibility == android.view.View.VISIBLE) binding.btnFollow.visibility = android.view.View.GONE
                 val currentPos = musicService?.getCurrentPosition() ?: 0L
                 adapter.updateProgress(currentPos)
-                // If index didn't change callback yet (e.g., same line), force a center attempt
                 val idx = adapter.getActiveIndex()
                 if (idx >= 0) smoothScrollActiveToCenterIfNeeded(idx)
             } else {
@@ -217,10 +220,7 @@ class LyricsActivity : AppCompatActivity() {
             override fun run() {
                 val pos = musicService?.getCurrentPosition() ?: 0L
                 adapter.updateProgress(pos)
-                // Re-enable auto-scroll if the active line's progress crosses the screen center
-                if (!autoScrollEnabled && !userIsDragging) {
-                    maybeReenableAutoScrollByProgressCrossing(pos)
-                }
+                // NO re-habilitamos auto-scroll automáticamente; el usuario controla con el botón "Seguir"
                 handler.postDelayed(this, 120L)
             }
         }
@@ -232,49 +232,60 @@ class LyricsActivity : AppCompatActivity() {
         progressRunnable = null
     }
 
-    private fun smoothScrollActiveToCenterIfNeeded(position: Int) {
+    // Reemplaza el centrado con un anclaje estable
+    private fun ensureActiveWithinAnchorZone(position: Int) {
         val lm = binding.rvLyrics.layoutManager as? LinearLayoutManager ?: return
-        val targetView = lm.findViewByPosition(position)
-        val centerY = recyclerCenterY()
-        if (targetView != null) {
-            val viewCenter = (targetView.top + targetView.bottom) / 2
-            val delta = centerY - viewCenter
-            if (abs(delta) <= dpToPx(6f)) return // already centered enough
+        val rv = binding.rvLyrics
+        val v = lm.findViewByPosition(position)
+        val anchorY = anchorY()
+        val comfort = dpToPx(comfortZoneDp)
+        if (v != null) {
+            val center = (v.top + v.bottom) / 2
+            if (center in (anchorY - comfort)..(anchorY + comfort)) {
+                return // dentro de la zona cómoda, no movemos
+            }
         }
+        smoothScrollActiveToAnchor(position)
+    }
+
+    private fun smoothScrollActiveToAnchor(position: Int) {
+        val rv = binding.rvLyrics
+        val lm = rv.layoutManager as? LinearLayoutManager ?: return
+        val anchorY = anchorY()
         val scroller = object : LinearSmoothScroller(this) {
-            override fun calculateDtToFit(
-                viewStart: Int,
-                viewEnd: Int,
-                boxStart: Int,
-                boxEnd: Int,
-                snapPreference: Int
-            ): Int {
+            override fun calculateDtToFit(viewStart: Int, viewEnd: Int, boxStart: Int, boxEnd: Int, snapPreference: Int): Int {
                 val viewCenter = viewStart + (viewEnd - viewStart) / 2
-                val boxCenter = boxStart + (boxEnd - boxStart) / 2
-                return boxCenter - viewCenter
+                // Ajustamos para ubicar el centro de la línea exactamente en anchorY relativo al RecyclerView
+                val rvTop = 0 // coordenadas en el boxStart/boxEnd ya son relativas
+                val desiredCenter = rvTop + anchorY
+                return desiredCenter - viewCenter
             }
             override fun getVerticalSnapPreference(): Int = SNAP_TO_START
         }
         scroller.targetPosition = position
         programmaticScrollInProgress = true
-        (binding.rvLyrics.layoutManager as? LinearLayoutManager)?.startSmoothScroll(scroller)
+        lm.startSmoothScroll(scroller)
     }
 
-    private fun maybeReenableAutoScrollByProgressCrossing(currentPosMs: Long) {
-        val idx = adapter.getActiveIndex()
-        if (idx < 0) return
-        val line: LyricsLine = adapter.getLineAt(idx) ?: return
-        val start = line.timeMs
-        val duration = max(1L, line.durationMs)
-        val p = ((currentPosMs - start).toFloat() / duration.toFloat()).coerceIn(0f, 1f)
-        val lm = binding.rvLyrics.layoutManager as? LinearLayoutManager ?: return
-        val v = lm.findViewByPosition(idx) ?: return
-        val center = recyclerCenterY()
-        val spansCenter = v.top <= center && v.bottom >= center
-        if (spansCenter && p >= 0.5f) {
-            autoScrollEnabled = true
+    private fun smoothScrollActiveToCenterIfNeeded(position: Int) { ensureActiveWithinAnchorZone(position) }
+
+    private fun anchorY(): Int {
+        val rv = binding.rvLyrics
+        val contentTop = rv.paddingTop
+        val contentBottom = rv.height - rv.paddingBottom
+        val contentHeight = contentBottom - contentTop
+        return (contentTop + contentHeight * anchorRatio).toInt()
+    }
+
+    private fun showFollowButtonIfNeeded() {
+        if (binding.btnFollow.visibility != android.view.View.VISIBLE) {
+            binding.btnFollow.alpha = 0f
+            binding.btnFollow.visibility = android.view.View.VISIBLE
+            binding.btnFollow.animate().alpha(1f).setDuration(150L).start()
         }
     }
+
+    // Eliminamos maybeReenableAutoScrollByProgressCrossing (ya no se usa)
 
     private fun recyclerCenterY(): Int {
         val rv = binding.rvLyrics

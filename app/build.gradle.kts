@@ -23,10 +23,10 @@ android {
 
     defaultConfig {
         applicationId = "com.arantec.castafiore"
-        minSdk = 31
+        minSdk = 30
         targetSdk = 36
-        versionCode = 102
-        versionName = "4.0.9"
+        versionCode = 104
+        versionName = "4.1.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

@@ -9,6 +9,22 @@
     android:paddingHorizontal="16dp"
     android:paddingVertical="0dp">
 
+    <!-- Barra de progreso de la canción (sin thumb) -->
+    <ProgressBar
+        android:id="@+id/miniSongProgressBar"
+        style="@android:style/Widget.ProgressBar.Horizontal"
+        android:layout_width="0dp"
+        android:layout_height="4dp"
+        android:layout_marginTop="0dp"
+        android:progress="0"
+        android:max="1000"
+        android:indeterminate="false"
+        android:progressDrawable="@drawable/progress_bar_mini_player"
+        android:visibility="gone"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
+
     <!-- Imagen del álbum actual -->
     <ImageView
         android:id="@+id/ivMiniAlbumCover"

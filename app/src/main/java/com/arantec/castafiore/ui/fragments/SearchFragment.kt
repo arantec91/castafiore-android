@@ -219,51 +219,50 @@ class SearchFragment : Fragment(), HasContentState {
     }
 
     private fun navigateToPlaylistDetail(playlist: Playlist) {
+        val b = _binding ?: return
         val action = SearchFragmentDirections.actionSearchToPlaylistDetail(
             playlist.id,
             playlist.name
         )
-        // Freeze scrolling before navigating to avoid visual stutter
-        binding.rvPublicPlaylists.isNestedScrollingEnabled = false
-        binding.root.post {
+        b.rvPublicPlaylists.isNestedScrollingEnabled = false
+        b.root.post {
             try {
-                findNavController().navigate(action)
+                if (isAdded && _binding != null) {
+                    findNavController().navigate(action)
+                }
             } catch (_: Exception) {
-                // Restore if navigation fails
-                binding.rvPublicPlaylists.isNestedScrollingEnabled = true
-                Toast.makeText(requireContext(), "No se pudo abrir la playlist", Toast.LENGTH_SHORT).show()
+                _binding?.rvPublicPlaylists?.isNestedScrollingEnabled = true
+                _binding?.let { Toast.makeText(requireContext(), "No se pudo abrir la playlist", Toast.LENGTH_SHORT).show() }
             }
         }
     }
 
     private fun handleAlbumNavigation(album: Album) {
-        // Congelar el RecyclerView antes de navegar para evitar efectos visuales
-        binding.rvSearchResults.isNestedScrollingEnabled = false
-
-        // Forzar que los views se "asienten" antes de la transición
-        binding.root.post {
+        val b = _binding ?: return
+        b.rvSearchResults.isNestedScrollingEnabled = false
+        b.root.post {
             try {
-                val action = SearchFragmentDirections.actionSearchToAlbumDetail(album)
-                findNavController().navigate(action)
+                if (isAdded && _binding != null) {
+                    val action = SearchFragmentDirections.actionSearchToAlbumDetail(album)
+                    findNavController().navigate(action)
+                }
             } catch (_: Exception) {
-                // Restaurar scroll si hay error
-                binding.rvSearchResults.isNestedScrollingEnabled = true
+                _binding?.rvSearchResults?.isNestedScrollingEnabled = true
             }
         }
     }
 
     private fun handleArtistNavigation(artist: Artist) {
-        // Congelar el RecyclerView antes de navegar para evitar efectos visuales
-        binding.rvSearchResults.isNestedScrollingEnabled = false
-
-        // Forzar que los views se "asienten" antes de la transición
-        binding.root.post {
+        val b = _binding ?: return
+        b.rvSearchResults.isNestedScrollingEnabled = false
+        b.root.post {
             try {
-                val action = SearchFragmentDirections.actionSearchToArtistDetail(artist.id, artist.name)
-                findNavController().navigate(action)
+                if (isAdded && _binding != null) {
+                    val action = SearchFragmentDirections.actionSearchToArtistDetail(artist.id, artist.name)
+                    findNavController().navigate(action)
+                }
             } catch (_: Exception) {
-                // Restaurar scroll si hay error
-                binding.rvSearchResults.isNestedScrollingEnabled = true
+                _binding?.rvSearchResults?.isNestedScrollingEnabled = true
             }
         }
     }
@@ -317,7 +316,7 @@ class SearchFragment : Fragment(), HasContentState {
         }
 
         // Debounce
-        searchJob = lifecycleScope.launch {
+        searchJob = viewLifecycleOwner.lifecycleScope.launch {
             delay(SEARCH_DELAY_MS)
             if (query == currentSearchQuery) {
                 performSearch(query)
@@ -343,7 +342,7 @@ class SearchFragment : Fragment(), HasContentState {
         binding.errorState.isGone = true
         binding.emptyState.isGone = true
 
-        lifecycleScope.launch {
+        viewLifecycleOwner.lifecycleScope.launch {
             val result = musicRepository.getPlaylists()
             result.onSuccess { playlists ->
                 val publics = playlists.filter { it.public }
@@ -389,7 +388,7 @@ class SearchFragment : Fragment(), HasContentState {
             showLoading(true)
         }
 
-        lifecycleScope.launch {
+        viewLifecycleOwner.lifecycleScope.launch {
             val result = musicRepository.searchMusic(query)
             result.onSuccess { (songs, albums, artists) ->
                 val items = mutableListOf<SearchResultsAdapter.Item>()
@@ -500,9 +499,11 @@ class SearchFragment : Fragment(), HasContentState {
             val results = data.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
             if (!results.isNullOrEmpty()) {
                 val spokenText = results[0]
-                binding.etSearch.setText(spokenText)
-                binding.etSearch.setSelection(spokenText.length)
-                performSearch(spokenText)
+                _binding?.let { b ->
+                    b.etSearch.setText(spokenText)
+                    b.etSearch.setSelection(spokenText.length)
+                    performSearch(spokenText)
+                }
             }
         }
     }
@@ -514,50 +515,50 @@ class SearchFragment : Fragment(), HasContentState {
     }
 
     private fun showLoading(show: Boolean) {
-        binding.loadingState.isVisible = show
+        val b = _binding ?: return
+        b.loadingState.isVisible = show
         if (show) {
-            // Al mostrar loading, ocultar todo lo demás
-            binding.rvSearchResults.isGone = true
-            binding.rvPublicPlaylists.isGone = true
-            binding.emptyState.isGone = true
-            binding.errorState.isGone = true
+            b.rvSearchResults.isGone = true
+            b.rvPublicPlaylists.isGone = true
+            b.emptyState.isGone = true
+            b.errorState.isGone = true
         }
-        // Cuando show es false, no cambiamos otros estados; quienes llamen a este método
-        // deben haber mostrado el estado correcto (resultados, error o vacío).
     }
 
     private fun showEmptyState() {
-        binding.emptyState.isVisible = true
-        binding.loadingState.isGone = true
-        binding.rvSearchResults.isGone = true
-        binding.rvPublicPlaylists.isGone = true
-        binding.errorState.isGone = true
+        val b = _binding ?: return
+        b.emptyState.isVisible = true
+        b.loadingState.isGone = true
+        b.rvSearchResults.isGone = true
+        b.rvPublicPlaylists.isGone = true
+        b.errorState.isGone = true
     }
 
     private fun showResults() {
-        binding.rvSearchResults.isVisible = true
-        binding.rvPublicPlaylists.isGone = true
-        binding.emptyState.isGone = true
-        binding.loadingState.isGone = true
-        binding.errorState.isGone = true
+        val b = _binding ?: return
+        b.rvSearchResults.isVisible = true
+        b.rvPublicPlaylists.isGone = true
+        b.emptyState.isGone = true
+        b.loadingState.isGone = true
+        b.errorState.isGone = true
         switchToViewMode(ViewMode.RESULTS)
     }
 
     private fun showErrorState(title: String, message: String) {
-        binding.tvErrorTitle.text = title
-        binding.tvErrorMessage.text = message
-        binding.errorState.isVisible = true
-        binding.rvPublicPlaylists.isGone = true
-        binding.emptyState.isGone = true
-        binding.loadingState.isGone = true
-        binding.rvSearchResults.isGone = true
+        val b = _binding ?: return
+        b.tvErrorTitle.text = title
+        b.tvErrorMessage.text = message
+        b.errorState.isVisible = true
+        b.rvPublicPlaylists.isGone = true
+        b.emptyState.isGone = true
+        b.loadingState.isGone = true
+        b.rvSearchResults.isGone = true
     }
 
     private fun showSnackbar(message: String, isError: Boolean = false) {
-        val snackbar = Snackbar.make(binding.root, message, Snackbar.LENGTH_SHORT)
-        if (isError) {
-            // Usa color por defecto de Material si no existe R.color.error
-        }
+        val b = _binding ?: return
+        val snackbar = Snackbar.make(b.root, message, Snackbar.LENGTH_SHORT)
+        if (isError) { /* could style later */ }
         snackbar.show()
     }
 

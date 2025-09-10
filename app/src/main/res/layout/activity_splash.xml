@@ -48,7 +48,7 @@
         android:id="@+id/tvVersion"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="v4.0.8"
+        android:text="v4.1.1"
         android:textColor="@color/text_secondary"
         android:textSize="14sp"
         android:layout_marginBottom="32dp"

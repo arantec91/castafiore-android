@@ -111,6 +111,21 @@
                     android:visibility="gone"
                     android:text="@string/no_lyrics"/>
             </LinearLayout>
+
+            <!-- Follow button (appears when auto-scroll está desactivado) -->
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnFollow"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="bottom|end"
+                android:layout_margin="16dp"
+                android:text="@string/follow_lyrics"
+                android:visibility="gone"
+                app:cornerRadius="20dp"
+                android:insetLeft="16dp"
+                android:insetRight="16dp"
+                android:insetTop="8dp"
+                android:insetBottom="8dp"/>
         </FrameLayout>
 
     </LinearLayout>

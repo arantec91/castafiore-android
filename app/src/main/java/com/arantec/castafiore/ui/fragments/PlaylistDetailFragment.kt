@@ -335,11 +335,44 @@ class PlaylistDetailFragment : Fragment(), HasContentState {
         }
     }
 
+    // New: shimmer for title
+    private fun showTitleShimmer(show: Boolean) {
+        if (!isAdded || _binding == null) return
+        val shimmerTitle = binding.shimmerTitle
+        if (show) {
+            shimmerTitle.visibility = View.VISIBLE
+            // Remove the title view from layout flow to avoid extra vertical gap
+            binding.tvTitle.visibility = View.GONE
+            try { shimmerTitle.startShimmer() } catch (_: Exception) {}
+        } else {
+            try { shimmerTitle.stopShimmer() } catch (_: Exception) {}
+            shimmerTitle.visibility = View.GONE
+            binding.tvTitle.visibility = View.VISIBLE
+        }
+    }
+
+    // New: shimmer for info text
+    private fun showInfoShimmer(show: Boolean) {
+        if (!isAdded || _binding == null) return
+        val shimmerInfo = binding.shimmerInfo
+        if (show) {
+            shimmerInfo.visibility = View.VISIBLE
+            binding.tvInfo.visibility = View.INVISIBLE
+            try { shimmerInfo.startShimmer() } catch (_: Exception) {}
+        } else {
+            try { shimmerInfo.stopShimmer() } catch (_: Exception) {}
+            shimmerInfo.visibility = View.GONE
+            binding.tvInfo.visibility = View.VISIBLE
+        }
+    }
+
     private fun loadPlaylist(isRefresh: Boolean = false) {
         // Loading UX
         if (!isRefresh) {
             // Use shimmer instead of full-screen overlay for a lighter feel
             showShimmer(true)
+            showTitleShimmer(true)
+            showInfoShimmer(true)
             binding.emptyLayout.visibility = View.GONE
             binding.btnRetry.visibility = View.GONE
             binding.rvSongs.visibility = View.GONE
@@ -358,6 +391,7 @@ class PlaylistDetailFragment : Fragment(), HasContentState {
             infoDeferred.await().onSuccess { info ->
                 playlistInfo = info
                 binding.tvTitle.text = info.name
+                showTitleShimmer(false)
 
                 // Show or hide More depending on public status
                 binding.btnMore.visibility = if (info.public) View.GONE else View.VISIBLE
@@ -436,6 +470,7 @@ class PlaylistDetailFragment : Fragment(), HasContentState {
 
                     // Update info text
                     binding.tvInfo.text = buildInfoText(playlistSongs)
+                    showInfoShimmer(false)
 
                     // Update UI state
                     isPlaying = musicService?.isPlaying() == true && isPlaylistQueuePlaying()
@@ -473,6 +508,8 @@ class PlaylistDetailFragment : Fragment(), HasContentState {
                     binding.btnRetry.visibility = View.VISIBLE
                     binding.rvSongs.visibility = View.GONE
                     showShimmer(false)
+                    showTitleShimmer(false)
+                    showInfoShimmer(false)
                     if (isRefresh || isManualRefresh) {
                         binding.swipeRefreshLayout.isRefreshing = false
                         isManualRefresh = false
@@ -844,8 +881,8 @@ class PlaylistDetailFragment : Fragment(), HasContentState {
             val isFav = com.arantec.castafiore.utils.PlaylistFavoritesManager.isFavorite(requireContext(), playlistId)
             binding.btnFavorite.setImageResource(if (isFav) R.drawable.ic_favorite else R.drawable.ic_favorite_border)
             val tintColor = if (isFav) R.color.primary else R.color.white
-            binding.btnFavorite.imageTintList = android.content.res.ColorStateList.valueOf(
-                androidx.core.content.ContextCompat.getColor(requireContext(), tintColor)
+            binding.btnFavorite.imageTintList = ColorStateList.valueOf(
+                ContextCompat.getColor(requireContext(), tintColor)
             )
         } else {
             binding.btnFavorite.visibility = View.GONE

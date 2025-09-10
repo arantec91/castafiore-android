@@ -50,6 +50,11 @@ class HomeFragment : Fragment(), HasContentState {
     private var musicService: MusicService? = null
     private var isBound = false
 
+    // Flags para evitar registrar observers múltiples veces al recrear la vista
+    private var registeredRecentlyAddedObserver = false
+    private var registeredRecentlyPlayedObserver = false
+    private var registeredMostPlayedObserver = false
+
     // Variables para el sistema de refresh automático
     private lateinit var appLifecycleManager: AppLifecycleManager
     private var isInitialLoad = true
@@ -144,9 +149,9 @@ class HomeFragment : Fragment(), HasContentState {
         // Pool compartido para mejorar el reciclado entre listas horizontales
         val sharedPool = RecyclerView.RecycledViewPool()
 
-        // Configurar adaptador para álbumes agregados recientemente
-        recentlyAddedAdapter = AlbumHorizontalAdapter { album ->
-            onAlbumClick(album)
+        // Configurar adaptador para álbumes agregados recientemente (reusar si ya existe)
+        if (!this::recentlyAddedAdapter.isInitialized) {
+            recentlyAddedAdapter = AlbumHorizontalAdapter { album -> onAlbumClick(album) }
         }
         binding.rvRecentlyAdded.apply {
             val lm = LinearLayoutManager(context, LinearLayoutManager.HORIZONTAL, false)
@@ -160,17 +165,28 @@ class HomeFragment : Fragment(), HasContentState {
             setRecycledViewPool(sharedPool)
             (itemAnimator as? androidx.recyclerview.widget.SimpleItemAnimator)?.supportsChangeAnimations = false
         }
-        // Observer para asegurar visibilidad del slider base al actualizarse
-        recentlyAddedAdapter.registerAdapterDataObserver(object : RecyclerView.AdapterDataObserver() {
-            private fun ensureVisible() { binding.root.post { ensureBaseSectionsVisible() } }
-            override fun onChanged() = ensureVisible()
-            override fun onItemRangeInserted(positionStart: Int, itemCount: Int) = ensureVisible()
-            override fun onItemRangeRemoved(positionStart: Int, itemCount: Int) = ensureVisible()
-        })
+        // Observer para asegurar visibilidad del slider base al actualizarse (registrar una sola vez)
+        if (!registeredRecentlyAddedObserver) {
+            recentlyAddedAdapter.registerAdapterDataObserver(object : RecyclerView.AdapterDataObserver() {
+                private fun ensureVisible() { binding.root.post { ensureBaseSectionsVisible() } }
+                override fun onChanged() = ensureVisible()
+                override fun onItemRangeInserted(positionStart: Int, itemCount: Int) = ensureVisible()
+                override fun onItemRangeRemoved(positionStart: Int, itemCount: Int) = ensureVisible()
+            })
+            registeredRecentlyAddedObserver = true
+        }
 
-        // Configurar adaptador para álbumes reproducidos recientemente
-        recentlyPlayedAdapter = AlbumHorizontalAdapter { album ->
-            onAlbumClick(album)
+        // Configurar adaptador para álbumes reproducidos recientemente (reusar si ya existe)
+        if (!this::recentlyPlayedAdapter.isInitialized) {
+            recentlyPlayedAdapter = AlbumHorizontalAdapter { album -> onAlbumClick(album) }
+        }
+        if (!registeredRecentlyPlayedObserver) {
+            recentlyPlayedAdapter.registerAdapterDataObserver(object : RecyclerView.AdapterDataObserver() {
+                override fun onChanged() { binding.root.post { updateOptionalSectionsVisibility() } }
+                override fun onItemRangeInserted(positionStart: Int, itemCount: Int) { binding.root.post { updateOptionalSectionsVisibility() } }
+                override fun onItemRangeRemoved(positionStart: Int, itemCount: Int) { binding.root.post { updateOptionalSectionsVisibility() } }
+            })
+            registeredRecentlyPlayedObserver = true
         }
         binding.rvRecentlyPlayed.apply {
             val lm = LinearLayoutManager(context, LinearLayoutManager.HORIZONTAL, false)
@@ -184,16 +200,18 @@ class HomeFragment : Fragment(), HasContentState {
             setRecycledViewPool(sharedPool)
             (itemAnimator as? androidx.recyclerview.widget.SimpleItemAnimator)?.supportsChangeAnimations = false
         }
-        // Observer para actualizar visibilidad cuando la lista cambie
-        recentlyPlayedAdapter.registerAdapterDataObserver(object : RecyclerView.AdapterDataObserver() {
-            override fun onChanged() { binding.root.post { updateOptionalSectionsVisibility() } }
-            override fun onItemRangeInserted(positionStart: Int, itemCount: Int) { binding.root.post { updateOptionalSectionsVisibility() } }
-            override fun onItemRangeRemoved(positionStart: Int, itemCount: Int) { binding.root.post { updateOptionalSectionsVisibility() } }
-        })
 
-        // Configurar adaptador para álbumes más reproducidos
-        mostPlayedAdapter = AlbumHorizontalAdapter { album ->
-            onAlbumClick(album)
+        // Configurar adaptador para álbumes más reproducidos (reusar si ya existe)
+        if (!this::mostPlayedAdapter.isInitialized) {
+            mostPlayedAdapter = AlbumHorizontalAdapter { album -> onAlbumClick(album) }
+        }
+        if (!registeredMostPlayedObserver) {
+            mostPlayedAdapter.registerAdapterDataObserver(object : RecyclerView.AdapterDataObserver() {
+                override fun onChanged() { binding.root.post { updateOptionalSectionsVisibility() } }
+                override fun onItemRangeInserted(positionStart: Int, itemCount: Int) { binding.root.post { updateOptionalSectionsVisibility() } }
+                override fun onItemRangeRemoved(positionStart: Int, itemCount: Int) { binding.root.post { updateOptionalSectionsVisibility() } }
+            })
+            registeredMostPlayedObserver = true
         }
         binding.rvMostPlayed.apply {
             val lm = LinearLayoutManager(context, LinearLayoutManager.HORIZONTAL, false)
@@ -207,21 +225,17 @@ class HomeFragment : Fragment(), HasContentState {
             setRecycledViewPool(sharedPool)
             (itemAnimator as? androidx.recyclerview.widget.SimpleItemAnimator)?.supportsChangeAnimations = false
         }
-        // Observer para actualizar visibilidad cuando la lista cambie
-        mostPlayedAdapter.registerAdapterDataObserver(object : RecyclerView.AdapterDataObserver() {
-            override fun onChanged() { binding.root.post { updateOptionalSectionsVisibility() } }
-            override fun onItemRangeInserted(positionStart: Int, itemCount: Int) { binding.root.post { updateOptionalSectionsVisibility() } }
-            override fun onItemRangeRemoved(positionStart: Int, itemCount: Int) { binding.root.post { updateOptionalSectionsVisibility() } }
-        })
 
-        // Configurar adaptador para artistas similares al último reproducido
-        similarArtistsAdapter = ArtistHorizontalAdapter(
-            onArtistClick = { artist -> onArtistClick(artist) },
-            imageSizeDp = 128,
-            textWidthDp = 128,
-            textSizeSp = 14f,
-            centerText = true
-        )
+        // Configurar adaptador para artistas similares (reusar si ya existe)
+        if (!this::similarArtistsAdapter.isInitialized) {
+            similarArtistsAdapter = ArtistHorizontalAdapter(
+                onArtistClick = { artist -> onArtistClick(artist) },
+                imageSizeDp = 128,
+                textWidthDp = 128,
+                textSizeSp = 14f,
+                centerText = true
+            )
+        }
         binding.rvSimilarArtists.apply {
             val lm = LinearLayoutManager(context, LinearLayoutManager.HORIZONTAL, false)
             lm.isItemPrefetchEnabled = true
@@ -235,14 +249,16 @@ class HomeFragment : Fragment(), HasContentState {
             (itemAnimator as? androidx.recyclerview.widget.SimpleItemAnimator)?.supportsChangeAnimations = false
         }
 
-        // Configurar adaptador para Tus artistas favoritos
-        favoriteArtistsAdapter = ArtistHorizontalAdapter(
-            onArtistClick = { artist -> onArtistClick(artist) },
-            imageSizeDp = 96,
-            textWidthDp = 96,
-            textSizeSp = 14f,
-            centerText = true
-        )
+        // Configurar adaptador para Tus artistas favoritos (reusar si ya existe)
+        if (!this::favoriteArtistsAdapter.isInitialized) {
+            favoriteArtistsAdapter = ArtistHorizontalAdapter(
+                onArtistClick = { artist -> onArtistClick(artist) },
+                imageSizeDp = 96,
+                textWidthDp = 96,
+                textSizeSp = 14f,
+                centerText = true
+            )
+        }
         binding.rvFavoriteArtists.apply {
             val lm = LinearLayoutManager(context, LinearLayoutManager.HORIZONTAL, false)
             lm.isItemPrefetchEnabled = true
@@ -390,7 +406,8 @@ class HomeFragment : Fragment(), HasContentState {
                 awaitAll(
                     async { loadRecentlyAddedAlbums() },
                     async { loadRecentlyPlayedAlbums() },
-                    async { loadMostPlayedAlbums() }
+                    async { loadMostPlayedAlbums() },
+                    async { loadFavoriteArtists() }
                 )
             }
 
@@ -405,13 +422,6 @@ class HomeFragment : Fragment(), HasContentState {
                 loadSimilarArtists()
             } catch (_: Exception) {
                 // Ignorar; loadSimilarArtists maneja su propia visibilidad
-            }
-
-            // Cargar Tus artistas favoritos
-            try {
-                loadFavoriteArtists()
-            } catch (_: Exception) {
-                // Ignorar; loadFavoriteArtists maneja su propia visibilidad
             }
 
             android.util.Log.d("HomeFragment", "Carga de datos completada")
@@ -680,7 +690,8 @@ class HomeFragment : Fragment(), HasContentState {
             musicRepository.getStarredArtists().fold(
                 onSuccess = { artists ->
                     val list = artists.distinctBy { it.id }.take(10)
-                    viewLifecycleOwner.lifecycleScope.launch(Dispatchers.Main) {
+                    // Actualizar UI de forma síncrona para evitar parpadeos
+                    withContext(Dispatchers.Main) {
                         if (list.isNotEmpty()) {
                             favoriteArtistsAdapter.submit(list)
                             binding.tvFavoriteArtistsTitle.visibility = View.VISIBLE
@@ -692,14 +703,14 @@ class HomeFragment : Fragment(), HasContentState {
                     }
                 },
                 onFailure = {
-                    viewLifecycleOwner.lifecycleScope.launch(Dispatchers.Main) {
+                    withContext(Dispatchers.Main) {
                         binding.tvFavoriteArtistsTitle.visibility = View.GONE
                         binding.rvFavoriteArtists.visibility = View.GONE
                     }
                 }
             )
         } catch (_: Exception) {
-            viewLifecycleOwner.lifecycleScope.launch(Dispatchers.Main) {
+            withContext(Dispatchers.Main) {
                 binding.tvFavoriteArtistsTitle.visibility = View.GONE
                 binding.rvFavoriteArtists.visibility = View.GONE
             }
@@ -848,7 +859,8 @@ class HomeFragment : Fragment(), HasContentState {
         val hasAny = (
             (this::recentlyAddedAdapter.isInitialized && recentlyAddedAdapter.itemCount > 0) ||
             (this::recentlyPlayedAdapter.isInitialized && recentlyPlayedAdapter.itemCount > 0) ||
-            (this::mostPlayedAdapter.isInitialized && mostPlayedAdapter.itemCount > 0)
+            (this::mostPlayedAdapter.isInitialized && mostPlayedAdapter.itemCount > 0) ||
+            (this::favoriteArtistsAdapter.isInitialized && favoriteArtistsAdapter.itemCount > 0)
         )
         return hasAny
     }
