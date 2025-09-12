@@ -1,108 +1,179 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<com.google.android.material.card.MaterialCardView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:orientation="horizontal"
-    android:padding="12dp"
-    android:background="?attr/selectableItemBackground"
-    android:gravity="center_vertical">
+    android:layout_marginHorizontal="8dp"
+    android:layout_marginVertical="4dp"
+    app:cardUseCompatPadding="false"
+    app:cardPreventCornerOverlap="true"
+    app:cardCornerRadius="12dp"
+    app:strokeWidth="0dp"
+    app:strokeColor="@android:color/transparent">
 
-    <!-- Artwork/Image -->
-    <com.google.android.material.imageview.ShapeableImageView
-        android:id="@+id/ivArtwork"
-        android:layout_width="56dp"
-        android:layout_height="56dp"
-        android:layout_marginEnd="16dp"
-        android:scaleType="centerCrop"
-        android:src="@drawable/ic_album_placeholder"
-        app:strokeWidth="0.5dp"
-        app:strokeColor="@color/divider" />
-
-    <!-- Content -->
     <LinearLayout
-        android:layout_width="0dp"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_weight="1"
-        android:orientation="vertical"
-        android:layout_marginEnd="12dp">
+        android:orientation="vertical">
 
-        <!-- Title and Type -->
+        <!-- Clickable content container to keep ripple behavior -->
         <LinearLayout
+            android:id="@+id/clickableContainer"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
-            android:gravity="center_vertical"
-            android:layout_marginBottom="2dp">
+            android:padding="12dp"
+            android:background="?attr/selectableItemBackground"
+            android:gravity="center_vertical">
 
-            <TextView
-                android:id="@+id/tvTitle"
+            <!-- Artwork/Image -->
+            <com.google.android.material.imageview.ShapeableImageView
+                android:id="@+id/ivArtwork"
+                android:layout_width="56dp"
+                android:layout_height="56dp"
+                android:layout_marginEnd="16dp"
+                android:scaleType="centerCrop"
+                android:src="@drawable/ic_album_placeholder"
+                app:strokeWidth="0.5dp"
+                app:strokeColor="@color/divider" />
+
+            <!-- Content -->
+            <LinearLayout
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:text="Song Title"
-                android:textColor="@color/text_on_primary"
-                android:textSize="16sp"
-                android:textStyle="normal"
-                android:maxLines="1"
-                android:ellipsize="end" />
+                android:orientation="vertical"
+                android:layout_marginEnd="12dp">
 
-            <TextView
-                android:id="@+id/tvType"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="8dp"
-                android:text="Canción"
-                android:textColor="@color/text_secondary"
-                android:textSize="12sp"
-                android:background="@drawable/bg_type_tag"
-                android:paddingHorizontal="8dp"
-                android:paddingVertical="2dp"
-                android:visibility="visible" />
+                <!-- Title and Type -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:layout_marginBottom="2dp">
+
+                    <TextView
+                        android:id="@+id/tvTitle"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="Artist / Title"
+                        android:textColor="@color/text_on_primary"
+                        android:textSize="16sp"
+                        android:textStyle="normal"
+                        android:maxLines="1"
+                        android:ellipsize="end" />
+
+                </LinearLayout>
+
+                <!-- Subtitle (duration removed) -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical">
+
+                    <TextView
+                        android:id="@+id/tvSubtitle"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="Artist • Album"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="14sp"
+                        android:maxLines="1"
+                        android:ellipsize="end" />
+
+                </LinearLayout>
+
+            </LinearLayout>
+
+            <!-- Favorite button (shown for songs, albums, artists) -->
+            <ImageButton
+                android:id="@+id/btnFavorite"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:src="@drawable/ic_favorite_border"
+                android:contentDescription="Favorito"
+                app:tint="@color/text_secondary"
+                android:visibility="gone" />
+
+            <!-- More button (only for songs) -->
+            <ImageButton
+                android:id="@+id/btnMore"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:src="@drawable/ic_more_vertical"
+                android:contentDescription="Más opciones"
+                app:tint="@color/text_secondary"
+                android:visibility="gone" />
 
         </LinearLayout>
 
-        <!-- Subtitle and Duration -->
+        <!-- Actions for best artist as sibling below clickableContainer -->
         <LinearLayout
+            android:id="@+id/actionsRow"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:layout_marginTop="0dp"
+            android:paddingStart="12dp"
+            android:paddingEnd="12dp"
+            android:paddingBottom="12dp"
             android:orientation="horizontal"
-            android:gravity="center_vertical">
+            android:gravity="start"
+            android:visibility="gone"
+            android:weightSum="2">
 
-            <TextView
-                android:id="@+id/tvSubtitle"
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnTopSongs"
                 android:layout_width="0dp"
-                android:layout_height="wrap_content"
+                android:layout_height="42dp"
                 android:layout_weight="1"
-                android:text="Artist • Album"
-                android:textColor="@color/text_secondary"
+                android:minWidth="0dp"
+                android:minHeight="0dp"
+                android:paddingHorizontal="12dp"
+                android:gravity="center"
+                android:text="Canciones top"
+                android:textAllCaps="false"
                 android:textSize="14sp"
-                android:maxLines="1"
-                android:ellipsize="end" />
+                android:textColor="@android:color/white"
+                app:backgroundTint="@color/primary"
+                app:icon="@drawable/ic_play"
+                app:iconGravity="textStart"
+                app:iconPadding="8dp"
+                app:iconTint="@android:color/white"
+                style="@style/Widget.MaterialComponents.Button" />
 
-            <TextView
-                android:id="@+id/tvDuration"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="8dp"
-                android:text="3:45"
-                android:textColor="@color/text_secondary"
-                android:textSize="12sp"
-                android:visibility="gone" />
+            <Space
+                android:layout_width="8dp"
+                android:layout_height="1dp" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnRadio"
+                android:layout_width="0dp"
+                android:layout_height="42dp"
+                android:layout_weight="1"
+                android:minWidth="0dp"
+                android:minHeight="0dp"
+                android:paddingHorizontal="12dp"
+                android:gravity="center"
+                android:text="Radio"
+                android:textAllCaps="false"
+                android:textSize="14sp"
+                android:textColor="@color/text_primary"
+                app:backgroundTint="@android:color/transparent"
+                app:strokeWidth="1dp"
+                app:strokeColor="@color/primary"
+                app:icon="@drawable/ic_song_radio"
+                app:iconGravity="textStart"
+                app:iconPadding="8dp"
+                app:iconTint="@color/text_primary"
+                style="@style/Widget.MaterialComponents.Button"/>
 
         </LinearLayout>
 
     </LinearLayout>
 
-    <!-- More button (only for songs) -->
-    <ImageButton
-        android:id="@+id/btnMore"
-        android:layout_width="40dp"
-        android:layout_height="40dp"
-        android:background="?attr/selectableItemBackgroundBorderless"
-        android:src="@drawable/ic_more_vertical"
-        android:contentDescription="Más opciones"
-        app:tint="@color/text_secondary"
-        android:visibility="gone" />
-
-</LinearLayout>
+</com.google.android.material.card.MaterialCardView>

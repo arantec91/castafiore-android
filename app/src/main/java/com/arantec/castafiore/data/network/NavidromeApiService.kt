@@ -1,6 +1,7 @@
 package com.arantec.castafiore.data.network
 
 import com.arantec.castafiore.data.models.*
+import com.arantec.castafiore.data.models.SongResponse
 import retrofit2.Response
 import retrofit2.http.GET
 import retrofit2.http.Query
@@ -249,4 +250,15 @@ interface NavidromeApiService {
         @Query("id") id: String,
         @Query("f") format: String = "json"
     ): Response<ArtistInfo2Response>
+
+    @GET("rest/getSong.view")
+    suspend fun getSong(
+        @Query("u") username: String,
+        @Query("t") token: String,
+        @Query("s") salt: String,
+        @Query("v") version: String,
+        @Query("c") client: String,
+        @Query("id") id: String,
+        @Query("f") format: String = "json"
+    ): Response<SongResponse>
 }

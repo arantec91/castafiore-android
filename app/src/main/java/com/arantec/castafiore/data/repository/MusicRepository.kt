@@ -127,7 +127,10 @@ class MusicRepository private constructor(private val context: Context) {
                     salt = salt,
                     version = "1.16.1",
                     client = "Castafiore",
-                    query = query
+                    query = query,
+                    artistCount = 100,
+                    albumCount = 100,
+                    songCount = 100
                 )
 
                 if (response.isSuccessful) {
@@ -634,7 +637,7 @@ class MusicRepository private constructor(private val context: Context) {
     }
 
     // Método para obtener las canciones más populares de un artista usando la API específica
-    suspend fun getArtistTopSongs(artistName: String, count: Int = 25): Result<List<Song>> {
+    suspend fun getArtistTopSongs(artistName: String, count: Int = 100): Result<List<Song>> {
         return cacheManager.getSongs(
             key = CacheKeys.artistTopSongs(artistName, count),
             type = CacheTypes.SONG_LIST_TYPE
@@ -1156,7 +1159,7 @@ class MusicRepository private constructor(private val context: Context) {
         }
     }
 
-    suspend fun removeSongFromPlaylist(playlistId: String, indexToRemove: Int): Result<Boolean> {
+    suspend fun removeSongFromPlaylist(playlistId: String, songIndexToRemove: Int): Result<Boolean> {
         return try {
             val (username, token, salt) = getAuthParams()
             val response = NavidromeClient.getApiService().updatePlaylist(
@@ -1166,7 +1169,7 @@ class MusicRepository private constructor(private val context: Context) {
                 version = "1.16.1",
                 client = "Castafiore",
                 playlistId = playlistId,
-                songIndexToRemove = indexToRemove
+                songIndexToRemove = songIndexToRemove
             )
 
             if (response.isSuccessful) {
@@ -1338,6 +1341,34 @@ class MusicRepository private constructor(private val context: Context) {
             com.arantec.castafiore.data.cache.RecentPlaysStore.getInstance(context).getAll(limit)
         } catch (e: Exception) {
             emptyList()
+        }
+    }
+
+    suspend fun getSong(songId: String): Result<Song> {
+        return try {
+            val (username, token, salt) = getAuthParams()
+            val response = NavidromeClient.getApiService().getSong(
+                username = username,
+                token = token,
+                salt = salt,
+                version = "1.16.1",
+                client = "Castafiore",
+                id = songId
+            )
+            if (response.isSuccessful) {
+                val body = response.body()
+                val status = body?.subsonicResponse?.status
+                val song = body?.subsonicResponse?.song
+                if (status == "ok" && song != null) {
+                    Result.success(song)
+                } else {
+                    Result.failure(Exception(body?.subsonicResponse?.error?.message ?: "Song not found"))
+                }
+            } else {
+                Result.failure(Exception("HTTP Error: ${response.code()} - ${response.message()}"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
         }
     }
 }

@@ -242,3 +242,16 @@ data class ArtistInfo2(
 data class SimilarArtists(
     val artist: List<Artist>?
 )
+
+// Song response
+data class SongResponse(
+    @SerializedName("subsonic-response")
+    val subsonicResponse: SongResult
+)
+
+data class SongResult(
+    val status: String,
+    val version: String,
+    val song: Song?,
+    val error: ErrorResponse? = null
+)

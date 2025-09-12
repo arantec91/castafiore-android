@@ -900,6 +900,23 @@ class MusicService : Service() {
         }
     }
 
+    // Batch append songs to the queue without disrupting current playback; enqueues next only once
+    fun appendToQueue(songs: List<Song>) {
+        if (songs.isEmpty()) return
+        val existingIds = playlist.map { it.id }.toHashSet()
+        var added = false
+        songs.forEach { s ->
+            if (existingIds.add(s.id)) {
+                playlist.add(s)
+                added = true
+            }
+        }
+        if (added) {
+            notifyQueueChanged(playlist.toList())
+            enqueueNextMediaItem()
+        }
+    }
+
     fun playNext(song: Song) {
         val insertPosition = currentIndex + 1
         if (insertPosition <= playlist.size) {

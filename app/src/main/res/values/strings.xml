@@ -218,4 +218,26 @@
     <string name="remove_favorite">Quitar de favoritos</string>
     <string name="retry">Reintentar</string>
     <string name="invalid_credentials">Credenciales inválidas</string>
+
+    <!-- Recent Searches -->
+    <string name="recent_searches">Búsquedas recientes</string>
+    <string name="clear_history">Borrar</string>
+    <string name="no_recent_searches">Sin búsquedas recientes</string>
+    <string name="type_song">Canción</string>
+    <string name="type_artist">Artista</string>
+    <string name="type_album">Álbum</string>
+    <string name="type_playlist">Playlist</string>
+    <string name="history_icon_desc">Historial</string>
+
+    <!-- Search Screen -->
+    <string name="search_title">Buscar</string>
+    <string name="search_hint">Canciones, álbumes, artistas...</string>
+    <string name="clear_search">Limpiar búsqueda</string>
+    <string name="empty_search_title">Encuentra tu música</string>
+    <string name="empty_search_subtitle">Busca canciones, álbumes y artistas</string>
+    <string name="loading_search">Buscando...</string>
+    <string name="error_no_results_title">No se encontraron resultados</string>
+    <string name="error_no_results_subtitle">Intenta con otros términos de búsqueda</string>
+    <string name="icon_search_desc">Icono buscar</string>
+    <string name="icon_status_desc">Icono de estado</string>
 </resources>

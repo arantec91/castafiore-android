@@ -59,6 +59,7 @@ class HomeFragment : Fragment(), HasContentState {
     private lateinit var appLifecycleManager: AppLifecycleManager
     private var isInitialLoad = true
     private var lastLoadTime = 0L
+    private var attemptedFavoriteRetry = false
 
     // Listener para refresh automático
     private val autoRefreshListener = {
@@ -109,12 +110,12 @@ class HomeFragment : Fragment(), HasContentState {
         setupRecyclerViews()
         setupRefreshSystem()
 
+        // Establecer estado de loading antes de aplicar cualquier cache para evitar parpadeo desordenado
+        showLoading(true)
+
         // Prefijar sliders base desde cache si existen (Discover eliminado)
         applyCachedRecentlyAddedIfAvailable()
-        if (recentlyAddedAdapter.itemCount > 0) {
-            ensureBaseSectionsVisible()
-            updateOptionalSectionsVisibility()
-        }
+        // No forzar visibilidad aquí; el flujo de loading priorizará la sección superior (favoritos)
 
         // Cargar datos inmediatamente
         loadData()
@@ -388,26 +389,21 @@ class HomeFragment : Fragment(), HasContentState {
                 android.util.Log.d("HomeFragment", "Cargando datos (refresh)")
             } else {
                 android.util.Log.d("HomeFragment", "Cargando datos (inicial)")
-                // Mostrar loading sólo si no tenemos contenido base ya visible (RecentlyAdded cacheado)
-                val hasBaseContent = (recentlyAddedAdapter.itemCount > 0)
-                if (!hasBaseContent) {
-                    withContext(Dispatchers.Main) { showLoading(true) }
-                } else {
-                    withContext(Dispatchers.Main) {
-                        isLoading = false
-                        ensureBaseSectionsVisible()
-                        updateOptionalSectionsVisibility()
-                    }
-                }
+                // Siempre mostrar loading al entrar para evitar que "Agregados recientemente" aparezca antes que la sección superior
+                withContext(Dispatchers.Main) { showLoading(true) }
             }
 
-            // Cargar datos base en paralelo (álbumes) para reducir el tiempo total
+            // Cargar sección superior primero (favoritos) para mejorar la percepción de orden
+            try {
+                loadFavoriteArtists()
+            } catch (_: Exception) { }
+
+            // Cargar el resto en paralelo
             supervisorScope {
                 awaitAll(
                     async { loadRecentlyAddedAlbums() },
                     async { loadRecentlyPlayedAlbums() },
-                    async { loadMostPlayedAlbums() },
-                    async { loadFavoriteArtists() }
+                    async { loadMostPlayedAlbums() }
                 )
             }
 
@@ -439,6 +435,8 @@ class HomeFragment : Fragment(), HasContentState {
     private fun loadData() {
         // Verificar si el repositorio está configurado
         if (!musicRepository.isConfigured()) {
+            // Importante: ocultar overlay de loading para permitir interacción (e.g., ir a Configuración)
+            showLoading(false)
             showError("Configura tu servidor Navidrome para ver contenido")
             return
         }
@@ -459,6 +457,8 @@ class HomeFragment : Fragment(), HasContentState {
             }
         } catch (e: Exception) {
             android.util.Log.e("HomeFragment", "Error initializing NavidromeClient: ${e.message}")
+            // Importante: ocultar overlay de loading si hay error de configuración
+            showLoading(false)
             showError("Error de configuración del servidor")
             return
         }
@@ -699,6 +699,14 @@ class HomeFragment : Fragment(), HasContentState {
                         } else {
                             binding.tvFavoriteArtistsTitle.visibility = View.GONE
                             binding.rvFavoriteArtists.visibility = View.GONE
+                            // Si en la primera carga viene vacío, intentar una vez más tras una breve espera
+                            if (isInitialLoad && !attemptedFavoriteRetry) {
+                                attemptedFavoriteRetry = true
+                                viewLifecycleOwner.lifecycleScope.launch {
+                                    kotlinx.coroutines.delay(800)
+                                    try { loadFavoriteArtists() } catch (_: Exception) { }
+                                }
+                            }
                         }
                     }
                 },
@@ -706,6 +714,13 @@ class HomeFragment : Fragment(), HasContentState {
                     withContext(Dispatchers.Main) {
                         binding.tvFavoriteArtistsTitle.visibility = View.GONE
                         binding.rvFavoriteArtists.visibility = View.GONE
+                        if (isInitialLoad && !attemptedFavoriteRetry) {
+                            attemptedFavoriteRetry = true
+                            viewLifecycleOwner.lifecycleScope.launch {
+                                kotlinx.coroutines.delay(1000)
+                                try { loadFavoriteArtists() } catch (_: Exception) { }
+                            }
+                        }
                     }
                 }
             )
@@ -713,6 +728,13 @@ class HomeFragment : Fragment(), HasContentState {
             withContext(Dispatchers.Main) {
                 binding.tvFavoriteArtistsTitle.visibility = View.GONE
                 binding.rvFavoriteArtists.visibility = View.GONE
+                if (isInitialLoad && !attemptedFavoriteRetry) {
+                    attemptedFavoriteRetry = true
+                    viewLifecycleOwner.lifecycleScope.launch {
+                        kotlinx.coroutines.delay(1000)
+                        try { loadFavoriteArtists() } catch (_: Exception) { }
+                    }
+                }
             }
         }
     }
@@ -737,19 +759,17 @@ class HomeFragment : Fragment(), HasContentState {
     private fun showLoading(show: Boolean) {
         isLoading = show
 
-        // Si el host tiene overlay global, delegar y ocultar el ProgressBar local para evitar duplicado
-        loadingHost?.let { host ->
-            try { host.showGlobalLoading(show) } catch (_: Exception) {}
-            binding.progressBar.visibility = View.GONE
-        } ?: run {
-            // Fallback: usar ProgressBar local
-            binding.progressBar.visibility = if (show) View.VISIBLE else View.GONE
-        }
+        // Usar únicamente el ProgressBar local para no bloquear la app
+        binding.progressBar.visibility = if (show) View.VISIBLE else View.GONE
 
         if (show) {
-            // Mantener "Agregados recientemente" visible para evitar parpadeos
-            binding.tvRecentlyAddedTitle.visibility = View.VISIBLE
-            binding.rvRecentlyAdded.visibility = View.VISIBLE
+            // Durante loading, reservar espacio para la sección superior (favoritos)
+            binding.tvFavoriteArtistsTitle.visibility = View.INVISIBLE
+            binding.rvFavoriteArtists.visibility = View.INVISIBLE
+
+            // No mostrar "Agregados recientemente" aún para no dar sensación de carga desde el medio
+            binding.tvRecentlyAddedTitle.visibility = View.INVISIBLE
+            binding.rvRecentlyAdded.visibility = View.INVISIBLE
 
             // Reservar espacio para secciones opcionales
             binding.tvRecentlyPlayedTitle.visibility = View.INVISIBLE
@@ -757,12 +777,15 @@ class HomeFragment : Fragment(), HasContentState {
             binding.tvMostPlayedTitle.visibility = View.INVISIBLE
             binding.rvMostPlayed.visibility = View.INVISIBLE
 
-            // Similar artists y favoritos ocultos durante loading
+            // Similar artists ocultos durante loading
             binding.similarHeaderContainer.visibility = View.GONE
             binding.rvSimilarArtists.visibility = View.GONE
-            binding.tvFavoriteArtistsTitle.visibility = View.GONE
-            binding.rvFavoriteArtists.visibility = View.GONE
         } else {
+            // Mostrar secciones disponibles según contenido cargado
+            if (this::favoriteArtistsAdapter.isInitialized && favoriteArtistsAdapter.itemCount > 0) {
+                binding.tvFavoriteArtistsTitle.visibility = View.VISIBLE
+                binding.rvFavoriteArtists.visibility = View.VISIBLE
+            }
             binding.tvRecentlyAddedTitle.visibility = View.VISIBLE
             binding.rvRecentlyAdded.visibility = View.VISIBLE
             updateOptionalSectionsVisibility()
@@ -827,8 +850,19 @@ class HomeFragment : Fragment(), HasContentState {
     }
 
     private fun ensureBaseSectionsVisible() {
-        binding.tvRecentlyAddedTitle.visibility = View.VISIBLE
-        binding.rvRecentlyAdded.visibility = View.VISIBLE
+        if (isLoading) {
+            // No forzar visibilidad de favoritos aquí; dejar que loadFavoriteArtists controle su visibilidad
+            binding.tvRecentlyAddedTitle.visibility = View.INVISIBLE
+            binding.rvRecentlyAdded.visibility = View.INVISIBLE
+        } else {
+            // Si favoritos ya está listo, mantenerlo visible
+            if (this::favoriteArtistsAdapter.isInitialized && favoriteArtistsAdapter.itemCount > 0) {
+                binding.tvFavoriteArtistsTitle.visibility = View.VISIBLE
+                binding.rvFavoriteArtists.visibility = View.VISIBLE
+            }
+            binding.tvRecentlyAddedTitle.visibility = View.VISIBLE
+            binding.rvRecentlyAdded.visibility = View.VISIBLE
+        }
         // Removed: tvDiscoverTitle/rvDiscover
     }
 
@@ -846,6 +880,9 @@ class HomeFragment : Fragment(), HasContentState {
 
         // Remover listener para evitar memory leaks
         appLifecycleManager.removeRefreshListener(autoRefreshListener)
+
+        // Asegurar que cualquier overlay global que haya quedado se oculte
+        try { loadingHost?.showGlobalLoading(false) } catch (_: Exception) {}
 
         _binding = null
     }
