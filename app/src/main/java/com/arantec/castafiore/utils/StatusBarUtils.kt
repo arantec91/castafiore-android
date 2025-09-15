@@ -7,14 +7,16 @@ import android.view.View
 import android.view.Window
 import android.view.WindowInsetsController
 import androidx.core.content.ContextCompat
+import androidx.core.graphics.ColorUtils
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.fragment.app.Fragment
 import com.arantec.castafiore.R
 
 /**
- * Utility class for consistent status bar color across the app
- * Always uses the fixed dark background color (#121212)
+ * Utility class for consistent status bar color across the app.
+ * - Provides fixed dark color helpers
+ * - Provides dynamic color helpers with automatic icon contrast
  */
 object StatusBarUtils {
 
@@ -24,30 +26,48 @@ object StatusBarUtils {
      * @param context The context to get resources from
      */
     private fun setAppStatusBarColor(window: Window, context: Context) {
-        // Always use the fixed dark background color (#121212)
         val statusBarColor = ContextCompat.getColor(context, R.color.dark_background)
+        applyStatusBarColor(window, statusBarColor)
+    }
 
-        // Apply status bar color consistently across all API levels
+    /**
+     * Applies a specific status bar color with automatic icon contrast (light/dark)
+     */
+    private fun applyStatusBarColor(window: Window, color: Int) {
+        // Ensure we draw behind system bars
         window.addFlags(android.view.WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS)
         window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS)
-        window.statusBarColor = statusBarColor
+        window.statusBarColor = color
 
-        // Use light icons for dark background
+        // Decide icon color based on background luminance (light bg -> dark icons)
+        val isLightBackground = try {
+            ColorUtils.calculateLuminance(color) > 0.5
+        } catch (_: Throwable) {
+            false
+        }
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            window.insetsController?.setSystemBarsAppearance(
-                0, // Clear light status bar flags to show light icons
-                WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS
-            )
+            val controller = window.insetsController
+            if (controller != null) {
+                val appearance = if (isLightBackground) WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS else 0
+                controller.setSystemBarsAppearance(
+                    appearance,
+                    WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS
+                )
+            }
         } else {
             var flags = window.decorView.systemUiVisibility
-            flags = flags and View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR.inv()
+            flags = if (isLightBackground) {
+                flags or View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
+            } else {
+                flags and View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR.inv()
+            }
             window.decorView.systemUiVisibility = flags
         }
     }
 
     /**
      * Sets the fixed status bar color from a Fragment
-     * @param fragment The fragment requesting the update
      */
     fun setStatusBarColor(fragment: Fragment) {
         val activity = fragment.requireActivity()
@@ -56,10 +76,24 @@ object StatusBarUtils {
 
     /**
      * Sets the fixed status bar color from an Activity
-     * @param activity The activity requesting the update
      */
     fun setStatusBarColor(activity: Activity) {
         setAppStatusBarColor(activity.window, activity)
+    }
+
+    /**
+     * Sets a dynamic status bar color from a Fragment with automatic icon contrast
+     */
+    fun setStatusBarColor(fragment: Fragment, color: Int) {
+        val activity = fragment.requireActivity()
+        applyStatusBarColor(activity.window, color)
+    }
+
+    /**
+     * Sets a dynamic status bar color from an Activity with automatic icon contrast
+     */
+    fun setStatusBarColor(activity: Activity, color: Int) {
+        applyStatusBarColor(activity.window, color)
     }
 
     /**

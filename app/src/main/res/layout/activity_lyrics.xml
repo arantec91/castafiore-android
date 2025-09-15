@@ -10,7 +10,7 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:orientation="vertical"
-        android:paddingHorizontal="16dp"
+        android:paddingHorizontal="8dp"
         android:paddingTop="0dp"
         android:paddingBottom="8dp">
 
@@ -76,41 +76,23 @@
             android:layout_height="0dp"
             android:layout_weight="1">
 
-            <!-- Recycler of lyrics -->
-            <androidx.recyclerview.widget.RecyclerView
-                android:id="@+id/rvLyrics"
+            <!-- LrcView for lyrics -->
+            <me.wcy.lrcview.LrcView
+                android:id="@+id/lrcView"
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
-                android:clipToPadding="false"
-                android:paddingVertical="8dp"
-                android:overScrollMode="never"/>
+                android:paddingTop="8dp"
+                android:paddingBottom="8dp"
+                app:lrcTextSize="22sp"
+                app:lrcNormalTextSize="18sp"
+                app:lrcNormalTextColor="@color/text_secondary"
+                app:lrcCurrentTextColor="@color/text_primary"
+                app:lrcDividerHeight="12dp"
+                app:lrcTextGravity="center"
+                app:lrcPadding="8dp"
+                app:lrcLabel="@string/no_lyrics" />
 
-            <!-- Centered overlay containing spinner and status text -->
-            <LinearLayout
-                android:id="@+id/overlayContainer"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_gravity="center"
-                android:gravity="center"
-                android:orientation="vertical">
 
-                <ProgressBar
-                    android:id="@+id/progress"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:visibility="gone"/>
-
-                <TextView
-                    android:id="@+id/tvStatus"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:textColor="@color/text_secondary"
-                    android:textSize="14sp"
-                    android:gravity="center"
-                    android:layout_marginTop="8dp"
-                    android:visibility="gone"
-                    android:text="@string/no_lyrics"/>
-            </LinearLayout>
 
             <!-- Follow button (appears when auto-scroll está desactivado) -->
             <com.google.android.material.button.MaterialButton

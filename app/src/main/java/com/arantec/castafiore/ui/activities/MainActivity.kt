@@ -38,6 +38,7 @@ import android.content.Context.BIND_AUTO_CREATE
 import com.arantec.castafiore.ui.fragments.DownloadsFragment
 import com.arantec.castafiore.ui.fragments.FavoritesFragment
 import com.arantec.castafiore.ui.fragments.PlaylistDetailFragment
+import com.arantec.castafiore.ui.fragments.HomeFragment
 import androidx.fragment.app.Fragment
 
 class MainActivity : AppCompatActivity(), LoadingHost {
@@ -167,7 +168,9 @@ class MainActivity : AppCompatActivity(), LoadingHost {
         val current = currentTopFragment()
         return current !is DownloadsFragment &&
                 current !is FavoritesFragment &&
-                current !is PlaylistDetailFragment
+                current !is PlaylistDetailFragment &&
+                // Suppress global overlay on Home: it manages its own local loader
+                current !is HomeFragment
     }
 
     private fun forceHideOverlayAndClearManualOverride() {

@@ -142,6 +142,10 @@ class FavoritesFragment : Fragment(), HasContentState {
             layoutManager = LinearLayoutManager(context)
             adapter = songAdapter
             isNestedScrollingEnabled = false
+            // Disable change animations to avoid flicker on frequent partial updates
+            itemAnimator = null
+            // Important with NestedScrollView: do not fix size so height can grow after async data
+            setHasFixedSize(false)
         }
     }
 
@@ -157,6 +161,22 @@ class FavoritesFragment : Fragment(), HasContentState {
                 service.playQueue(
                     favoriteSongs,
                     startIndex,
+                    MusicService.PlaybackSource(
+                        MusicService.SourceType.FAVORITES,
+                        null,
+                        getString(R.string.favorite_songs_title)
+                    )
+                )
+            }
+        }
+
+        binding.fabRandom.setOnClickListener {
+            val service = musicService ?: return@setOnClickListener
+            if (favoriteSongs.isNotEmpty()) {
+                val shuffled = favoriteSongs.shuffled()
+                service.playQueue(
+                    shuffled,
+                    0,
                     MusicService.PlaybackSource(
                         MusicService.SourceType.FAVORITES,
                         null,
@@ -529,13 +549,25 @@ class FavoritesFragment : Fragment(), HasContentState {
         viewLifecycleOwner.lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 downloadManager.downloadStates
-                    .debounce(200L)
-                    .collectLatest { states: Map<String, SongDownloadManager.DownloadState> ->
-                        if (!isAdded || _binding == null) return@collectLatest
+                    .sample(250)
+                    .collect { states: Map<String, SongDownloadManager.DownloadState> ->
+                        if (!isAdded || _binding == null) return@collect
 
-                        states.values.forEach { state ->
-                            songAdapter.updateDownloadState(state)
+                        // Update only visible items to minimize rebind churn and flicker
+                        val lm = binding.rvSongs.layoutManager as? LinearLayoutManager
+                        val first = lm?.findFirstVisibleItemPosition() ?: -1
+                        val last = lm?.findLastVisibleItemPosition() ?: -1
+                        if (first >= 0 && last >= first && favoriteSongs.isNotEmpty()) {
+                            val safeFirst = first.coerceAtLeast(0)
+                            val safeLast = last.coerceAtMost(favoriteSongs.size - 1)
+                            val visibleIds = favoriteSongs.subList(safeFirst, safeLast + 1).map { it.id }.toSet()
+                            states.values.forEach { state ->
+                                if (state.songId in visibleIds) {
+                                    songAdapter.updateDownloadState(state)
+                                }
+                            }
                         }
+
                         // Update download button tint based on aggregate state
                         updateDownloadButtonTint()
                         // Update group progress UI for favorites

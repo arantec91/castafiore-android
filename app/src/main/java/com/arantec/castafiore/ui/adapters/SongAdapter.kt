@@ -23,6 +23,10 @@ class SongAdapter(
     // Enable stable IDs for better change animations and less rebind churn
     init { setHasStableIds(true) }
 
+    companion object {
+        private const val PAYLOAD_DOWNLOAD = "PAYLOAD_DOWNLOAD"
+    }
+
     private var playingSongId: String? = null
     private val downloadStates = mutableMapOf<String, com.arantec.castafiore.data.download.SongDownloadManager.DownloadState>()
 
@@ -59,7 +63,7 @@ class SongAdapter(
     fun updateDownloadState(state: com.arantec.castafiore.data.download.SongDownloadManager.DownloadState) {
         downloadStates[state.songId] = state
         val idx = songs.indexOfFirst { it.id == state.songId }
-        if (idx >= 0) notifyItemChanged(idx)
+        if (idx >= 0) notifyItemChanged(idx, PAYLOAD_DOWNLOAD)
     }
 
     inner class SongViewHolder(
@@ -74,7 +78,7 @@ class SongAdapter(
                     ivSongCover.visibility = View.GONE
                 } else {
                     ivSongCover.visibility = View.VISIBLE
-                    // Cargar portada de la canción (thumbnail) con preferencia por local
+                    // Cargar portada sólo en bind completo, nunca en payloads
                     try {
                         // Placeholder inmediato
                         ivSongCover.setImageResource(R.drawable.ic_music_note)
@@ -116,7 +120,6 @@ class SongAdapter(
                 val isPlaying = song.id == playingSongId
                 if (isPlaying) {
                     tvSongTitle.setTextColor(root.context.getColor(R.color.primary))
-                    // Mantener el color del artista siempre secundario incluso cuando se esté reproduciendo
                     tvSongArtist.setTextColor(root.context.getColor(R.color.text_secondary))
                 } else {
                     tvSongTitle.setTextColor(root.context.getColor(R.color.text_primary))
@@ -130,104 +133,7 @@ class SongAdapter(
 
                 // Progreso de descarga (si aplica)
                 val dState = downloadStates[song.id]
-                if (dState != null) {
-                    when (dState.status) {
-                        com.arantec.castafiore.data.download.SongDownloadManager.DownloadStatus.PENDING -> {
-                            if (circularDownloadInIcon) {
-                                // En modo circular en icono, ocultar pendiente para que sólo RUNNING muestre spinner
-                                containerDownload.visibility = View.GONE
-                                containerIconDownload.visibility = View.GONE
-                                cpiDownload.visibility = View.GONE
-                            } else {
-                                containerDownload.visibility = View.VISIBLE
-                                progressDownload.isIndeterminate = true
-                                progressDownload.progress = 0
-                                tvDownloadStatus.text = root.context.getString(R.string.downloading_pending)
-                            }
-                        }
-                        com.arantec.castafiore.data.download.SongDownloadManager.DownloadStatus.DOWNLOADING -> {
-                            if (circularDownloadInIcon) {
-                                containerDownload.visibility = View.GONE
-                                containerIconDownload.visibility = View.VISIBLE
-                                val p = dState.progress.coerceIn(0, 100)
-                                when {
-                                    p <= 0 -> {
-                                        // No progreso aún: mantener animación indeterminada para evitar anillo "vacío"
-                                        cpiDownload.visibility = View.VISIBLE
-                                        cpiDownload.isIndeterminate = true
-                                    }
-                                    p in 1..99 -> {
-                                        // Progreso real: cambiar a modo determinado
-                                        cpiDownload.visibility = View.VISIBLE
-                                        if (cpiDownload.isIndeterminate) cpiDownload.isIndeterminate = false
-                                        try {
-                                            cpiDownload.setProgressCompat(p, true)
-                                        } catch (_: Exception) {
-                                            cpiDownload.progress = p
-                                        }
-                                    }
-                                    else -> {
-                                        // p == 100: tratar como completado en el siguiente bloque
-                                        cpiDownload.visibility = View.GONE
-                                    }
-                                }
-                            } else {
-                                containerDownload.visibility = View.VISIBLE
-                                progressDownload.isIndeterminate = false
-                                progressDownload.progress = dState.progress.coerceIn(0, 100)
-                                tvDownloadStatus.text = root.context.getString(R.string.downloading_progress, dState.progress.coerceIn(0, 100))
-                            }
-                        }
-                        com.arantec.castafiore.data.download.SongDownloadManager.DownloadStatus.COMPLETED -> {
-                            containerDownload.visibility = View.GONE
-                            cpiDownload.visibility = View.GONE
-                            // containerIconDownload handled after we compute isDownloaded
-                        }
-                        com.arantec.castafiore.data.download.SongDownloadManager.DownloadStatus.FAILED -> {
-                            if (circularDownloadInIcon) {
-                                containerDownload.visibility = View.GONE
-                                cpiDownload.visibility = View.GONE
-                                containerIconDownload.visibility = View.GONE
-                            } else {
-                                containerDownload.visibility = View.VISIBLE
-                                progressDownload.isIndeterminate = false
-                                progressDownload.progress = 0
-                                tvDownloadStatus.text = root.context.getString(R.string.downloading_failed)
-                            }
-                        }
-                        com.arantec.castafiore.data.download.SongDownloadManager.DownloadStatus.CANCELLED -> {
-                            containerDownload.visibility = View.GONE
-                            cpiDownload.visibility = View.GONE
-                            containerIconDownload.visibility = View.GONE
-                        }
-                    }
-                } else {
-                    containerDownload.visibility = View.GONE
-                    cpiDownload.visibility = View.GONE
-                    containerIconDownload.visibility = View.GONE
-                }
-
-                // Icono de descargado: visible cuando la canción está descargada
-                try {
-                    val dm = com.arantec.castafiore.data.download.SongDownloadManager.getInstance(root.context)
-                    // Use fast check to avoid content resolver I/O on main thread
-                    val isDownloaded = dm.isSongDownloadedFast(song.id)
-                        || (dState?.status == com.arantec.castafiore.data.download.SongDownloadManager.DownloadStatus.COMPLETED)
-                    val isSpinnerVisible = cpiDownload.visibility == View.VISIBLE
-                    if (!isSpinnerVisible && isDownloaded) {
-                        ivDownloaded.visibility = View.VISIBLE
-                        containerIconDownload.visibility = View.VISIBLE
-                    } else if (!isSpinnerVisible) {
-                        // ensure no gap
-                        ivDownloaded.visibility = View.GONE
-                        containerIconDownload.visibility = View.GONE
-                    }
-                } catch (_: Exception) {
-                    ivDownloaded.visibility = View.GONE
-                    if (cpiDownload.visibility != View.VISIBLE) {
-                        containerIconDownload.visibility = View.GONE
-                    }
-                }
+                applyDownloadUi(song, dState)
 
                 // Click handlers
                 root.setOnClickListener {
@@ -236,6 +142,106 @@ class SongAdapter(
 
                 btnSongMore.setOnClickListener {
                     onSongMoreClick(song)
+                }
+            }
+        }
+
+        // Partial update handler for download status changes only
+        fun partialUpdateDownloadUi(song: Song, dState: com.arantec.castafiore.data.download.SongDownloadManager.DownloadState?) {
+            binding.apply {
+                applyDownloadUi(song, dState)
+            }
+        }
+
+        private fun applyDownloadUi(song: Song, dState: com.arantec.castafiore.data.download.SongDownloadManager.DownloadState?) {
+            binding.apply {
+                // Reset visibilities minimally; do not touch title/artist/cover here
+                when (dState?.status) {
+                    com.arantec.castafiore.data.download.SongDownloadManager.DownloadStatus.PENDING -> {
+                        if (circularDownloadInIcon) {
+                            containerDownload.visibility = View.GONE
+                            containerIconDownload.visibility = View.GONE
+                            cpiDownload.visibility = View.GONE
+                        } else {
+                            containerDownload.visibility = View.VISIBLE
+                            progressDownload.isIndeterminate = true
+                            progressDownload.progress = 0
+                            tvDownloadStatus.text = root.context.getString(R.string.downloading_pending)
+                        }
+                    }
+                    com.arantec.castafiore.data.download.SongDownloadManager.DownloadStatus.DOWNLOADING -> {
+                        if (circularDownloadInIcon) {
+                            containerDownload.visibility = View.GONE
+                            containerIconDownload.visibility = View.VISIBLE
+                            val p = dState.progress.coerceIn(0, 100)
+                            when {
+                                p <= 0 -> {
+                                    cpiDownload.visibility = View.VISIBLE
+                                    cpiDownload.isIndeterminate = true
+                                }
+                                p in 1..99 -> {
+                                    cpiDownload.visibility = View.VISIBLE
+                                    if (cpiDownload.isIndeterminate) cpiDownload.isIndeterminate = false
+                                    try { cpiDownload.setProgressCompat(p, true) } catch (_: Exception) { cpiDownload.progress = p }
+                                }
+                                else -> {
+                                    cpiDownload.visibility = View.GONE
+                                }
+                            }
+                        } else {
+                            containerDownload.visibility = View.VISIBLE
+                            progressDownload.isIndeterminate = false
+                            progressDownload.progress = dState.progress.coerceIn(0, 100)
+                            tvDownloadStatus.text = root.context.getString(R.string.downloading_progress, dState.progress.coerceIn(0, 100))
+                        }
+                    }
+                    com.arantec.castafiore.data.download.SongDownloadManager.DownloadStatus.COMPLETED -> {
+                        containerDownload.visibility = View.GONE
+                        cpiDownload.visibility = View.GONE
+                        // handled below with isDownloaded check
+                    }
+                    com.arantec.castafiore.data.download.SongDownloadManager.DownloadStatus.FAILED -> {
+                        if (circularDownloadInIcon) {
+                            containerDownload.visibility = View.GONE
+                            cpiDownload.visibility = View.GONE
+                            containerIconDownload.visibility = View.GONE
+                        } else {
+                            containerDownload.visibility = View.VISIBLE
+                            progressDownload.isIndeterminate = false
+                            progressDownload.progress = 0
+                            tvDownloadStatus.text = root.context.getString(R.string.downloading_failed)
+                        }
+                    }
+                    com.arantec.castafiore.data.download.SongDownloadManager.DownloadStatus.CANCELLED -> {
+                        containerDownload.visibility = View.GONE
+                        cpiDownload.visibility = View.GONE
+                        containerIconDownload.visibility = View.GONE
+                    }
+                    else -> {
+                        containerDownload.visibility = View.GONE
+                        cpiDownload.visibility = View.GONE
+                        containerIconDownload.visibility = View.GONE
+                    }
+                }
+
+                // Downloaded icon handling (avoid toggling while spinner visible)
+                try {
+                    val dm = com.arantec.castafiore.data.download.SongDownloadManager.getInstance(root.context)
+                    val isDownloaded = dm.isSongDownloadedFast(song.id)
+                        || (dState?.status == com.arantec.castafiore.data.download.SongDownloadManager.DownloadStatus.COMPLETED)
+                    val isSpinnerVisible = cpiDownload.visibility == View.VISIBLE
+                    if (!isSpinnerVisible && isDownloaded) {
+                        ivDownloaded.visibility = View.VISIBLE
+                        containerIconDownload.visibility = View.VISIBLE
+                    } else if (!isSpinnerVisible) {
+                        ivDownloaded.visibility = View.GONE
+                        containerIconDownload.visibility = View.GONE
+                    }
+                } catch (_: Exception) {
+                    ivDownloaded.visibility = View.GONE
+                    if (cpiDownload.visibility != View.VISIBLE) {
+                        containerIconDownload.visibility = View.GONE
+                    }
                 }
             }
         }
@@ -248,6 +254,15 @@ class SongAdapter(
 
     override fun onBindViewHolder(holder: SongViewHolder, position: Int) {
         holder.bind(songs[position])
+    }
+
+    override fun onBindViewHolder(holder: SongViewHolder, position: Int, payloads: MutableList<Any>) {
+        if (payloads.contains(PAYLOAD_DOWNLOAD)) {
+            // Partial update: only refresh download UI, avoid rebinding text/cover
+            holder.partialUpdateDownloadUi(songs[position], downloadStates[songs[position].id])
+        } else {
+            super.onBindViewHolder(holder, position, payloads)
+        }
     }
 
     override fun getItemCount(): Int = songs.size

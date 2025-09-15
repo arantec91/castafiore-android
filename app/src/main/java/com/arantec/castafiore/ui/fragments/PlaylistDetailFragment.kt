@@ -212,7 +212,8 @@ class PlaylistDetailFragment : Fragment(), HasContentState {
             // Important: do NOT mark fixed size when inside NestedScrollView with wrap_content height,
             // otherwise RecyclerView may not expand after async data is set.
             setHasFixedSize(false)
-            itemAnimator = null // disable change animations to avoid jank on frequent state updates
+            // Disable change animations to avoid flicker on frequent partial updates
+            itemAnimator = null
         }
     }
 
@@ -231,6 +232,26 @@ class PlaylistDetailFragment : Fragment(), HasContentState {
                     service.playQueue(
                         playlistSongs,
                         startIndex,
+                        MusicService.PlaybackSource(
+                            MusicService.SourceType.PLAYLIST,
+                            playlistId,
+                            playlistName
+                        )
+                    )
+                }
+            } else {
+                bindMusicService()
+            }
+        }
+
+        binding.fabRandom.setOnClickListener {
+            val service = musicService
+            if (service != null) {
+                if (playlistSongs.isNotEmpty()) {
+                    val shuffled = playlistSongs.shuffled()
+                    service.playQueue(
+                        shuffled,
+                        0,
                         MusicService.PlaybackSource(
                             MusicService.SourceType.PLAYLIST,
                             playlistId,
@@ -837,7 +858,8 @@ class PlaylistDetailFragment : Fragment(), HasContentState {
         binding.collapsingToolbar.setContentScrimColor(baseColor)
         binding.collapsingToolbar.setStatusBarScrimColor(baseColor)
         binding.toolbar.navigationIcon?.setTint(android.graphics.Color.WHITE)
-        StatusBarUtils.setStatusBarColor(this)
+        // Aplicar también el color dinámico al status bar con contraste automático
+        StatusBarUtils.setStatusBarColor(this, topColor)
 
         gradientApplied = true
     }

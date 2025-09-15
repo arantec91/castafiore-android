@@ -165,6 +165,22 @@ class DownloadsFragment : Fragment(), HasContentState {
                 )
             }
         }
+
+        binding.fabRandom.setOnClickListener {
+            val service = musicService ?: return@setOnClickListener
+            if (downloadedSongs.isNotEmpty()) {
+                val shuffled = downloadedSongs.shuffled()
+                service.playQueue(
+                    shuffled,
+                    0,
+                    MusicService.PlaybackSource(
+                        MusicService.SourceType.DOWNLOADS,
+                        null,
+                        getString(R.string.bottom_downloads)
+                    )
+                )
+            }
+        }
     }
 
     private fun bindMusicService() {

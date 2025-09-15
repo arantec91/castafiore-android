@@ -25,8 +25,8 @@ android {
         applicationId = "com.arantec.castafiore"
         minSdk = 30
         targetSdk = 36
-        versionCode = 105
-        versionName = "4.1.2"
+        versionCode = 106
+        versionName = "4.1.3"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -132,6 +132,9 @@ dependencies {
 
     // Shimmer for skeleton loading
     implementation("com.facebook.shimmer:shimmer:0.5.0")
+
+    // LrcView for smooth lyrics rendering (JitPack coordinates)
+    implementation("com.github.wangchenyan:lrcview:2.2")
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

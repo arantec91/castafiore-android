@@ -77,6 +77,12 @@ class SearchResultsAdapter(
         private const val VIEW_TYPE_ITEM = 1
     }
 
+    // Callback para clic en headers de sección
+    private var onHeaderClickListener: ((Section) -> Unit)? = null
+    fun setOnHeaderClickListener(listener: (Section) -> Unit) {
+        onHeaderClickListener = listener
+    }
+
     override fun getItemViewType(position: Int): Int {
         return when (getItem(position)) {
             is Item.HeaderItem -> VIEW_TYPE_HEADER
@@ -105,32 +111,71 @@ class SearchResultsAdapter(
 
     inner class HeaderViewHolder(view: View) : RecyclerView.ViewHolder(view) {
         private val tvTitle: TextView = view.findViewById(R.id.tvSectionTitle)
+        private val headerRow: View = view.findViewById(R.id.headerRow)
+        private val ivChevron: View = view.findViewById(R.id.ivChevron)
+        private val originalBackground = headerRow.background
         fun bind(item: Item.HeaderItem) {
             tvTitle.text = item.title
+            // Ocultar ripple/click y chevron para la sección BEST (Mejor Resultado)
+            if (item.section == Section.BEST) {
+                ivChevron.isGone = true
+                headerRow.isClickable = false
+                headerRow.isFocusable = false
+                headerRow.background = null
+                headerRow.setOnClickListener(null)
+            } else {
+                ivChevron.isVisible = true
+                headerRow.isClickable = true
+                headerRow.isFocusable = true
+                headerRow.background = originalBackground
+                // Propagar clic del header a un callback según sección
+                headerRow.setOnClickListener {
+                    when (item.section) {
+                        Section.SONGS -> onHeaderClickListener?.invoke(Section.SONGS)
+                        Section.ARTISTS -> onHeaderClickListener?.invoke(Section.ARTISTS)
+                        Section.ALBUMS -> onHeaderClickListener?.invoke(Section.ALBUMS)
+                        Section.BEST -> onHeaderClickListener?.invoke(Section.BEST)
+                    }
+                }
+            }
         }
     }
 
     inner class SearchResultViewHolder(private val binding: ItemSearchResultBinding) : RecyclerView.ViewHolder(binding.root) {
         private fun styleBest(isBest: Boolean) {
-            val card = binding.root as? MaterialCardView ?: return
+            val card = binding.root as MaterialCardView
             val ctx = card.context
             val surfaceVariant = ContextCompat.getColor(ctx, R.color.surface_variant)
             val transparent = ContextCompat.getColor(ctx, android.R.color.transparent)
-            fun dp(value: Int): Int = (value * card.resources.displayMetrics.density).toInt()
+            fun dp(value: Int): Float = value * card.resources.displayMetrics.density
             if (isBest) {
-                // Remove stroke highlight; keep subtle elevation and background only
                 card.strokeWidth = 0
-                card.cardElevation = dp(2).toFloat()
+                card.cardElevation = dp(2)
                 card.setCardBackgroundColor(surfaceVariant)
+                card.radius = dp(12)
             } else {
                 card.strokeWidth = 0
                 card.cardElevation = 0f
                 card.setCardBackgroundColor(transparent)
+                card.radius = 0f
+            }
+        }
+
+        private fun setContainerPadding(isBest: Boolean) {
+            val context = binding.clickableContainer.context
+            val dp12 = (12 * context.resources.displayMetrics.density).toInt()
+            if (isBest) {
+                // Best item: uniform 12dp padding
+                binding.clickableContainer.setPadding(dp12, dp12, dp12, dp12)
+            } else {
+                // Non-best item: 12dp only at the bottom
+                binding.clickableContainer.setPadding(0, 0, 0, dp12)
             }
         }
 
         fun bindSong(song: Song, isBest: Boolean) {
             styleBest(isBest)
+            setContainerPadding(isBest)
             // Ensure artist-only actions are hidden for songs
             binding.actionsRow.isGone = true
             binding.btnTopSongs.setOnClickListener(null)
@@ -170,6 +215,7 @@ class SearchResultsAdapter(
 
         fun bindAlbum(album: Album, isBest: Boolean) {
             styleBest(isBest)
+            setContainerPadding(isBest)
             // Ensure artist-only actions are hidden for albums
             binding.actionsRow.isGone = true
             binding.btnTopSongs.setOnClickListener(null)
@@ -208,6 +254,7 @@ class SearchResultsAdapter(
 
         fun bindArtist(artist: Artist, isBest: Boolean) {
             styleBest(isBest)
+            setContainerPadding(isBest)
             binding.tvTitle.text = artist.name
             val albumsText = artist.albumCount?.let { "$it álbum(es)" }
             binding.tvSubtitle.text = albumsText ?: ""

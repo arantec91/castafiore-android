@@ -40,13 +40,7 @@
                     android:background="#121212"
                     android:elevation="0dp" />
 
-                <!-- Overlay superior para legibilidad del toolbar -->
-                <View
-                    android:id="@+id/headerTopScrim"
-                    android:layout_width="match_parent"
-                    android:layout_height="120dp"
-                    android:background="@drawable/gradient_header_top"
-                    app:layout_constraintTop_toTopOf="parent" />
+
 
                 <!-- Imagen del artista centrada tipo avatar circular -->
                 <ImageView

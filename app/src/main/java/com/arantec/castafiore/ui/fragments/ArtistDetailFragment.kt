@@ -38,12 +38,14 @@ import com.bumptech.glide.Glide
 import com.bumptech.glide.request.target.CustomTarget
 import com.bumptech.glide.request.transition.Transition
 import android.graphics.drawable.Drawable
+import android.os.Build
 import java.util.Locale
 import kotlin.math.max
 import kotlin.random.Random
 import com.arantec.castafiore.utils.snack
 import androidx.core.content.ContextCompat
 import com.arantec.castafiore.ui.helpers.HasContentState
+import com.arantec.castafiore.ui.helpers.LoadingHost
 import androidx.core.graphics.drawable.toDrawable
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.repeatOnLifecycle
@@ -83,6 +85,9 @@ class ArtistDetailFragment : Fragment(), HasContentState {
     // Estado colapsable de canciones populares
     private var isSongsExpanded: Boolean = false
     private val INITIAL_SONGS_LIMIT = 6
+
+    // Marcador de que la sección principal ya terminó de cargar (aunque esté vacía)
+    private var primaryContentReady: Boolean = false
 
     // Agregado: gestor de descargas para observar progreso
     private lateinit var downloadManager: SongDownloadManager
@@ -246,32 +251,36 @@ class ArtistDetailFragment : Fragment(), HasContentState {
     }
 
     private fun loadArtistData() {
-        // Only show local loader if we already have content (refresh behavior)
-        if (hasContent()) {
+        // Mostrar loader local solo si ya había contenido (comportamiento de refresco)
+        val hadContentInitially = hasContent()
+        if (hadContentInitially) {
             showLoading(true)
         }
 
         viewLifecycleOwner.lifecycleScope.launch {
             try {
-                // Cargar información del artista
+                // Cargar primero el contenido principal de la pantalla
                 loadArtistInfo()
-
-                // Cargar álbumes del artista
                 loadArtistAlbums()
-
-                // Cargar canciones populares del artista
                 loadArtistTopSongs()
 
-                // Cargar artistas similares (después de populares)
-                loadSimilarArtists()
+                // Marcar contenido primario listo (aunque sean listas vacías)
+                primaryContentReady = true
 
-                // Verificar si se sigue al artista
-                checkFollowStatus()
+                // En cuanto el contenido principal está listo, ocultar el loader local
+                if (hadContentInitially) showLoading(false)
 
+                // Si el overlay global está visible pero ya hay contenido primario listo, pedir que se oculte
+                (activity as? LoadingHost)?.let { host ->
+                    if (host.isGlobalLoadingVisible()) host.showGlobalLoading(false)
+                }
+
+                // Operaciones secundarias en paralelo (no bloquean el loader ni la UI)
+                launch { loadSimilarArtists() }
+                launch { checkFollowStatus() }
             } catch (_: Exception) {
                 showError("Error al cargar la información del artista")
-            } finally {
-                showLoading(false)
+                if (hadContentInitially) showLoading(false)
             }
         }
     }
@@ -492,14 +501,13 @@ class ArtistDetailFragment : Fragment(), HasContentState {
         val bgGradient = buildSmoothGradient(baseColor, topColor)
         binding.gradientBackground.background = bgGradient
 
-        // Para el AppBar y los scrims, usar color sólido estable
-        binding.appBarLayout.background = baseColor.toDrawable()
+        // Para el AppBar y el scrim, usar colores sólidos estables para evitar glitches/crashes al colapsar
+        binding.appBarLayout.background = android.graphics.drawable.ColorDrawable(baseColor)
         binding.collapsingToolbar.setContentScrimColor(baseColor)
-        // Usar color base estable en lugar de dinámico para evitar parpadeos
         binding.collapsingToolbar.setStatusBarScrimColor(baseColor)
-        binding.toolbar.navigationIcon?.setTint(Color.WHITE)
-        // Usar color fijo estable en lugar de dinámico para evitar parpadeos/crashes
-        StatusBarUtils.setStatusBarColor(this)
+        binding.toolbar.navigationIcon?.setTint(android.graphics.Color.WHITE)
+        // Aplicar también el color dinámico al status bar con contraste automático
+        StatusBarUtils.setStatusBarColor(this, topColor)
     }
 
     private fun buildSmoothGradient(baseColor: Int, topColor: Int): GradientDrawable {
@@ -520,19 +528,21 @@ class ArtistDetailFragment : Fragment(), HasContentState {
             gradientType = GradientDrawable.LINEAR_GRADIENT
             setDither(true)
 
-            // Zona sólida solo del 10%, transición suave distribuida en el 90% restante
-            setColors(colors, floatArrayOf(0f, 0.1f, 0.22f, 0.35f, 0.5f, 0.65f, 0.78f, 0.88f, 0.95f, 1f))
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                // Zona sólida solo del 10%, transición suave distribuida en el 90% restante
+                setColors(colors, floatArrayOf(0f, 0.1f, 0.22f, 0.35f, 0.5f, 0.65f, 0.78f, 0.88f, 0.95f, 1f))
+            }
         }
     }
 
     // Función auxiliar para mezclar colores
     private fun blendColors(color1: Int, color2: Int, ratio: Float): Int {
         val inverseRatio = 1f - ratio
-        val r = (Color.red(color1) * ratio + Color.red(color2) * inverseRatio).toInt()
-        val g = (Color.green(color1) * ratio + Color.green(color2) * inverseRatio).toInt()
-        val b = (Color.blue(color1) * ratio + Color.blue(color2) * inverseRatio).toInt()
-        val a = (Color.alpha(color1) * ratio + Color.alpha(color2) * inverseRatio).toInt()
-        return Color.argb(a, r, g, b)
+        val r = (android.graphics.Color.red(color1) * ratio + android.graphics.Color.red(color2) * inverseRatio).toInt()
+        val g = (android.graphics.Color.green(color1) * ratio + android.graphics.Color.green(color2) * inverseRatio).toInt()
+        val b = (android.graphics.Color.blue(color1) * ratio + android.graphics.Color.blue(color2) * inverseRatio).toInt()
+        val a = (android.graphics.Color.alpha(color1) * ratio + android.graphics.Color.alpha(color2) * inverseRatio).toInt()
+        return android.graphics.Color.argb(a, r, g, b)
     }
 
     private fun setStaticBackground() {
@@ -897,8 +907,9 @@ class ArtistDetailFragment : Fragment(), HasContentState {
     // Métodos de UI auxiliares
     private fun showLoading(show: Boolean) {
         if (!isAdded || _binding == null) return
+        // Solo controlar el ProgressBar local aquí
         binding.progressBar.visibility = if (show) View.VISIBLE else View.GONE
-        // Do not hide entire content; global overlay will cover initial loads
+        // No tocar contenido ni overlays globales aquí
     }
 
     private fun showError(message: String) {
@@ -1058,9 +1069,11 @@ class ArtistDetailFragment : Fragment(), HasContentState {
 
     // Report whether there is already meaningful content rendered
     override fun hasContent(): Boolean {
+        // Si el contenido primario terminó de cargar (aunque vacío), considera que hay contenido para evitar flicker del overlay
+        if (primaryContentReady) return true
         val albumsCount = if (this::albumAdapter.isInitialized) albumAdapter.itemCount else 0
         val songsCount = if (this::songAdapter.isInitialized) songAdapter.itemCount else 0
-        // Consider content only when there’s meaningful list data rendered
+        // Considerar contenido cuando haya datos en listas
         return albumsCount > 0 || songsCount > 0
     }
 

@@ -76,6 +76,8 @@ class SearchFragment : Fragment(), HasContentState {
     private var keepHistoryVisible: Boolean = false
     // Suppress history during first render to avoid flicker
     private var isInitializing: Boolean = true
+    // Track the active search network job to cancel stale requests
+    private var activeSearchJob: Job? = null
 
     // Estado de filtros (solo resultados)
     private var filterArtists = false
@@ -285,8 +287,22 @@ class SearchFragment : Fragment(), HasContentState {
         binding.rvSearchResults.apply {
             layoutManager = LinearLayoutManager(requireContext())
             adapter = searchAdapter
-            setHasFixedSize(true
-            )
+            setHasFixedSize(true)
+        }
+        // Clic del header de sección: activar chip correspondiente y aplicar filtros
+        searchAdapter.setOnHeaderClickListener { section ->
+            when (section) {
+                SearchResultsAdapter.Section.SONGS -> binding.chipSongs.isChecked = true
+                SearchResultsAdapter.Section.ARTISTS -> binding.chipArtists.isChecked = true
+                SearchResultsAdapter.Section.ALBUMS -> binding.chipAlbums.isChecked = true
+                SearchResultsAdapter.Section.BEST -> {
+                    // Sin chip específico: limpiar filtros para ver todos
+                    binding.chipArtists.isChecked = false
+                    binding.chipAlbums.isChecked = false
+                    binding.chipSongs.isChecked = false
+                }
+            }
+            // Los listeners de chips ya actualizan estilos y rebuild de items
         }
     }
 
@@ -459,6 +475,9 @@ class SearchFragment : Fragment(), HasContentState {
         binding.etSearch.setOnEditorActionListener { _, actionId, _ ->
             if (actionId == EditorInfo.IME_ACTION_SEARCH) {
                 val q = binding.etSearch.text.toString().trim()
+                // Cancel any pending debounced search to avoid duplicate requests
+                searchJob?.cancel()
+                activeSearchJob?.cancel()
                 performSearch(q)
                 true
             } else false
@@ -558,6 +577,8 @@ class SearchFragment : Fragment(), HasContentState {
             // Al escribir, liberar pin de historial y mostrar chips
             keepHistoryVisible = false
             binding.chipGroupFilters.isVisible = true
+            // Al iniciar una búsqueda, ocultar el grid de playlists públicas
+            binding.rvPublicPlaylists.isGone = true
         }
 
         // Texto no vacío: ocultar historial y hacer búsqueda (debounce)
@@ -640,11 +661,28 @@ class SearchFragment : Fragment(), HasContentState {
             )
             return
         }
-        if (hasContent()) {
-            showLoading(true)
+
+        // Ocultar historial y playlists al iniciar cualquier búsqueda
+        binding.historyHeader.isGone = true
+        binding.rvSearchHistory.isGone = true
+        binding.rvPublicPlaylists.isGone = true
+
+        // Mantener contenido actual visible durante la carga para evitar parpadeos
+        val hadResultItems = this::searchAdapter.isInitialized && searchAdapter.itemCount > 0
+        val hadAnyContent = hasContent()
+
+        // Cancelar la petición de búsqueda en curso (si la hay)
+        activeSearchJob?.cancel()
+
+        // Limpiar resultados anteriores inmediatamente para evitar parpadeo
+        if (this::searchAdapter.isInitialized) {
+            searchAdapter.submitData(emptyList())
         }
 
-        viewLifecycleOwner.lifecycleScope.launch {
+        // Mostrar indicador de carga como overlay, sin ocultar resultados actuales
+        showLoading(true)
+
+        activeSearchJob = viewLifecycleOwner.lifecycleScope.launch {
             val result = musicRepository.searchMusic(query)
             result.onSuccess { (songs, albums, artists) ->
                 // Skip outdated responses if user changed/cleared the query
@@ -704,10 +742,14 @@ class SearchFragment : Fragment(), HasContentState {
 
                 val display = buildDisplayItems()
                 if (display.isEmpty()) {
-                    showErrorState(
-                        title = "Sin resultados",
-                        message = "Intenta con otros términos"
-                    )
+                    // Si no hay resultados, no flashes si ya había contenido: mantenerlo
+                    if (!hadAnyContent || !hadResultItems) {
+                        showErrorState(
+                            title = "Sin resultados",
+                            message = "Intenta con otros términos"
+                        )
+                    }
+                    // Dejar la lista anterior visible si existía
                 } else {
                     viewModel.items.value = display
                     showResults()
@@ -722,12 +764,17 @@ class SearchFragment : Fragment(), HasContentState {
             }.onFailure { e ->
                 // Skip outdated errors if query changed/cleared
                 if (query != currentSearchQuery || currentSearchQuery.isBlank()) return@onFailure
-                showErrorState(
-                    title = "Error",
-                    message = e.message ?: "Error al buscar"
-                )
+                // En error, si ya había contenido, mantenerlo y no mostrar error de pantalla completa
+                if (!hadAnyContent) {
+                    showErrorState(
+                        title = "Error",
+                        message = e.message ?: "Error al buscar"
+                    )
+                }
             }
             showLoading(false)
+            // Limpiar referencia de job activo
+            activeSearchJob = null
         }
     }
 
@@ -940,8 +987,7 @@ class SearchFragment : Fragment(), HasContentState {
         val b = _binding ?: return
         b.loadingState.isVisible = show
         if (show) {
-            b.rvSearchResults.isGone = true
-            b.rvPublicPlaylists.isGone = true
+            // No ocultar el contenido existente; solo superponer el indicador para evitar parpadeos
             b.emptyState.isGone = true
             b.errorState.isGone = true
             // Ensure history is hidden while loading to avoid overlap
@@ -992,6 +1038,7 @@ class SearchFragment : Fragment(), HasContentState {
     override fun onDestroyView() {
         super.onDestroyView()
         searchJob?.cancel()
+        activeSearchJob?.cancel()
         _binding = null
     }
 

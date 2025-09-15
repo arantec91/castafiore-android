@@ -286,6 +286,9 @@ class AlbumDetailFragment : Fragment(), HasContentState {
             layoutManager = LinearLayoutManager(requireContext())
             adapter = songAdapter
             isNestedScrollingEnabled = false
+            // Reduce flicker on frequent partial updates
+            itemAnimator = null
+            setHasFixedSize(false)
         }
     }
 
@@ -382,23 +385,12 @@ class AlbumDetailFragment : Fragment(), HasContentState {
             if (isBound && musicService != null) {
                 musicService?.let { service ->
                     if (isCurrentAlbumPlaying()) {
-                        // Si este álbum es el que se está reproduciendo actualmente
-                        if (service.isPlaying()) {
-                            // Si está reproduciéndose, pausar
-                            service.pause()
-                        } else {
-                            // Si está pausado, reanudar (no reiniciar la cola)
-                            service.play()
-                        }
-                    } else {
-                        // Si este álbum NO se está reproduciendo, iniciar desde el principio
-                        if (albumSongs.isNotEmpty()) {
-                            playAlbum()
-                        }
+                        if (service.isPlaying()) service.pause() else service.play()
+                    } else if (albumSongs.isNotEmpty()) {
+                        playAlbum()
                     }
                 }
             } else {
-                // Posponer acción hasta que el servicio esté enlazado
                 pendingAction = {
                     musicService?.let { service ->
                         if (isCurrentAlbumPlaying()) {
@@ -406,6 +398,42 @@ class AlbumDetailFragment : Fragment(), HasContentState {
                         } else if (albumSongs.isNotEmpty()) {
                             playAlbum()
                         }
+                    }
+                }
+                bindMusicService()
+            }
+        }
+
+        // Nuevo: reproducción aleatoria del álbum
+        binding.fabRandom.setOnClickListener {
+            if (isBound && musicService != null) {
+                musicService?.let { service ->
+                    if (albumSongs.isNotEmpty()) {
+                        val shuffled = albumSongs.shuffled()
+                        service.playQueue(
+                            shuffled,
+                            0,
+                            com.arantec.castafiore.service.MusicService.PlaybackSource(
+                                com.arantec.castafiore.service.MusicService.SourceType.ALBUM,
+                                currentAlbum?.id,
+                                currentAlbum?.name
+                            )
+                        )
+                    }
+                }
+            } else {
+                pendingAction = {
+                    if (albumSongs.isNotEmpty()) {
+                        val shuffled = albumSongs.shuffled()
+                        musicService?.playQueue(
+                            shuffled,
+                            0,
+                            com.arantec.castafiore.service.MusicService.PlaybackSource(
+                                com.arantec.castafiore.service.MusicService.SourceType.ALBUM,
+                                currentAlbum?.id,
+                                currentAlbum?.name
+                            )
+                        )
                     }
                 }
                 bindMusicService()
@@ -621,7 +649,8 @@ class AlbumDetailFragment : Fragment(), HasContentState {
         binding.collapsingToolbar.setContentScrimColor(baseColor)
         binding.collapsingToolbar.setStatusBarScrimColor(baseColor)
         binding.toolbar.navigationIcon?.setTint(android.graphics.Color.WHITE)
-        StatusBarUtils.setStatusBarColor(this)
+        // Aplicar también el color dinámico al status bar con contraste automático
+        StatusBarUtils.setStatusBarColor(this, topColor)
     }
 
     private fun buildSmoothGradient(baseColor: Int, topColor: Int): GradientDrawable {
