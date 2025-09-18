@@ -5,6 +5,13 @@
     android:layout_height="match_parent"
     android:background="@color/background_primary">
 
+    <!-- Background overlay to mirror PlayerActivity's gradientBackground -->
+    <View
+        android:id="@+id/lyricsBackground"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@color/background_primary" />
+
     <LinearLayout
         android:id="@+id/contentContainer"
         android:layout_width="match_parent"
@@ -20,7 +27,7 @@
             android:layout_height="wrap_content"
             android:orientation="horizontal"
             android:gravity="center_vertical"
-            android:layout_marginBottom="8dp">
+            android:layout_marginBottom="16dp">
 
             <ImageButton
                 android:id="@+id/btnBack"
@@ -83,12 +90,12 @@
                 android:layout_height="match_parent"
                 android:paddingTop="8dp"
                 android:paddingBottom="8dp"
-                app:lrcTextSize="22sp"
-                app:lrcNormalTextSize="18sp"
+                app:lrcTextSize="32sp"
+                app:lrcNormalTextSize="24sp"
                 app:lrcNormalTextColor="@color/text_secondary"
-                app:lrcCurrentTextColor="@color/text_primary"
+                app:lrcCurrentTextColor="@color/primary"
                 app:lrcDividerHeight="12dp"
-                app:lrcTextGravity="center"
+                app:lrcTextGravity="left"
                 app:lrcPadding="8dp"
                 app:lrcLabel="@string/no_lyrics" />
 

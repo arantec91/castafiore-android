@@ -20,8 +20,9 @@ class SongAdapter(
     private val circularDownloadInIcon: Boolean = false
 ) : RecyclerView.Adapter<SongAdapter.SongViewHolder>() {
 
-    // Enable stable IDs for better change animations and less rebind churn
-    init { setHasStableIds(true) }
+    // Disable stable IDs to avoid RecyclerView conflicts when external updates/animations overlap
+    // DiffUtil already uses Song.id for identity, which is sufficient for animations
+    init { setHasStableIds(false) }
 
     companion object {
         private const val PAYLOAD_DOWNLOAD = "PAYLOAD_DOWNLOAD"
@@ -46,7 +47,9 @@ class SongAdapter(
 
     fun updateSongs(newSongs: List<Song>) {
         // Always submit a new list instance to avoid identity short-circuiting
-        differ.submitList(newSongs.toList())
+        // Also, enforce unique items by id to satisfy stable ID requirements
+        val unique = newSongs.distinctBy { it.id }
+        differ.submitList(unique)
     }
 
     fun setPlayingSong(songId: String?) {
@@ -57,7 +60,7 @@ class SongAdapter(
         val newIndex = songId?.let { id -> songs.indexOfFirst { it.id == id } } ?: -1
         if (oldIndex >= 0) notifyItemChanged(oldIndex)
         if (newIndex >= 0 && newIndex != oldIndex) notifyItemChanged(newIndex)
-        if (oldIndex < 0 && newIndex < 0) notifyDataSetChanged() // fallback if we can't find items
+        // Avoid notifyDataSetChanged() with stable IDs to prevent animation conflicts
     }
 
     fun updateDownloadState(state: com.arantec.castafiore.data.download.SongDownloadManager.DownloadState) {
@@ -267,8 +270,14 @@ class SongAdapter(
 
     override fun getItemCount(): Int = songs.size
 
-    // Provide stable ID based on song id
+    // Provide a 64-bit stable ID derived from the song's string id to avoid hash collisions
     override fun getItemId(position: Int): Long {
-        return songs.getOrNull(position)?.id?.hashCode()?.toLong() ?: RecyclerView.NO_ID
+        val idStr = songs.getOrNull(position)?.id ?: return RecyclerView.NO_ID
+        // 64-bit rolling hash (very low collision probability compared to String.hashCode())
+        var h = 1125899906842597L // prime-ish seed
+        for (ch in idStr) {
+            h = (h * 1315423911L) xor ch.code.toLong()
+        }
+        return h
     }
 }

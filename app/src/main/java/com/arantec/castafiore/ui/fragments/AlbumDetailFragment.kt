@@ -72,6 +72,8 @@ class AlbumDetailFragment : Fragment(), HasContentState {
     private var appBarOffsetListener: com.google.android.material.appbar.AppBarLayout.OnOffsetChangedListener? = null
 
     // Color original de la status bar ahora manejado por StatusBarUtils
+    // Remember last dynamic status bar color to reapply on resume
+    private var lastStatusBarTopColor: Int? = null
 
     private val serviceConnection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
@@ -649,7 +651,8 @@ class AlbumDetailFragment : Fragment(), HasContentState {
         binding.collapsingToolbar.setContentScrimColor(baseColor)
         binding.collapsingToolbar.setStatusBarScrimColor(baseColor)
         binding.toolbar.navigationIcon?.setTint(android.graphics.Color.WHITE)
-        // Aplicar también el color dinámico al status bar con contraste automático
+        // Aplicar también el color dinámico al status bar con contraste automático y recordarlo
+        lastStatusBarTopColor = topColor
         StatusBarUtils.setStatusBarColor(this, topColor)
     }
 
@@ -700,7 +703,8 @@ class AlbumDetailFragment : Fragment(), HasContentState {
         // Usar iconos blancos para el toolbar (apropiado para fondo oscuro)
         binding.toolbar.navigationIcon?.setTint(android.graphics.Color.WHITE)
 
-        // Use centralized status bar color utility
+        // Use centralized status bar color utility and reset dynamic memory
+        lastStatusBarTopColor = null
         StatusBarUtils.setStatusBarColor(this)
     }
 
@@ -1042,8 +1046,9 @@ class AlbumDetailFragment : Fragment(), HasContentState {
     // Lifecycle methods
     override fun onResume() {
         super.onResume()
-        // Ensure consistent status bar color on resume
-        StatusBarUtils.setStatusBarColor(this)
+        // Ensure consistent status bar color on resume: reapply last dynamic if available
+        lastStatusBarTopColor?.let { StatusBarUtils.setStatusBarColor(this, it) }
+            ?: StatusBarUtils.setStatusBarColor(this)
     }
 
     override fun onStart() {

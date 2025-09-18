@@ -43,6 +43,11 @@ class PlayerActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityPlayerBinding
 
+    // Remember last dynamic system bars color to reapply on resume
+    private var lastSystemBarsColor: Int? = null
+    // Track the current player background color to decide foreground contrast
+    private var lastAppliedBackgroundColor: Int? = null
+
     private lateinit var musicRepository: MusicRepository
     private var musicService: MusicService? = null
     private var isBound = false
@@ -132,8 +137,9 @@ class PlayerActivity : AppCompatActivity() {
             }
         }
 
-        // Set consistent status bar color via utility
-        StatusBarUtils.setStatusBarColor(this)
+        // Set consistent bars color: use last dynamic if available, else default
+        lastSystemBarsColor?.let { StatusBarUtils.setSystemBarsColor(this, it) }
+            ?: StatusBarUtils.setSystemBarsColor(this, "#121212".toColorInt())
     }
 
     private fun setupClickListeners() {
@@ -433,8 +439,11 @@ class PlayerActivity : AppCompatActivity() {
     }
 
     private fun extractColorsAndApplyTheme(bitmap: Bitmap) {
-        Palette.from(bitmap).generate {
-            // Por ahora, mantener tema estático para consistencia
+        val color = com.arantec.castafiore.utils.ImageUtils.extractBackgroundColor(bitmap)
+        if (color != null) {
+            currentSong?.let { com.arantec.castafiore.utils.ThemeColorCache.put(it, color) }
+            applyDynamicTheme(color)
+        } else {
             applyDefaultTheme()
         }
     }
@@ -442,8 +451,80 @@ class PlayerActivity : AppCompatActivity() {
     private fun applyDefaultTheme() {
         val staticColor = "#121212".toColorInt()
         binding.gradientBackground.setBackgroundColor(staticColor)
-        // Asegurar status bar consistente
-        StatusBarUtils.setStatusBarColor(this)
+        // Reset memory and apply fixed bars color
+        lastSystemBarsColor = null
+        StatusBarUtils.setSystemBarsColor(this, staticColor)
+        // Apply foreground contrast for default background
+        applyForegroundContrastForBackground(staticColor)
+    }
+
+    private fun applyDynamicTheme(color: Int) {
+        // Apply color to the player background
+        binding.gradientBackground.setBackgroundColor(color)
+        // Remember and apply to both status and navigation bars
+        lastSystemBarsColor = color
+        StatusBarUtils.setSystemBarsColor(this, color)
+        // Apply foreground contrast for dynamic background
+        applyForegroundContrastForBackground(color)
+    }
+
+    // Calculates best on-colors (primary/secondary/inactive) based on WCAG contrast
+    private data class OnColors(val primary: Int, val secondary: Int, val inactive: Int)
+
+    private fun pickOnColors(backgroundColor: Int): OnColors {
+        // Compare contrast of black/white over the background and pick the best
+        val contrastBlack = androidx.core.graphics.ColorUtils.calculateContrast(Color.BLACK, backgroundColor)
+        val contrastWhite = androidx.core.graphics.ColorUtils.calculateContrast(Color.WHITE, backgroundColor)
+        val primary = if (contrastBlack >= contrastWhite) Color.BLACK else Color.WHITE
+        // Secondary ~60% alpha of the primary; inactive ~30%
+        val secondary = androidx.core.graphics.ColorUtils.setAlphaComponent(primary, 0x99)
+        val inactive = androidx.core.graphics.ColorUtils.setAlphaComponent(primary, 0x4D)
+        return OnColors(primary, secondary, inactive)
+    }
+
+    // Adjust text and icon colors based on best-contrast color (black/white) instead of luminance threshold
+    private fun applyForegroundContrastForBackground(backgroundColor: Int) {
+        lastAppliedBackgroundColor = backgroundColor
+        val on = pickOnColors(backgroundColor)
+
+        // Texts
+        binding.tvSongTitle.setTextColor(on.primary)
+        binding.tvArtistName.setTextColor(on.secondary)
+        binding.tvPlayingFrom.setTextColor(on.primary)
+        binding.tvPlayingFromLabel.setTextColor(on.secondary)
+        binding.tvCurrentTime.setTextColor(on.secondary)
+        binding.tvTotalTime.setTextColor(on.secondary)
+
+        // Top bar icons
+        binding.btnBack.imageTintList = android.content.res.ColorStateList.valueOf(on.primary)
+        binding.btnMore.imageTintList = android.content.res.ColorStateList.valueOf(on.primary)
+
+        // Transport controls
+        binding.btnPlayPause.imageTintList = android.content.res.ColorStateList.valueOf(on.primary)
+        binding.btnPrevious.imageTintList = android.content.res.ColorStateList.valueOf(on.primary)
+        binding.btnNext.imageTintList = android.content.res.ColorStateList.valueOf(on.primary)
+
+        // Queue / Lyrics
+        runCatching { binding.btnQueue.imageTintList = android.content.res.ColorStateList.valueOf(on.primary) }
+        runCatching { binding.btnLyrics.imageTintList = android.content.res.ColorStateList.valueOf(on.primary) }
+
+        // Buttons that depend on state will be refreshed with on.secondary/on.primary
+        updateFavoriteButton()
+        updateShuffleButton()
+        updateRepeatButton()
+
+        // Slider
+        binding.seekBarProgress.apply {
+            thumbTintList = android.content.res.ColorStateList.valueOf(on.primary)
+            trackActiveTintList = android.content.res.ColorStateList.valueOf(on.primary)
+            trackInactiveTintList = android.content.res.ColorStateList.valueOf(on.inactive)
+            haloTintList = android.content.res.ColorStateList.valueOf(on.primary)
+        }
+    }
+
+    private fun currentOnColors(): OnColors {
+        val bg = lastAppliedBackgroundColor ?: "#121212".toColorInt()
+        return pickOnColors(bg)
     }
 
     private fun updatePlayingFrom() {
@@ -590,25 +671,23 @@ class PlayerActivity : AppCompatActivity() {
     }
 
     private fun updatePlayPauseButton() {
-        val iconRes = if (isPlaying) R.drawable.ic_pause else R.drawable.ic_play
+        val iconRes = if (isPlaying) R.drawable.ic_pause_main else R.drawable.ic_play_main
         binding.btnPlayPause.setImageResource(iconRes)
     }
 
     private fun updateShuffleButton() {
         android.util.Log.d("PlayerActivity", "[DEBUG_LOG] updateShuffleButton: Using shuffle state = $isShuffleEnabled")
-        val tint = if (isShuffleEnabled) {
-            getColor(R.color.primary)
-        } else {
-            getColor(R.color.text_secondary)
-        }
+        val on = currentOnColors()
+        val tint = if (isShuffleEnabled) on.primary else on.secondary
         binding.btnShuffle.imageTintList = android.content.res.ColorStateList.valueOf(tint)
     }
 
     private fun updateRepeatButton() {
+        val on = currentOnColors()
         val (iconRes, tint) = when (repeatMode) {
-            RepeatMode.OFF -> R.drawable.ic_repeat to getColor(R.color.text_secondary)
-            RepeatMode.ALL -> R.drawable.ic_repeat to getColor(R.color.primary)
-            RepeatMode.ONE -> R.drawable.ic_repeat_one to getColor(R.color.primary)
+            RepeatMode.OFF -> R.drawable.ic_repeat to on.secondary
+            RepeatMode.ALL -> R.drawable.ic_repeat to on.primary
+            RepeatMode.ONE -> R.drawable.ic_repeat_one to on.primary
         }
 
         binding.btnRepeat.setImageResource(iconRes)
@@ -622,12 +701,9 @@ class PlayerActivity : AppCompatActivity() {
     }
 
     private fun updateFavoriteButton() {
+        val on = currentOnColors()
         val iconRes = if (isFavorite) R.drawable.ic_favorite_36 else R.drawable.ic_favorite_border_36
-        val tint = if (isFavorite) {
-            getColor(R.color.primary)
-        } else {
-            getColor(R.color.text_secondary)
-        }
+        val tint = if (isFavorite) on.primary else on.secondary
 
         binding.btnFavorite.setImageResource(iconRes)
         binding.btnFavorite.imageTintList = android.content.res.ColorStateList.valueOf(tint)
@@ -851,8 +927,9 @@ class PlayerActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
 
-        // Ensure consistent status bar color
-        StatusBarUtils.setStatusBarColor(this)
+        // Ensure system bars color is consistent with last dynamic
+        lastSystemBarsColor?.let { StatusBarUtils.setSystemBarsColor(this, it) }
+            ?: StatusBarUtils.setSystemBarsColor(this, "#121212".toColorInt())
 
         // Reestablecer modo de pantalla completa
         setupFullScreenMode()

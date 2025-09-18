@@ -72,12 +72,13 @@
     <string name="music_service_unavailable">Servicio de música no disponible</string>
 
     <!-- Artist detail -->
-    <string name="albums_title">Álbumes</string>
-    <string name="popular_title">Populares</string>
+    <string name="albums_title">Discografía</string>
+    <string name="popular_title">Canciones Populares</string>
     <string name="albums_count_singular">%1$d álbum</string>
     <string name="albums_count_plural">%1$d álbumes</string>
     <string name="show_more">Ver más</string>
     <string name="show_less">Mostrar menos</string>
+    <string name="preparing_songs">Preparando canciones…</string>
 
     <!-- Login / Setup -->
     <string name="login_title">Bienvenido</string>

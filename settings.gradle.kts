@@ -22,4 +22,5 @@ dependencyResolutionManagement {
 
 rootProject.name = "Castafiore"
 include(":app")
+include(":lrcview")
  

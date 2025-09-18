@@ -33,7 +33,7 @@
                 android:layout_height="wrap_content"
                 android:orientation="horizontal"
                 android:gravity="center_vertical"
-                android:layout_marginBottom="32dp">
+                android:layout_marginBottom="16dp">
 
                 <ImageButton
                     android:id="@+id/btnBack"
@@ -54,6 +54,7 @@
                     android:layout_marginHorizontal="16dp">
 
                     <TextView
+                        android:id="@+id/tvPlayingFromLabel"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="@string/playing_from"
@@ -94,14 +95,18 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginHorizontal="0dp"
-                android:layout_marginBottom="32dp">
+                android:layout_marginBottom="32dp"
+                android:clipToPadding="false"
+                android:clipChildren="false">
 
                 <androidx.cardview.widget.CardView
                     android:layout_width="0dp"
                     android:layout_height="0dp"
                     app:cardBackgroundColor="#121212"
                     app:cardCornerRadius="12dp"
-                    app:cardElevation="12dp"
+                    app:cardUseCompatPadding="true"
+                    app:cardPreventCornerOverlap="true"
+                    app:cardElevation="8dp"
                     app:layout_constraintDimensionRatio="1:1"
                     app:layout_constraintEnd_toEndOf="parent"
                     app:layout_constraintStart_toStartOf="parent"
@@ -113,7 +118,8 @@
                         android:layout_height="match_parent"
                         android:contentDescription="@null"
                         android:scaleType="centerCrop"
-                        android:src="@drawable/ic_album_placeholder" />
+                        android:src="@drawable/ic_album_placeholder"
+                        android:clipToOutline="true" />
 
                 </androidx.cardview.widget.CardView>
 
@@ -231,7 +237,7 @@
                 android:layout_marginBottom="4dp"
                 app:cardCornerRadius="16dp"
                 app:cardElevation="0dp"
-                app:cardBackgroundColor="#121212"
+                app:cardBackgroundColor="@android:color/transparent"
                 app:useCompatPadding="true">
 
                 <!-- Controles principales de reproducción -->
@@ -271,17 +277,15 @@
                         android:layout_height="wrap_content"
                         android:layout_weight="1">
 
-                        <com.google.android.material.floatingactionbutton.FloatingActionButton
+                        <ImageButton
                             android:id="@+id/btnPlayPause"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
+                            android:layout_width="56dp"
+                            android:layout_height="56dp"
                             android:layout_gravity="center"
+                            android:background="?attr/selectableItemBackgroundBorderless"
                             android:contentDescription="@string/play_pause"
-                            android:src="@drawable/ic_play"
-                            app:backgroundTint="@color/primary"
-                            app:tint="@color/white"
-                            app:fabSize="normal"
-                            app:maxImageSize="36dp"/>
+                            android:src="@drawable/ic_play_main"
+                            app:tint="@color/text_primary"/>
                     </FrameLayout>
 
                     <!-- Next -->
@@ -317,7 +321,7 @@
                 android:layout_marginTop="8dp"
                 app:cardCornerRadius="16dp"
                 app:cardElevation="0dp"
-                app:cardBackgroundColor="#121212"
+                app:cardBackgroundColor="@android:color/transparent"
                 app:useCompatPadding="true">
 
                 <LinearLayout

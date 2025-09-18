@@ -53,6 +53,9 @@ import com.arantec.castafiore.data.download.SongDownloadManager
 
 class ArtistDetailFragment : Fragment(), HasContentState {
 
+    // Remember last dynamic status bar color to reapply on resume
+    private var lastStatusBarTopColor: Int? = null
+
     private var _binding: FragmentArtistDetailBinding? = null
     private val binding get() = _binding!!
 
@@ -68,6 +71,10 @@ class ArtistDetailFragment : Fragment(), HasContentState {
     private var albums: List<Album> = emptyList()
     private var topSongs: List<Song> = emptyList()
     private var similarArtists: List<Artist> = emptyList()
+
+    // Estado de carga y petición pendiente para reproducir al terminar de cargar
+    private var songsLoading: Boolean = false
+    private var pendingPlayTopSongs: Boolean = false
 
     private lateinit var albumAdapter: ArtistAlbumHorizontalAdapter
     private lateinit var songAdapter: SongAdapter
@@ -240,7 +247,12 @@ class ArtistDetailFragment : Fragment(), HasContentState {
         }
 
         binding.btnPlay.setOnClickListener {
-            playArtistTopSongs()
+            if (songsLoading) {
+                pendingPlayTopSongs = true
+                binding.btnPlay.isEnabled = false
+            } else {
+                playArtistTopSongs()
+            }
         }
 
         // Toggle Ver más / Mostrar menos
@@ -333,6 +345,13 @@ class ArtistDetailFragment : Fragment(), HasContentState {
     }
 
     private suspend fun loadArtistTopSongs() {
+        songsLoading = true
+        // Deshabilitar botón Play durante la carga para evitar taps rápidos
+        withContext(Dispatchers.Main) {
+            if (isAdded && _binding != null) {
+                binding.btnPlay.isEnabled = false
+            }
+        }
         // Usar la API específica getTopSongs.view de Navidrome
         val result = withContext(Dispatchers.IO) {
             musicRepository.getArtistTopSongs(artistName ?: "", 25)
@@ -344,15 +363,24 @@ class ArtistDetailFragment : Fragment(), HasContentState {
                 withContext(Dispatchers.Main) {
                     if (!isAdded || _binding == null) return@withContext
                     updateSongsListUI()
+                    // Rehabilitar botón Play cuando termina la carga
+                    binding.btnPlay.isEnabled = true
+                    // Si el usuario pidió reproducir mientras cargaba, y ahora hay canciones, ejecutar
+                    if (pendingPlayTopSongs && topSongs.isNotEmpty()) {
+                        pendingPlayTopSongs = false
+                        playArtistTopSongs()
+                    }
                 }
             },
             onFailure = { error ->
                 withContext(Dispatchers.Main) {
                     if (!isAdded || _binding == null) return@withContext
+                    binding.btnPlay.isEnabled = true
                     showError("Error al cargar canciones populares: ${'$'}{error.message}")
                 }
             }
         )
+        songsLoading = false
     }
 
     private suspend fun loadSimilarArtists() {
@@ -385,7 +413,10 @@ class ArtistDetailFragment : Fragment(), HasContentState {
     private fun updateSongsListUI() {
         if (!isAdded || _binding == null) return
 
-        val hasMoreThanLimit = topSongs.size > INITIAL_SONGS_LIMIT
+        // Deduplicate by song id to satisfy stable ID uniqueness
+        val uniqueTopSongs = topSongs.distinctBy { it.id }
+
+        val hasMoreThanLimit = uniqueTopSongs.size > INITIAL_SONGS_LIMIT
 
         // Configurar visibilidad y texto del botón
         binding.btnToggleSongs.visibility = if (hasMoreThanLimit) View.VISIBLE else View.GONE
@@ -393,9 +424,9 @@ class ArtistDetailFragment : Fragment(), HasContentState {
 
         // Actualizar lista a mostrar
         val songsToShow = if (hasMoreThanLimit && !isSongsExpanded) {
-            topSongs.take(INITIAL_SONGS_LIMIT)
+            uniqueTopSongs.take(INITIAL_SONGS_LIMIT)
         } else {
-            topSongs
+            uniqueTopSongs
         }
         songAdapter.updateSongs(songsToShow)
 
@@ -506,7 +537,8 @@ class ArtistDetailFragment : Fragment(), HasContentState {
         binding.collapsingToolbar.setContentScrimColor(baseColor)
         binding.collapsingToolbar.setStatusBarScrimColor(baseColor)
         binding.toolbar.navigationIcon?.setTint(android.graphics.Color.WHITE)
-        // Aplicar también el color dinámico al status bar con contraste automático
+        // Aplicar también el color dinámico al status bar con contraste automático y recordarlo
+        lastStatusBarTopColor = topColor
         StatusBarUtils.setStatusBarColor(this, topColor)
     }
 
@@ -557,7 +589,8 @@ class ArtistDetailFragment : Fragment(), HasContentState {
         // Usar iconos blancos para el toolbar (apropiado para fondo oscuro)
         binding.toolbar.navigationIcon?.setTint(Color.WHITE)
 
-        // Use centralized status bar color utility
+        // Use centralized status bar color utility and reset dynamic memory
+        lastStatusBarTopColor = null
         StatusBarUtils.setStatusBarColor(this)
     }
 
@@ -1047,8 +1080,9 @@ class ArtistDetailFragment : Fragment(), HasContentState {
             updatePlaybackState()
         }
 
-        // Ensure consistent status bar color on resume
-        StatusBarUtils.setStatusBarColor(this)
+        // Ensure consistent status bar color on resume: reapply last dynamic if available
+        lastStatusBarTopColor?.let { StatusBarUtils.setStatusBarColor(this, it) }
+            ?: StatusBarUtils.setStatusBarColor(this)
     }
 
     override fun onStop() {

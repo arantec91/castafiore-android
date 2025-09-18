@@ -54,6 +54,9 @@ import android.util.Log
 
 class PlaylistDetailFragment : Fragment(), HasContentState {
 
+    // Remember last dynamic status bar color to reapply on resume
+    private var lastStatusBarTopColor: Int? = null
+
     private var _binding: FragmentPlaylistDetailBinding? = null
     private val binding get() = _binding!!
 
@@ -792,7 +795,8 @@ class PlaylistDetailFragment : Fragment(), HasContentState {
         // Usar iconos blancos para el toolbar
         binding.toolbar.navigationIcon?.setTint(android.graphics.Color.WHITE)
 
-        // Aplicar color de status bar usando utility
+        // Reset dynamic status bar color memory and apply static
+        lastStatusBarTopColor = null
         StatusBarUtils.setStatusBarColor(this)
     }
 
@@ -858,7 +862,8 @@ class PlaylistDetailFragment : Fragment(), HasContentState {
         binding.collapsingToolbar.setContentScrimColor(baseColor)
         binding.collapsingToolbar.setStatusBarScrimColor(baseColor)
         binding.toolbar.navigationIcon?.setTint(android.graphics.Color.WHITE)
-        // Aplicar también el color dinámico al status bar con contraste automático
+        // Aplicar también el color dinámico al status bar con contraste automático y recordarlo
+        lastStatusBarTopColor = topColor
         StatusBarUtils.setStatusBarColor(this, topColor)
 
         gradientApplied = true
@@ -976,7 +981,8 @@ class PlaylistDetailFragment : Fragment(), HasContentState {
         // Ensure any global overlay is hidden on this screen
         (activity as? LoadingHost)?.showGlobalLoading(false)
         // Keep status bar consistent with current app bar theme
-        StatusBarUtils.setStatusBarColor(this)
+        lastStatusBarTopColor?.let { StatusBarUtils.setStatusBarColor(this, it) }
+            ?: StatusBarUtils.setStatusBarColor(this)
     }
 
     override fun onDestroy() {

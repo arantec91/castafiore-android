@@ -97,6 +97,62 @@ object StatusBarUtils {
     }
 
     /**
+     * Applies a specific color to BOTH status and navigation bars with automatic icon contrast.
+     */
+    private fun applySystemBarsColor(window: Window, color: Int) {
+        // Ensure we draw behind system bars
+        window.addFlags(android.view.WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS)
+        window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS)
+        window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_TRANSLUCENT_NAVIGATION)
+
+        window.statusBarColor = color
+        window.navigationBarColor = color
+
+        val isLightBackground = try {
+            ColorUtils.calculateLuminance(color) > 0.5
+        } catch (_: Throwable) {
+            false
+        }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            window.insetsController?.let { controller ->
+                var appearance = 0
+                if (isLightBackground) {
+                    appearance = appearance or WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS
+                    appearance = appearance or WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS
+                }
+                controller.setSystemBarsAppearance(
+                    appearance,
+                    WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS or WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS
+                )
+            }
+        } else {
+            var flags = window.decorView.systemUiVisibility
+            flags = if (isLightBackground) {
+                flags or View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR or View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR
+            } else {
+                flags and View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR.inv() and View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR.inv()
+            }
+            window.decorView.systemUiVisibility = flags
+        }
+    }
+
+    /**
+     * Sets BOTH system bars color from a Fragment
+     */
+    fun setSystemBarsColor(fragment: Fragment, color: Int) {
+        val activity = fragment.requireActivity()
+        applySystemBarsColor(activity.window, color)
+    }
+
+    /**
+     * Sets BOTH system bars color from an Activity
+     */
+    fun setSystemBarsColor(activity: Activity, color: Int) {
+        applySystemBarsColor(activity.window, color)
+    }
+
+    /**
      * Applies only the top system bar inset (status bar height) as additional paddingTop to the given view.
      * This ensures content does not draw under the status bar without introducing bottom insets that caused gaps.
      */

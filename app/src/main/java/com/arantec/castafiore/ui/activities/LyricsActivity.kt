@@ -22,6 +22,20 @@ import kotlinx.coroutines.launch
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 
+// Added for dynamic theming
+import androidx.palette.graphics.Palette
+import androidx.core.graphics.toColorInt
+import androidx.core.graphics.ColorUtils
+import android.graphics.Color
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.drawable.Drawable
+import com.bumptech.glide.Glide
+import com.arantec.castafiore.data.download.SongDownloadManager
+import com.bumptech.glide.request.target.CustomTarget
+import com.bumptech.glide.request.transition.Transition
+import com.arantec.castafiore.data.repository.MusicRepository
+import com.arantec.castafiore.utils.StatusBarUtils
 
 
 class LyricsActivity : AppCompatActivity() {
@@ -35,6 +49,20 @@ class LyricsActivity : AppCompatActivity() {
 
     private var loadJob: Job? = null
     private var songChangeListener: ((Song?) -> Unit)? = null
+
+    // Dynamic theming state
+    private var lastAppliedBackgroundColor: Int? = null
+    private lateinit var musicRepository: MusicRepository
+
+    private data class OnColors(val primary: Int, val secondary: Int)
+
+    private fun pickOnColors(background: Int): OnColors {
+        val cb = ColorUtils.calculateContrast(Color.BLACK, background)
+        val cw = ColorUtils.calculateContrast(Color.WHITE, background)
+        val primary = if (cb >= cw) Color.BLACK else Color.WHITE
+        val secondary = ColorUtils.setAlphaComponent(primary, 0x99)
+        return OnColors(primary, secondary)
+    }
 
     private val serviceConnection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
@@ -54,6 +82,8 @@ class LyricsActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         binding = ActivityLyricsBinding.inflate(layoutInflater)
         setContentView(binding.root)
+
+        musicRepository = MusicRepository.getInstance(this)
 
         // Apply status bar insets to top padding (preserve existing 16dp)
         val initialTop = binding.contentContainer.paddingTop
@@ -75,8 +105,16 @@ class LyricsActivity : AppCompatActivity() {
             true
         }
 
+        // Initial default theme
+        applyDefaultTheme()
+
         // Bind service
         bindMusicService()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        lastAppliedBackgroundColor?.let { StatusBarUtils.setSystemBarsColor(this, it) }
     }
 
     override fun onDestroy() {
@@ -115,15 +153,26 @@ class LyricsActivity : AppCompatActivity() {
         updateHeader(song)
         loadLyricsFor(song)
         startProgressUpdates()
+        // Reaplicar color de barras del sistema para consistencia al volver de Player
+        lastAppliedBackgroundColor?.let { StatusBarUtils.setSystemBarsColor(this, it) }
     }
 
     private fun updateHeader(song: Song?) {
         if (song == null) {
             binding.tvSongTitle.text = ""
             binding.tvArtistName.text = ""
+            // keep default theme
+            applyDefaultTheme()
         } else {
             binding.tvSongTitle.text = song.title
             binding.tvArtistName.text = song.artist
+            // attempt dynamic theming from cache -> cover
+            val cached = com.arantec.castafiore.utils.ThemeColorCache.get(song)
+            if (cached != null) {
+                applyDynamicTheme(cached)
+            } else {
+                tryLoadCoverAndApplyTheme(song)
+            }
         }
     }
 
@@ -171,6 +220,74 @@ class LyricsActivity : AppCompatActivity() {
         progressRunnable = null
     }
 
+    // Theming helpers
+    private fun applyDefaultTheme() {
+        val color = "#121212".toColorInt()
+        applyDynamicTheme(color)
+    }
+
+    private fun applyDynamicTheme(background: Int) {
+        lastAppliedBackgroundColor = background
+        // Background (apply to dedicated background view for consistency with Player)
+        binding.lyricsBackground.setBackgroundColor(background)
+        StatusBarUtils.setSystemBarsColor(this, background)
+        // Foreground text/icon colors
+        val on = pickOnColors(background)
+        binding.tvSongTitle.setTextColor(on.primary)
+        binding.tvArtistName.setTextColor(on.secondary)
+        // Aplicar colores directos al LrcView del módulo local
+        binding.lrcView.setCurrentColor(on.primary)
+        binding.lrcView.setNormalColor(on.secondary)
+        // Back button tint
+        binding.btnBack.imageTintList = android.content.res.ColorStateList.valueOf(on.primary)
+    }
+
+    private fun tryLoadCoverAndApplyTheme(song: Song) {
+        // Preferir portada local como en PlayerActivity
+        val dm = SongDownloadManager.getInstance(this)
+        val localCoverPath = try { dm.createCoverPath(song) } catch (_: Exception) { null }
+        if (!localCoverPath.isNullOrEmpty()) {
+            val file = java.io.File(localCoverPath)
+            if (file.exists()) {
+                BitmapFactory.decodeFile(localCoverPath)?.let { bmp ->
+                    applyDynamicThemeFromBitmap(bmp)
+                    return
+                }
+            }
+        }
+
+        // Fallback a URL remota (mismo formato que PlayerActivity)
+        val (username, token, salt) = musicRepository.getAuthParams()
+        val coverUrl = if (song.albumId != null) {
+            "${musicRepository.serverUrl}/rest/getCoverArt.view?id=${song.albumId}&u=$username&t=$token&s=$salt&v=1.16.1&c=Castafiore&size=500"
+        } else null
+        if (coverUrl == null) {
+            applyDefaultTheme()
+            return
+        }
+        Glide.with(this)
+            .asBitmap()
+            .load(coverUrl)
+            .into(object : CustomTarget<Bitmap>() {
+                override fun onResourceReady(resource: Bitmap, transition: Transition<in Bitmap>?) {
+                    applyDynamicThemeFromBitmap(resource)
+                }
+                override fun onLoadCleared(placeholder: Drawable?) { /* no-op */ }
+                override fun onLoadFailed(errorDrawable: Drawable?) { applyDefaultTheme() }
+            })
+    }
+
+    private fun applyDynamicThemeFromBitmap(bitmap: Bitmap) {
+        val color = com.arantec.castafiore.utils.ImageUtils.extractBackgroundColor(bitmap)
+        if (color != null) {
+            // Cache for consistency with PlayerActivity
+            musicService?.getCurrentSong()?.let { com.arantec.castafiore.utils.ThemeColorCache.put(it, color) }
+            applyDynamicTheme(color)
+        } else {
+            applyDefaultTheme()
+        }
+    }
+
     // Ya no usamos RecyclerView ni ancla manual; LrcView maneja el scroll suavemente
 
     // Convierte nuestro modelo a texto LRC
@@ -184,7 +301,7 @@ class LyricsActivity : AppCompatActivity() {
         }
         val sb = StringBuilder()
         for (line in lines) {
-            sb.append(format(line.timeMs)).append(' ')
+            sb.append(format(line.timeMs))
                 .append(line.text).append('\n')
         }
         return sb.toString()
