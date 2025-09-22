@@ -742,11 +742,11 @@ class AlbumDetailFragment : Fragment(), HasContentState {
         val bottomSheet = com.arantec.castafiore.ui.dialogs.SongOptionsBottomSheet.newInstance(song, false)
             .setOnAddToQueueClickListener { selectedSong ->
                 musicService?.addToQueue(selectedSong)
-                snack("Agregado a la cola: ${'$'}{selectedSong.title}")
+                snack("Agregado a la cola: ${selectedSong.title}")
             }
             .setOnPlayNextClickListener { selectedSong ->
                 musicService?.playNext(selectedSong)
-                snack("Se reproducirá siguiente: ${'$'}{selectedSong.title}")
+                snack("Se reproducirá siguiente: ${selectedSong.title}")
             }
             .setOnAddToPlaylistClickListener { selectedSong ->
                 // Mostrar diálogo de selección de playlist
@@ -777,6 +777,9 @@ class AlbumDetailFragment : Fragment(), HasContentState {
                 .setOnAddToQueueClickListener { selectedAlbum ->
                     addAlbumToQueue(selectedAlbum)
                 }
+                .setOnAddAlbumToPlaylistClickListener { selectedAlbum ->
+                    addAlbumToPlaylist(selectedAlbum)
+                }
                 .setOnAlbumInfoClickListener { selectedAlbum ->
                     showAlbumInfo(selectedAlbum)
                 }
@@ -799,6 +802,15 @@ class AlbumDetailFragment : Fragment(), HasContentState {
         } ?: run {
             snack("Servicio de música no disponible")
         }
+    }
+
+    private fun addAlbumToPlaylist(album: Album) {
+        if (albumSongs.isEmpty()) {
+            snack("No hay canciones del álbum para agregar a playlist")
+            return
+        }
+        val selector = com.arantec.castafiore.ui.dialogs.PlaylistSelectorBottomSheet.newInstance(ArrayList(albumSongs))
+        selector.show(childFragmentManager, "PlaylistSelectorBottomSheet")
     }
 
     /**
@@ -853,9 +865,9 @@ class AlbumDetailFragment : Fragment(), HasContentState {
                                     if (removed > 0) {
                                         // Inline tint to secondary color
                                         try {
-                                            binding.btnDownload.imageTintList = ColorStateList.valueOf(requireContext().getColor(R.color.text_secondary))
+                                            binding.btnDownload.imageTintList = ColorStateList.valueOf(requireContext().getColor(R.color.text_primary))
                                         } catch (_: Exception) {
-                                            binding.btnDownload.setColorFilter(requireContext().getColor(R.color.text_secondary))
+                                            binding.btnDownload.setColorFilter(requireContext().getColor(R.color.text_primary))
                                         }
                                         snack("$removed descargas eliminadas")
                                     }
@@ -864,12 +876,12 @@ class AlbumDetailFragment : Fragment(), HasContentState {
                         },
                         onFailure = { error ->
                             binding.btnFavorite.isEnabled = true
-                            snack("Error al actualizar favoritos: ${'$'}{error.message}")
+                            snack("Error al actualizar favoritos: ${error.message}")
                         }
                     )
                 } catch (e: Exception) {
                     binding.btnFavorite.isEnabled = true
-                    snack("Error: ${'$'}{e.message}")
+                    snack("Error: ${e.message}")
                 }
             }
         }
@@ -883,7 +895,7 @@ class AlbumDetailFragment : Fragment(), HasContentState {
             binding.btnFavorite.setColorFilter(android.graphics.Color.parseColor("#FF2D55")) // Color principal
         } else {
             binding.btnFavorite.setImageResource(R.drawable.ic_favorite_border)
-            binding.btnFavorite.setColorFilter(android.graphics.Color.parseColor("#B3FFFFFF")) // Color texto secundario
+            binding.btnFavorite.setColorFilter(android.graphics.Color.parseColor("#FFFFFF")) // Color texto secundario
         }
     }
 

@@ -479,7 +479,7 @@ class DownloadsFragment : Fragment(), HasContentState {
                 tvInfoDuration.text = formatSongDuration(selectedSong.duration)
                 tvInfoGenre.text = selectedSong.genre ?: "Desconocido"
                 tvInfoYear.text = selectedSong.year?.toString() ?: "Desconocido"
-                tvInfoBitrate.text = if (selectedSong.bitRate != null) "${'$'}{selectedSong.bitRate} kbps" else "Desconocido"
+                tvInfoBitrate.text = if (selectedSong.bitRate != null) "${selectedSong.bitRate} kbps" else "Desconocido"
                 tvInfoFormat.text = selectedSong.suffix?.uppercase() ?: "Desconocido"
                 tvInfoFileSize.text = com.arantec.castafiore.data.download.SongDownloadManager.getInstance(requireContext()).formatFileSize(
                     com.arantec.castafiore.data.download.SongDownloadManager.getInstance(requireContext()).getSongFileSize(selectedSong.id)

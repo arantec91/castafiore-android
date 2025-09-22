@@ -376,7 +376,7 @@ class ArtistDetailFragment : Fragment(), HasContentState {
                 withContext(Dispatchers.Main) {
                     if (!isAdded || _binding == null) return@withContext
                     binding.btnPlay.isEnabled = true
-                    showError("Error al cargar canciones populares: ${'$'}{error.message}")
+                    showError("Error al cargar canciones populares: ${error.message}")
                 }
             }
         )
@@ -782,12 +782,12 @@ class ArtistDetailFragment : Fragment(), HasContentState {
             .setOnAddToQueueClickListener { selectedSong ->
                 // Agregar canción a la cola de reproducción
                 musicService?.addToQueue(selectedSong)
-                snack("Agregado a la cola: ${'$'}{selectedSong.title}")
+                snack("Agregado a la cola: ${selectedSong.title}")
             }
             .setOnPlayNextClickListener { selectedSong ->
                 // Agregar canción para reproducir siguiente
                 musicService?.playNext(selectedSong)
-                snack("Se reproducirá siguiente: ${'$'}{selectedSong.title}")
+                snack("Se reproducirá siguiente: ${selectedSong.title}")
             }
             .setOnAddToPlaylistClickListener { selectedSong ->
                 // Mostrar diálogo de selección de playlist
@@ -956,7 +956,7 @@ class ArtistDetailFragment : Fragment(), HasContentState {
 
     // Métodos auxiliares para el bottom sheet de opciones de canciones
     private fun shareSong(song: Song) {
-        val shareText = "Escucha \"${'$'}{song.title}\" de ${'$'}{song.artist} en el álbum \"${'$'}{song.album}\""
+        val shareText = "Escucha \"${song.title}\" de ${song.artist} en el álbum \"${song.album}\""
         val shareIntent = Intent().apply {
             action = Intent.ACTION_SEND
             putExtra(Intent.EXTRA_TEXT, shareText)
@@ -998,7 +998,7 @@ class ArtistDetailFragment : Fragment(), HasContentState {
         // Configurar información opcional
         tvInfoGenre.text = song.genre ?: "Desconocido"
         tvInfoYear.text = song.year?.toString() ?: "Desconocido"
-        tvInfoBitrate.text = if (song.bitRate != null) "${'$'}{song.bitRate} kbps" else "Desconocido"
+        tvInfoBitrate.text = if (song.bitRate != null) "${song.bitRate} kbps" else "Desconocido"
         tvInfoFormat.text = song.suffix?.uppercase() ?: "Desconocido"
 
         // Formatear el tamaño del archivo
@@ -1061,7 +1061,7 @@ class ArtistDetailFragment : Fragment(), HasContentState {
             sizeInBytes >= gb -> String.format(Locale.getDefault(), "%.1f GB", sizeInBytes / gb)
             sizeInBytes >= mb -> String.format(Locale.getDefault(), "%.1f MB", sizeInBytes / mb)
             sizeInBytes >= kb -> String.format(Locale.getDefault(), "%.1f KB", sizeInBytes / kb)
-            else -> "${'$'}sizeInBytes bytes"
+            else -> "$sizeInBytes bytes"
         }
     }
 

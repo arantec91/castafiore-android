@@ -29,15 +29,26 @@ class PlaylistSelectorBottomSheet : BottomSheetDialogFragment() {
     private lateinit var musicRepository: MusicRepository
     private lateinit var playlistAdapter: PlaylistSelectorAdapter
     private var song: Song? = null
+    private var songs: ArrayList<Song>? = null
     private var playlists = mutableListOf<Playlist>()
 
     companion object {
         private const val ARG_SONG = "song"
+        private const val ARG_SONGS = "songs"
 
         fun newInstance(song: Song): PlaylistSelectorBottomSheet {
             val fragment = PlaylistSelectorBottomSheet()
             val args = Bundle().apply {
                 putParcelable(ARG_SONG, song)
+            }
+            fragment.arguments = args
+            return fragment
+        }
+
+        fun newInstance(songs: ArrayList<Song>): PlaylistSelectorBottomSheet {
+            val fragment = PlaylistSelectorBottomSheet()
+            val args = Bundle().apply {
+                putParcelableArrayList(ARG_SONGS, songs)
             }
             fragment.arguments = args
             return fragment
@@ -53,6 +64,7 @@ class PlaylistSelectorBottomSheet : BottomSheetDialogFragment() {
                 @Suppress("DEPRECATION")
                 it.getParcelable(ARG_SONG)
             }
+            songs = it.getParcelableArrayList(ARG_SONGS)
         }
         musicRepository = MusicRepository.getInstance(requireContext())
     }
@@ -94,13 +106,23 @@ class PlaylistSelectorBottomSheet : BottomSheetDialogFragment() {
     }
 
     private fun setupUI() {
-        song?.let { currentSong ->
-            binding.tvSongTitle.text = "Agregar \"${currentSong.title}\" a playlist"
+        val currentSong = song
+        val currentSongs = songs
+        binding.tvSongTitle.text = when {
+            currentSongs != null && currentSongs.isNotEmpty() ->
+                "Agregar ${currentSongs.size} canciones a playlist"
+            currentSong != null ->
+                "Agregar \"${currentSong.title}\" a playlist"
+            else -> "Selecciona una playlist"
         }
 
         // Configurar RecyclerView
         playlistAdapter = PlaylistSelectorAdapter { playlist ->
-            addSongToPlaylist(playlist)
+            if (currentSongs != null && currentSongs.isNotEmpty()) {
+                addSongsToPlaylist(playlist, currentSongs)
+            } else if (currentSong != null) {
+                addSongToPlaylist(playlist)
+            }
         }
 
         binding.rvPlaylists.apply {
@@ -256,6 +278,65 @@ class PlaylistSelectorBottomSheet : BottomSheetDialogFragment() {
                 } catch (e: Exception) {
                     snack("Error: ${e.message}")
                 }
+            }
+        }
+    }
+
+    // Muestra/oculta estado de carga durante la adición masiva
+    private fun setAddingState(isAdding: Boolean, message: String? = null) {
+        binding.progressBar.visibility = if (isAdding) View.VISIBLE else View.GONE
+        binding.rvPlaylists.isEnabled = !isAdding
+        binding.btnCreatePlaylist.isEnabled = !isAdding
+        binding.btnCancel.isEnabled = !isAdding
+        message?.let { binding.tvSongTitle.text = it }
+    }
+
+    // Agrega múltiples canciones con chequeo de duplicados y feedback visual/progreso
+    private fun addSongsToPlaylist(playlist: Playlist, songsToAdd: List<Song>) {
+        lifecycleScope.launch {
+            try {
+                setAddingState(true, "Preparando…")
+
+                val dm = SongDownloadManager.getInstance(requireContext())
+                var wasFullyDownloaded = false
+
+                // Traer canciones existentes para deduplicar
+                val existingSongsResult = musicRepository.getPlaylistSongs(playlist.id)
+                val existing = existingSongsResult.getOrElse { emptyList() }
+                wasFullyDownloaded = existing.isNotEmpty() && existing.all { File(dm.createDownloadPath(it)).exists() }
+                val existingIds = existing.map { it.id }.toHashSet()
+
+                // Filtrar solo nuevas
+                val uniqueNew = songsToAdd.filter { it.id !in existingIds }
+                if (uniqueNew.isEmpty()) {
+                    setAddingState(false)
+                    snack("Todas las canciones ya están en \"${playlist.name}\"")
+                    return@launch
+                }
+
+                var addedCount = 0
+                setAddingState(true, "Agregando 0/${uniqueNew.size} a \"${playlist.name}\"")
+
+                uniqueNew.forEachIndexed { index, s ->
+                    val r = musicRepository.addSongToPlaylist(playlist.id, s.id)
+                    if (r.isSuccess) {
+                        addedCount++
+                        if (wasFullyDownloaded && !dm.isSongDownloaded(s.id) && !dm.isSongDownloading(s.id)) {
+                            dm.downloadSong(s)
+                        }
+                    }
+                    // Actualizar mensaje cada pocos elementos para evitar exceso de redibujos
+                    if (index == uniqueNew.lastIndex || index % 3 == 0) {
+                        setAddingState(true, "Agregando ${index + 1}/${uniqueNew.size} a \"${playlist.name}\"")
+                    }
+                }
+
+                setAddingState(false)
+                snack("Agregadas ${addedCount}/${songsToAdd.size} a \"${playlist.name}\"")
+                dismiss()
+            } catch (e: Exception) {
+                setAddingState(false)
+                snack("Error: ${e.message}")
             }
         }
     }

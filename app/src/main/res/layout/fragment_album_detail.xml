@@ -179,7 +179,7 @@
                     android:background="?attr/selectableItemBackgroundBorderless"
                     android:contentDescription="@string/add_to_favorites"
                     android:src="@drawable/ic_favorite_border"
-                    app:tint="@color/text_secondary" />
+                    app:tint="@color/text_primary" />
 
                 <!-- Botón descargar álbum (inicio) -->
                 <ImageButton
@@ -190,7 +190,7 @@
                     android:background="?attr/selectableItemBackgroundBorderless"
                     android:contentDescription="@string/download_to_device"
                     android:src="@drawable/ic_download"
-                    app:tint="@color/text_secondary" />
+                    app:tint="@color/text_primary" />
 
                 <!-- Indicador de progreso global de descarga (sustituye al botón durante la descarga) -->
                 <FrameLayout
@@ -236,7 +236,7 @@
                     android:background="?attr/selectableItemBackgroundBorderless"
                     android:contentDescription="@string/more_options"
                     android:src="@drawable/ic_more_vert"
-                    app:tint="@color/text_secondary" />
+                    app:tint="@color/text_primary" />
 
                 <View
                     android:layout_width="0dp"

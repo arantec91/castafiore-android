@@ -647,7 +647,17 @@ class HomeFragment : Fragment(), HasContentState {
                                 if (list.isNotEmpty()) {
                                     similarArtistsAdapter.submit(list)
                                     // Header con artista base
-                                    binding.tvSimilarArtistName.text = artistName
+                                    binding.tvSimilarArtistName.apply {
+                                        text = artistName
+                                        isClickable = true
+                                        setOnClickListener {
+                                            val bundle = android.os.Bundle().apply {
+                                                putString("artistId", artistId)
+                                                putString("artistName", artistName)
+                                            }
+                                            findNavController().navigate(R.id.artistDetailFragment, bundle)
+                                        }
+                                    }
                                     try {
                                         val server = musicRepository.serverUrl
                                         if (!server.isNullOrEmpty()) {

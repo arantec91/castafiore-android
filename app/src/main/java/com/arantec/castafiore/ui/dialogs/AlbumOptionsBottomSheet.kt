@@ -21,6 +21,7 @@ class AlbumOptionsBottomSheet : BottomSheetDialogFragment() {
     private var isFavorited = false
     private var onAddToQueueClickListener: ((Album) -> Unit)? = null
     private var onAddToFavoritesClickListener: ((Album) -> Unit)? = null
+    private var onAddAlbumToPlaylistClickListener: ((Album) -> Unit)? = null
     private var onAlbumInfoClickListener: ((Album) -> Unit)? = null
 
     companion object {
@@ -159,6 +160,11 @@ class AlbumOptionsBottomSheet : BottomSheetDialogFragment() {
             dismiss()
         }
 
+        binding.llAddAlbumToPlaylist.setOnClickListener {
+            album?.let { onAddAlbumToPlaylistClickListener?.invoke(it) }
+            dismiss()
+        }
+
         binding.llAlbumInfo.setOnClickListener {
             album?.let { onAlbumInfoClickListener?.invoke(it) }
             dismiss()
@@ -190,6 +196,11 @@ class AlbumOptionsBottomSheet : BottomSheetDialogFragment() {
 
     fun setOnAlbumInfoClickListener(listener: (Album) -> Unit): AlbumOptionsBottomSheet {
         onAlbumInfoClickListener = listener
+        return this
+    }
+
+    fun setOnAddAlbumToPlaylistClickListener(listener: (Album) -> Unit): AlbumOptionsBottomSheet {
+        onAddAlbumToPlaylistClickListener = listener
         return this
     }
 

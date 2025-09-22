@@ -241,4 +241,9 @@
     <string name="error_no_results_subtitle">Intenta con otros términos de búsqueda</string>
     <string name="icon_search_desc">Icono buscar</string>
     <string name="icon_status_desc">Icono de estado</string>
+
+    <!-- Home Screen -->
+    <string name="escuchados_recientemente">Escuchado recientemente</string>
+    <string name="agregados_recientemente">Agregado recientemente</string>
+    <string name="m_s_reproducidos">Más escuchado</string>
 </resources>
