@@ -1,0 +1,19 @@
+apply plugin: 'com.android.library'
+
+
+android {
+    namespace 'me.wcy.lrcview'
+    compileSdk 36
+
+    defaultConfig {
+        minSdkVersion 30
+        targetSdkVersion 36
+    }
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_11
+        targetCompatibility = JavaVersion.VERSION_11
+    }
+}
+
+
