@@ -202,12 +202,15 @@ class SongOptionsBottomSheet : BottomSheetDialogFragment() {
     }
 
     private fun updateFavoriteButton() {
+        // Verificar que el binding no sea null antes de usarlo
+        val currentBinding = _binding ?: return
+        
         if (isSongFavorited) {
-            binding.btnSongFavorite.setImageResource(R.drawable.ic_favorite)
-            binding.btnSongFavorite.setColorFilter("#FF2D55".toColorInt()) // Color principal
+            currentBinding.btnSongFavorite.setImageResource(R.drawable.ic_favorite)
+            currentBinding.btnSongFavorite.setColorFilter("#FF2D55".toColorInt()) // Color principal
         } else {
-            binding.btnSongFavorite.setImageResource(R.drawable.ic_favorite_border)
-            binding.btnSongFavorite.setColorFilter("#B3FFFFFF".toColorInt()) // Color texto secundario
+            currentBinding.btnSongFavorite.setImageResource(R.drawable.ic_favorite_border)
+            currentBinding.btnSongFavorite.setColorFilter("#B3FFFFFF".toColorInt()) // Color texto secundario
         }
     }
 
@@ -377,22 +380,28 @@ class SongOptionsBottomSheet : BottomSheetDialogFragment() {
                     }
                 }
 
-                result.fold(
-                    onSuccess = {
-                        isSongFavorited = !isSongFavorited
-                        updateFavoriteButton()
-                        // Streaming-only: remove auto-download behavior when favorites were fully downloaded
-                    },
-                    onFailure = { error ->
-                        showSnackbar(
-                            "Error al actualizar favoritos: ${error.message}"
-                        )
-                    }
-                )
+                // Verificar que la vista aún exista antes de actualizar la UI
+                if (_binding != null) {
+                    result.fold(
+                        onSuccess = {
+                            isSongFavorited = !isSongFavorited
+                            updateFavoriteButton()
+                            // Streaming-only: remove auto-download behavior when favorites were fully downloaded
+                        },
+                        onFailure = { error ->
+                            showSnackbar(
+                                "Error al actualizar favoritos: ${error.message}"
+                            )
+                        }
+                    )
+                }
             } catch (e: Exception) {
-                showSnackbar(
-                    "Error: ${e.message}"
-                )
+                // Verificar que la vista aún exista antes de mostrar el mensaje
+                if (_binding != null) {
+                    showSnackbar(
+                        "Error: ${e.message}"
+                    )
+                }
             }
         }
     }
@@ -405,20 +414,26 @@ class SongOptionsBottomSheet : BottomSheetDialogFragment() {
                         musicRepository.isSongStarred(currentSong.id)
                     }
 
-                    result.fold(
-                        onSuccess = { isStarred ->
-                            isSongFavorited = isStarred
-                            updateFavoriteButton()
-                        },
-                        onFailure = {
-                            // Si falla la verificación, asumir que no está marcado como favorito
-                            isSongFavorited = false
-                            updateFavoriteButton()
-                        }
-                    )
+                    // Verificar que la vista aún exista antes de actualizar la UI
+                    if (_binding != null) {
+                        result.fold(
+                            onSuccess = { isStarred ->
+                                isSongFavorited = isStarred
+                                updateFavoriteButton()
+                            },
+                            onFailure = {
+                                // Si falla la verificación, asumir que no está marcado como favorito
+                                isSongFavorited = false
+                                updateFavoriteButton()
+                            }
+                        )
+                    }
                 } catch (_: Exception) {
-                    isSongFavorited = false
-                    updateFavoriteButton()
+                    // Verificar que la vista aún exista antes de actualizar la UI
+                    if (_binding != null) {
+                        isSongFavorited = false
+                        updateFavoriteButton()
+                    }
                 }
             }
         }

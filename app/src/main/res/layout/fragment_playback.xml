@@ -63,6 +63,7 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_marginTop="6dp"
+            android:layout_marginEnd="50dp"
             android:text="@string/settings_play_continue_similar_desc"
             android:textColor="@color/text_secondary"
             android:textSize="14sp"
@@ -70,13 +71,67 @@
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintEnd_toEndOf="parent"/>
 
-        <!-- Divider between Similar section and Audio Quality section -->
+        <!-- Divider between Similar section and Song Transitions section -->
         <com.google.android.material.divider.MaterialDivider
             android:id="@+id/dividerAfterSimilar"
             android:layout_width="0dp"
             android:layout_height="1dp"
             android:layout_marginTop="16dp"
             app:layout_constraintTop_toBottomOf="@id/tvDescSimilar"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"/>
+
+
+
+        <!-- Seamless Playback option -->
+        <TextView
+            android:id="@+id/tvSeamlessPlaybackTitle"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="@string/settings_seamless_playback_title"
+            android:textColor="@color/text_primary"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            app:layout_constraintTop_toBottomOf="@id/dividerAfterSimilar"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toStartOf="@id/switchSeamlessPlayback"
+            app:layout_goneMarginEnd="16dp"
+            app:layout_constraintHorizontal_bias="0"/>
+
+        <com.google.android.material.switchmaterial.SwitchMaterial
+            android:id="@+id/switchSeamlessPlayback"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:contentDescription="@string/settings_seamless_playback_title"
+            android:textOn=""
+            android:textOff=""
+            app:showText="false"
+            app:thumbTint="@color/switch_thumb_tint"
+            app:trackTint="@color/switch_track_tint"
+            app:layout_constraintTop_toTopOf="@id/tvSeamlessPlaybackTitle"
+            app:layout_constraintEnd_toEndOf="parent"/>
+
+        <TextView
+            android:id="@+id/tvSeamlessPlaybackDesc"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:layout_marginEnd="50dp"
+            android:text="@string/settings_seamless_playback_desc"
+            android:textColor="@color/text_secondary"
+            android:textSize="14sp"
+            app:layout_constraintTop_toBottomOf="@id/tvSeamlessPlaybackTitle"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"/>
+
+        <!-- Divider between Song Transitions section and Audio Quality section -->
+        <com.google.android.material.divider.MaterialDivider
+            android:id="@+id/dividerAfterTransitions"
+            android:layout_width="0dp"
+            android:layout_height="1dp"
+            android:layout_marginTop="16dp"
+            app:layout_constraintTop_toBottomOf="@id/tvSeamlessPlaybackDesc"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintEnd_toEndOf="parent"/>
 
@@ -90,7 +145,7 @@
             android:textColor="@color/text_primary"
             android:textSize="18sp"
             android:textStyle="bold"
-            app:layout_constraintTop_toBottomOf="@id/dividerAfterSimilar"
+            app:layout_constraintTop_toBottomOf="@id/dividerAfterTransitions"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintEnd_toEndOf="parent"/>
 

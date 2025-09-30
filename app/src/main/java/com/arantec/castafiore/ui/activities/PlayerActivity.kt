@@ -335,6 +335,12 @@ class PlayerActivity : AppCompatActivity() {
                 updateSongInfo(song)
                 loadAlbumArt(song)
                 checkFavoriteStatus(song)
+                
+                // Si hay una canción cargada, significa que se restauró el estado
+                if (!isPlaying) {
+                    //showMessage("Reproducción restaurada. Toca play para continuar.")
+                    //Eliminado para no mostrar mensaje, pero sin romper la logica
+                }
             }
 
             // Mostrar de dónde se está reproduciendo

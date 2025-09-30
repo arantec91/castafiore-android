@@ -43,6 +43,10 @@ import android.os.SystemClock
 import android.net.Uri
 import androidx.core.app.TaskStackBuilder
 import com.arantec.castafiore.ui.activities.MainActivity
+import androidx.lifecycle.DefaultLifecycleObserver
+import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.ProcessLifecycleOwner
+
 
 class MusicService : Service() {
 
@@ -69,6 +73,15 @@ class MusicService : Service() {
     private var scrobbleSentForCurrent = false
     private var trackStartTimeMillis: Long = 0L
 
+    // Gestión de persistencia del estado
+    private lateinit var playbackStateManager: PlaybackStateManager
+    private var lastStateSaveTime = 0L
+    private val stateSaveHandler = Handler(Looper.getMainLooper())
+    private var stateSaveRunnable: Runnable? = null
+    private var periodicSaveRunnable: Runnable? = null
+
+
+
     // Receiver to pause when audio becomes noisy (e.g., headphones unplugged)
     private val noisyReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -89,6 +102,17 @@ class MusicService : Service() {
 
     // Track favorite state for the current song to reflect it in the notification
     private var isCurrentSongFavorite: Boolean = false
+    
+    // Observer para detectar cuando la app entra en background
+    private val appLifecycleObserver = object : DefaultLifecycleObserver {
+        override fun onStop(owner: LifecycleOwner) {
+            // La aplicación entró en background, guardar estado inmediatamente
+            if (currentSong != null && !isPlaying) {
+                saveCurrentPlaybackState()
+                android.util.Log.d("MusicService", "Estado guardado por entrada en background")
+            }
+        }
+    }
 
     companion object {
         private const val TAG = "MusicService"
@@ -111,6 +135,7 @@ class MusicService : Service() {
         super.onCreate()
 
         musicRepository = MusicRepository.getInstance(this)
+        playbackStateManager = PlaybackStateManager(this)
 
         // Initialize shared player cache and wire ExoPlayer to use it
         PlayerCache.init(this)
@@ -245,6 +270,14 @@ class MusicService : Service() {
         // Restore shuffle preference
         val prefs = getSharedPreferences("player_prefs", Context.MODE_PRIVATE)
         isShuffleEnabled = prefs.getBoolean("shuffle_mode", false)
+
+        // Intentar restaurar el estado de reproducción previo
+        restorePlaybackStateIfAvailable()
+        
+        // Registrar observer del ciclo de vida de la aplicación para Android 13+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            ProcessLifecycleOwner.get().lifecycle.addObserver(appLifecycleObserver)
+        }
     }
 
     override fun onBind(intent: Intent): IBinder {
@@ -252,6 +285,18 @@ class MusicService : Service() {
     }
 
     override fun onDestroy() {
+        // Guardar el estado actual antes de destruir el servicio
+        saveCurrentPlaybackState()
+        
+        // Cancelar cualquier guardado pendiente
+        stateSaveRunnable?.let { stateSaveHandler.removeCallbacks(it) }
+        stopPeriodicStateSave()
+        
+        // Desregistrar observer del ciclo de vida
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            ProcessLifecycleOwner.get().lifecycle.removeObserver(appLifecycleObserver)
+        }
+        
         try { unregisterReceiver(noisyReceiver) } catch (_: Exception) {}
         exoPlayer?.release()
         exoPlayer = null
@@ -288,7 +333,14 @@ class MusicService : Service() {
         }
         // Fallback: handle media button intents (hardware/headset controls)
         MediaButtonReceiver.handleIntent(mediaSession, intent)
-        return START_NOT_STICKY
+        
+        // Retornar START_STICKY si hay contenido para reproducir o si se está reproduciendo
+        // Esto ayuda a que el sistema reinicie el servicio si es terminado
+        return if (currentSong != null || playlist.isNotEmpty()) {
+            START_STICKY
+        } else {
+            START_NOT_STICKY
+        }
     }
 
     private val mediaSessionCallback = object : MediaSessionCompat.Callback() {
@@ -333,6 +385,8 @@ class MusicService : Service() {
         notifyPlaybackStateChanged(true)
         showOrUpdateNotification()
         startProgressUpdates()
+        // Detener guardado periódico cuando se reanuda la reproducción
+        stopPeriodicStateSave()
     }
 
     private fun startNewSong() {
@@ -407,6 +461,8 @@ class MusicService : Service() {
             notifyPlaybackStateChanged(true)
             showOrUpdateNotification()
             startProgressUpdates()
+            // Detener guardado periódico cuando se reanuda la reproducción
+            stopPeriodicStateSave()
         } else {
             // Si no está listo, llamar a play normal
             play()
@@ -420,6 +476,12 @@ class MusicService : Service() {
         exoPlayer?.pause()
         showOrUpdateNotification()
         stopProgressUpdates()
+        // Guardar estado inmediatamente cuando se pausa (crítico para persistencia)
+        scheduleStateSave(immediate = true)
+        // Iniciar guardado periódico para Android 13+ (políticas agresivas de memoria)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            startPeriodicStateSave()
+        }
         // Leaving FGS is handled inside showOrUpdateNotification; ensure flag resets
     }
 
@@ -496,17 +558,20 @@ class MusicService : Service() {
             // Local (MediaStore) file is fully seekable
             player.seekTo(position)
             updatePlaybackState()
+            scheduleStateSave()
             return
         }
         if (localFile != null && localFile.exists()) {
             player.seekTo(position)
             updatePlaybackState()
+            scheduleStateSave()
             return
         }
         if (highQuality) {
             // Original stream: server should support range; ExoPlayer can seek
             player.seekTo(position)
             updatePlaybackState()
+            scheduleStateSave()
             return
         }
         // Basic quality (transcoded): restart stream at given offset using Subsonic/Navidrome timeOffset
@@ -527,6 +592,8 @@ class MusicService : Service() {
         player.prepare()
         player.playWhenReady = wasPlaying
         updatePlaybackState()
+        // Guardar estado después de hacer seek
+        scheduleStateSave()
     }
 
     fun playQueue(songs: List<Song>, startIndex: Int = 0, source: PlaybackSource? = null) {
@@ -561,6 +628,8 @@ class MusicService : Service() {
         updatePlaybackState()
         notifyPlaybackStateChanged(true)
         showOrUpdateNotification()
+        // Guardar estado cuando se establece nueva cola
+        scheduleStateSave()
     }
 
     fun playSong(song: Song, source: PlaybackSource? = null) {
@@ -581,6 +650,8 @@ class MusicService : Service() {
         updatePlaybackState()
         notifyPlaybackStateChanged(true)
         showOrUpdateNotification()
+        // Guardar estado cuando se reproduce una canción
+        scheduleStateSave()
     }
 
     // --- Notificación y metadata ---
@@ -1250,4 +1321,187 @@ class MusicService : Service() {
             }
         }
     }
+
+    // ========== MÉTODOS DE PERSISTENCIA DEL ESTADO ==========
+
+    /**
+     * Restaura el estado de reproducción si hay uno válido guardado
+     */
+    private fun restorePlaybackStateIfAvailable() {
+        try {
+            val savedState = playbackStateManager.restorePlaybackState()
+            if (savedState != null) {
+                android.util.Log.d("MusicService", "Restaurando estado de reproducción: ${savedState.currentSong?.title}")
+                
+                // Restaurar variables de estado
+                currentSong = savedState.currentSong
+                currentIndex = savedState.currentIndex
+                repeatMode = savedState.repeatMode
+                isShuffleEnabled = savedState.shuffleEnabled
+                playbackSource = savedState.playbackSource
+                
+                // Restaurar playlist
+                playlist.clear()
+                playlist.addAll(savedState.playlist)
+                
+                // Restaurar cola original si existe
+                originalQueue = savedState.originalQueue?.toMutableList()
+                
+                // Configurar ExoPlayer con el estado restaurado
+                if (savedState.currentSong != null && savedState.playlist.isNotEmpty()) {
+                    // Preparar la canción actual
+                    prepareMediaItems()
+                    
+                    // Buscar la posición guardada (pero no reproducir automáticamente)
+                    if (savedState.currentPosition > 0) {
+                        exoPlayer?.seekTo(savedState.currentPosition)
+                    }
+                    
+                    // Actualizar metadatos y notificación
+                    updateMediaMetadata()
+                    notifySongChanged(currentSong)
+                    notifyQueueChanged(playlist.toList())
+                    
+                    // Solo mostrar notificación si estaba reproduciéndose
+                    if (savedState.isPlaying) {
+                        showOrUpdateNotification()
+                    }
+                    
+                    android.util.Log.d("MusicService", "Estado restaurado exitosamente")
+                }
+            } else {
+                android.util.Log.d("MusicService", "No hay estado válido para restaurar")
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("MusicService", "Error al restaurar estado de reproducción", e)
+            playbackStateManager.clearPlaybackState()
+        }
+    }
+
+    /**
+     * Guarda el estado actual de reproducción
+     */
+    private fun saveCurrentPlaybackState() {
+        try {
+            if (currentSong != null && playlist.isNotEmpty()) {
+                val currentPos = getCurrentPosition()
+                
+                playbackStateManager.savePlaybackState(
+                    currentSong = currentSong,
+                    currentPosition = currentPos,
+                    currentIndex = currentIndex,
+                    playlist = playlist.toList(),
+                    originalQueue = originalQueue?.toList(),
+                    isPlaying = isPlaying,
+                    repeatMode = repeatMode,
+                    shuffleEnabled = isShuffleEnabled,
+                    playbackSource = playbackSource
+                )
+                
+                android.util.Log.d("MusicService", "Estado guardado: ${currentSong?.title} en posición $currentPos")
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("MusicService", "Error al guardar estado de reproducción", e)
+        }
+    }
+
+    /**
+     * Programa el guardado del estado con un retraso para evitar guardados excesivos
+     */
+    private fun scheduleStateSave(immediate: Boolean = false) {
+        val currentTime = System.currentTimeMillis()
+        
+        // Si es inmediato (pausa), guardar sin restricciones de tiempo
+        if (immediate) {
+            // Cancelar guardado pendiente
+            stateSaveRunnable?.let { stateSaveHandler.removeCallbacks(it) }
+            saveCurrentPlaybackState()
+            lastStateSaveTime = currentTime
+            return
+        }
+        
+        // Solo guardar si han pasado al menos 5 segundos desde el último guardado
+        if (currentTime - lastStateSaveTime < 5000) {
+            return
+        }
+        
+        // Cancelar guardado pendiente
+        stateSaveRunnable?.let { stateSaveHandler.removeCallbacks(it) }
+        
+        // Programar nuevo guardado en 2 segundos
+        stateSaveRunnable = Runnable {
+            saveCurrentPlaybackState()
+            lastStateSaveTime = System.currentTimeMillis()
+        }
+        
+        stateSaveHandler.postDelayed(stateSaveRunnable!!, 2000)
+    }
+    
+    /**
+     * Inicia el guardado periódico del estado cuando está pausado (para Android 13+)
+     */
+    private fun startPeriodicStateSave() {
+        stopPeriodicStateSave() // Detener cualquier guardado previo
+        
+        periodicSaveRunnable = object : Runnable {
+            override fun run() {
+                if (!isPlaying && currentSong != null) {
+                    saveCurrentPlaybackState()
+                    // Programar el siguiente guardado en 30 segundos
+                    stateSaveHandler.postDelayed(this, 30000)
+                }
+            }
+        }
+        
+        // Iniciar el primer guardado en 30 segundos
+        stateSaveHandler.postDelayed(periodicSaveRunnable!!, 30000)
+    }
+    
+    /**
+     * Detiene el guardado periódico del estado
+     */
+    private fun stopPeriodicStateSave() {
+        periodicSaveRunnable?.let { 
+            stateSaveHandler.removeCallbacks(it)
+            periodicSaveRunnable = null
+        }
+    }
+
+    /**
+     * Prepara los MediaItems en ExoPlayer basado en la playlist actual
+     */
+    private fun prepareMediaItems() {
+        try {
+            exoPlayer?.clearMediaItems()
+            
+            if (playlist.isNotEmpty() && currentIndex in playlist.indices) {
+                // Obtener parámetros de autenticación
+                val serverUrl = musicRepository.serverUrl ?: return
+                val (username, token, salt) = musicRepository.getAuthParams()
+                val highQuality = musicRepository.highQualityEnabled
+                val maxBitRate = if (highQuality) null else 128
+                val format = if (highQuality) null else "mp3"
+                
+                // Agregar todos los items de la playlist
+                val mediaItems = playlist.map { song ->
+                    val uri = if (song.path?.startsWith("http") == true) {
+                        Uri.parse(song.path)
+                    } else {
+                        val streamUrl = song.getStreamUrl(serverUrl, username, token, salt, maxBitRate, format)
+                        Uri.parse(streamUrl)
+                    }
+                    MediaItem.fromUri(uri)
+                }
+                
+                exoPlayer?.setMediaItems(mediaItems, currentIndex, 0L)
+                exoPlayer?.prepare()
+                
+                android.util.Log.d("MusicService", "MediaItems preparados: ${playlist.size} canciones")
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("MusicService", "Error al preparar MediaItems", e)
+        }
+    }
+
+
 }

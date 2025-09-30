@@ -41,6 +41,12 @@ class PlaybackFragment : Fragment() {
             musicRepository.continueWithSimilarEnabled = isChecked
         }
 
+        // Seamless playback switch
+        binding.switchSeamlessPlayback.isChecked = musicRepository.seamlessPlaybackEnabled
+        binding.switchSeamlessPlayback.setOnCheckedChangeListener { _, isChecked ->
+            musicRepository.seamlessPlaybackEnabled = isChecked
+        }
+
         // Audio quality radios: default to High if not set
         val highDefault = musicRepository.highQualityEnabled
         binding.radioHighQuality.isChecked = highDefault

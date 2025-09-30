@@ -86,6 +86,13 @@ class MusicRepository private constructor(private val context: Context) {
             prefs.edit().putBoolean("high_quality_enabled", value).apply()
         }
 
+    // Preferencia de reproducción sin pausas: elimina las pausas entre canciones
+    var seamlessPlaybackEnabled: Boolean
+        get() = prefs.getBoolean("seamless_playback_enabled", false)
+        set(value) {
+            prefs.edit().putBoolean("seamless_playback_enabled", value).apply()
+        }
+
     fun isConfigured(): Boolean {
         return !serverUrl.isNullOrEmpty() && !username.isNullOrEmpty() && !password.isNullOrEmpty()
     }

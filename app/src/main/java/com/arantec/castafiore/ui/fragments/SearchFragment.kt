@@ -60,7 +60,7 @@ class SearchFragment : Fragment(), HasContentState {
     }
 
     private var _binding: FragmentSearchBinding? = null
-    private val binding get() = _binding!!
+    private val binding get() = _binding ?: throw IllegalStateException("Binding is null")
 
     private lateinit var musicRepository: MusicRepository
     private lateinit var searchAdapter: SearchResultsAdapter
@@ -341,10 +341,14 @@ class SearchFragment : Fragment(), HasContentState {
                 viewLifecycleOwner.lifecycleScope.launch {
                     val result = musicRepository.getSong(entry.id)
                     result.onSuccess { song ->
+                        // Verificar si el binding aún existe antes de actualizar la UI
+                        if (_binding == null) return@onSuccess
+                        
                         // Optimista: resaltar de inmediato
                         historyAdapter.setPlayingSongId(song.id)
                         onSongSelected(song)
                     }.onFailure {
+                        if (_binding == null) return@onFailure
                         Toast.makeText(requireContext(), "No se pudo abrir la canción", Toast.LENGTH_SHORT).show()
                     }
                 }
@@ -357,8 +361,12 @@ class SearchFragment : Fragment(), HasContentState {
                 viewLifecycleOwner.lifecycleScope.launch {
                     val result = musicRepository.getAlbumDetail(entry.id)
                     result.onSuccess { album ->
+                        // Verificar si el binding aún existe antes de navegar
+                        if (_binding == null) return@onSuccess
+                        
                         handleAlbumNavigation(album)
                     }.onFailure {
+                        if (_binding == null) return@onFailure
                         Toast.makeText(requireContext(), "No se pudo abrir el álbum", Toast.LENGTH_SHORT).show()
                     }
                 }
@@ -587,6 +595,9 @@ class SearchFragment : Fragment(), HasContentState {
 
         searchJob = viewLifecycleOwner.lifecycleScope.launch {
             delay(SEARCH_DELAY_MS)
+            // Verificar si el binding aún existe antes de continuar
+            if (_binding == null) return@launch
+            
             if (query == currentSearchQuery) {
                 performSearch(query)
             }
@@ -606,6 +617,10 @@ class SearchFragment : Fragment(), HasContentState {
             showPublicPlaylists(cached.filter { it.public })
             return
         }
+        
+        // Verificar si el binding aún existe antes de continuar
+        if (_binding == null) return
+        
         // Mostrar grid vacío mientras carga
         binding.rvPublicPlaylists.isVisible = true
         binding.rvSearchResults.isGone = true
@@ -616,12 +631,18 @@ class SearchFragment : Fragment(), HasContentState {
         viewLifecycleOwner.lifecycleScope.launch {
             val result = musicRepository.getPlaylists()
             result.onSuccess { playlists ->
+                // Verificar si el binding aún existe antes de actualizar la UI
+                if (_binding == null) return@onSuccess
+                
                 val publics = playlists.filter { it.public }
                 viewModel.publicPlaylists.value = publics
                 if (currentSearchQuery.isBlank()) {
                     showPublicPlaylists(publics)
                 }
             }.onFailure {
+                // Verificar si el binding aún existe antes de actualizar la UI
+                if (_binding == null) return@onFailure
+                
                 // Si falla, mostrar estado vacío (solo si no hay texto y no hay foco)
                 if (currentSearchQuery.isBlank() && !binding.etSearch.hasFocus()) {
                     showEmptyState()
@@ -685,6 +706,9 @@ class SearchFragment : Fragment(), HasContentState {
         activeSearchJob = viewLifecycleOwner.lifecycleScope.launch {
             val result = musicRepository.searchMusic(query)
             result.onSuccess { (songs, albums, artists) ->
+                // Verificar si el binding aún existe antes de actualizar la UI
+                if (_binding == null) return@onSuccess
+                
                 // Skip outdated responses if user changed/cleared the query
                 if (query != currentSearchQuery || currentSearchQuery.isBlank()) return@onSuccess
 
@@ -762,6 +786,9 @@ class SearchFragment : Fragment(), HasContentState {
                     searchAdapter.submitData(display)
                 }
             }.onFailure { e ->
+                // Verificar si el binding aún existe antes de actualizar la UI
+                if (_binding == null) return@onFailure
+                
                 // Skip outdated errors if query changed/cleared
                 if (query != currentSearchQuery || currentSearchQuery.isBlank()) return@onFailure
                 // En error, si ya había contenido, mantenerlo y no mostrar error de pantalla completa

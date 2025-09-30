@@ -3,7 +3,7 @@ plugins {
     alias(libs.plugins.kotlin.android)
     id("kotlin-parcelize")
     id("androidx.navigation.safeargs.kotlin")
-    id("kotlin-kapt") // Requerido para el compilador de Glide
+    id("com.google.devtools.ksp") version "2.0.21-1.0.28" // Reemplaza kapt para Glide
 }
 
 // Pin Material to a published version in case transitive dependencies request a newer, unpublished one
@@ -25,8 +25,8 @@ android {
         applicationId = "com.arantec.castafiore"
         minSdk = 30
         targetSdk = 36
-        versionCode = 108
-        versionName = "4.1.5"
+        versionCode = 110
+        versionName = "4.1.7"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -109,7 +109,7 @@ dependencies {
 
     // Image loading
     implementation("com.github.bumptech.glide:glide:4.16.0")
-    kapt("com.github.bumptech.glide:compiler:4.16.0") // Para el módulo personalizado de Glide
+    ksp("com.github.bumptech.glide:ksp:4.16.0") // Para el módulo personalizado de Glide con KSP
     implementation("com.github.bumptech.glide:okhttp3-integration:4.16.0") // Integración con OkHttp
 
     // RecyclerView

@@ -24,7 +24,7 @@ import android.os.Build
 class PlaylistSelectorBottomSheet : BottomSheetDialogFragment() {
 
     private var _binding: BottomSheetPlaylistSelectorBinding? = null
-    private val binding get() = _binding!!
+    private val binding get() = _binding ?: throw IllegalStateException("Binding is null")
 
     private lateinit var musicRepository: MusicRepository
     private lateinit var playlistAdapter: PlaylistSelectorAdapter
@@ -142,6 +142,8 @@ class PlaylistSelectorBottomSheet : BottomSheetDialogFragment() {
     }
 
     private fun loadPlaylists() {
+        if (_binding == null) return
+        
         binding.progressBar.visibility = View.VISIBLE
         binding.rvPlaylists.visibility = View.GONE
 
@@ -150,6 +152,9 @@ class PlaylistSelectorBottomSheet : BottomSheetDialogFragment() {
                 val result = musicRepository.getPlaylists()
                 result.fold(
                     onSuccess = { playlistList ->
+                        // Verificar si el binding aún existe antes de actualizar la UI
+                        if (_binding == null) return@fold
+                        
                         // Filtrar playlists públicas: solo mostrar privadas
                         val privatePlaylists = playlistList.filter { !it.public }
                         playlists.clear()
@@ -166,6 +171,9 @@ class PlaylistSelectorBottomSheet : BottomSheetDialogFragment() {
                         }
                     },
                     onFailure = { error ->
+                        // Verificar si el binding aún existe antes de actualizar la UI
+                        if (_binding == null) return@fold
+                        
                         binding.progressBar.visibility = View.GONE
                         binding.tvEmptyState.visibility = View.VISIBLE
                         binding.tvEmptyState.text = "Error al cargar playlists: ${error.message}"
@@ -173,6 +181,9 @@ class PlaylistSelectorBottomSheet : BottomSheetDialogFragment() {
                     }
                 )
             } catch (e: Exception) {
+                // Verificar si el binding aún existe antes de actualizar la UI
+                if (_binding == null) return@launch
+                
                 binding.progressBar.visibility = View.GONE
                 binding.tvEmptyState.visibility = View.VISIBLE
                 binding.tvEmptyState.text = "Error: ${e.message}"
@@ -208,6 +219,9 @@ class PlaylistSelectorBottomSheet : BottomSheetDialogFragment() {
                 val result = musicRepository.createPlaylist(name)
                 result.fold(
                     onSuccess = { newPlaylist ->
+                        // Verificar si el binding aún existe antes de actualizar la UI
+                        if (_binding == null) return@fold
+                        
                         // Agregar la nueva playlist a la lista y actualizar el adapter solo si no es pública
                         if (!newPlaylist.public) {
                             playlists.add(0, newPlaylist)
@@ -226,10 +240,12 @@ class PlaylistSelectorBottomSheet : BottomSheetDialogFragment() {
                         }
                     },
                     onFailure = { error ->
+                        if (_binding == null) return@fold
                         snack("Error al crear playlist: ${error.message}")
                     }
                 )
             } catch (e: Exception) {
+                if (_binding == null) return@launch
                 snack("Error: ${e.message}")
             }
         }
@@ -239,6 +255,9 @@ class PlaylistSelectorBottomSheet : BottomSheetDialogFragment() {
         song?.let { currentSong ->
             lifecycleScope.launch {
                 try {
+                    // Verificar si el binding aún existe antes de continuar
+                    if (_binding == null) return@launch
+                    
                     val dm = SongDownloadManager.getInstance(requireContext())
                     var wasFullyDownloaded = false
 
@@ -246,6 +265,8 @@ class PlaylistSelectorBottomSheet : BottomSheetDialogFragment() {
                     val existingSongsResult = musicRepository.getPlaylistSongs(playlist.id)
                     existingSongsResult.fold(
                         onSuccess = { songs ->
+                            if (_binding == null) return@fold
+                            
                             val alreadyInPlaylist = songs.any { it.id == currentSong.id }
                             if (alreadyInPlaylist) {
                                 snack("\"${currentSong.title}\" ya está en \"${playlist.name}\"")
@@ -255,6 +276,7 @@ class PlaylistSelectorBottomSheet : BottomSheetDialogFragment() {
                             wasFullyDownloaded = songs.isNotEmpty() && songs.all { File(dm.createDownloadPath(it)).exists() }
                         },
                         onFailure = { error ->
+                            if (_binding == null) return@fold
                             snack("No se pudo verificar duplicados: ${error.message}")
                             return@launch
                         }
@@ -264,6 +286,8 @@ class PlaylistSelectorBottomSheet : BottomSheetDialogFragment() {
                     val result = musicRepository.addSongToPlaylist(playlist.id, currentSong.id)
                     result.fold(
                         onSuccess = {
+                            if (_binding == null) return@fold
+                            
                             snack("\"${currentSong.title}\" agregada a \"${playlist.name}\"")
                             // Si la playlist estaba completamente descargada, descargar la nueva canción automáticamente
                             if (wasFullyDownloaded && !dm.isSongDownloaded(currentSong.id) && !dm.isSongDownloading(currentSong.id)) {
@@ -272,10 +296,12 @@ class PlaylistSelectorBottomSheet : BottomSheetDialogFragment() {
                             dismiss()
                         },
                         onFailure = { error ->
+                            if (_binding == null) return@fold
                             snack("Error al agregar canción: ${error.message}")
                         }
                     )
                 } catch (e: Exception) {
+                    if (_binding == null) return@launch
                     snack("Error: ${e.message}")
                 }
             }
@@ -284,6 +310,8 @@ class PlaylistSelectorBottomSheet : BottomSheetDialogFragment() {
 
     // Muestra/oculta estado de carga durante la adición masiva
     private fun setAddingState(isAdding: Boolean, message: String? = null) {
+        if (_binding == null) return
+        
         binding.progressBar.visibility = if (isAdding) View.VISIBLE else View.GONE
         binding.rvPlaylists.isEnabled = !isAdding
         binding.btnCreatePlaylist.isEnabled = !isAdding
@@ -295,6 +323,9 @@ class PlaylistSelectorBottomSheet : BottomSheetDialogFragment() {
     private fun addSongsToPlaylist(playlist: Playlist, songsToAdd: List<Song>) {
         lifecycleScope.launch {
             try {
+                // Verificar si el binding aún existe antes de continuar
+                if (_binding == null) return@launch
+                
                 setAddingState(true, "Preparando…")
 
                 val dm = SongDownloadManager.getInstance(requireContext())
@@ -309,15 +340,20 @@ class PlaylistSelectorBottomSheet : BottomSheetDialogFragment() {
                 // Filtrar solo nuevas
                 val uniqueNew = songsToAdd.filter { it.id !in existingIds }
                 if (uniqueNew.isEmpty()) {
+                    if (_binding == null) return@launch
                     setAddingState(false)
                     snack("Todas las canciones ya están en \"${playlist.name}\"")
                     return@launch
                 }
 
                 var addedCount = 0
+                if (_binding == null) return@launch
                 setAddingState(true, "Agregando 0/${uniqueNew.size} a \"${playlist.name}\"")
 
                 uniqueNew.forEachIndexed { index, s ->
+                    // Verificar si el fragmento aún existe antes de continuar
+                    if (_binding == null) return@launch
+                    
                     val r = musicRepository.addSongToPlaylist(playlist.id, s.id)
                     if (r.isSuccess) {
                         addedCount++
@@ -331,10 +367,14 @@ class PlaylistSelectorBottomSheet : BottomSheetDialogFragment() {
                     }
                 }
 
+                // Verificar si el binding aún existe antes de finalizar
+                if (_binding == null) return@launch
+                
                 setAddingState(false)
                 snack("Agregadas ${addedCount}/${songsToAdd.size} a \"${playlist.name}\"")
                 dismiss()
             } catch (e: Exception) {
+                if (_binding == null) return@launch
                 setAddingState(false)
                 snack("Error: ${e.message}")
             }

@@ -91,20 +91,35 @@ object ImageLoader {
         onSuccess: ((Bitmap) -> Unit)? = null,
         onError: (() -> Unit)? = null
     ) {
+        android.util.Log.d("ImageLoader", "loadAlbumCover called with URL: $url")
+        
         if (url.isNullOrEmpty()) {
+            android.util.Log.w("ImageLoader", "Album cover URL is null or empty")
             imageView.setImageResource(R.drawable.ic_album_placeholder)
             onError?.invoke()
             return
         }
 
-        val opts = albumImageOptions.clone().onlyRetrieveFromCache(!NetworkUtils.isNetworkAvailable(context))
+        val isNetworkAvailable = NetworkUtils.isNetworkAvailable(context)
+        android.util.Log.d("ImageLoader", "Network available for album cover: $isNetworkAvailable")
+        
+        val opts = albumImageOptions.clone().onlyRetrieveFromCache(!isNetworkAvailable)
+        android.util.Log.d("ImageLoader", "Cache-only mode for album cover: ${!isNetworkAvailable}")
 
-        Glide.with(context)
-            .asBitmap()
-            .load(url)
-            .apply(opts)
-            .transition(BitmapTransitionOptions.withCrossFade(250))
-            .into(imageView)
+        try {
+            android.util.Log.d("ImageLoader", "Starting Glide load for album cover URL: $url")
+            Glide.with(context)
+                .asBitmap()
+                .load(url)
+                .apply(opts)
+                .transition(BitmapTransitionOptions.withCrossFade(250))
+                .into(imageView)
+            android.util.Log.d("ImageLoader", "Glide load request submitted for album cover")
+        } catch (e: Exception) {
+            android.util.Log.e("ImageLoader", "Exception in loadAlbumCover", e)
+            imageView.setImageResource(R.drawable.ic_album_placeholder)
+            onError?.invoke()
+        }
     }
 
     /**
@@ -151,13 +166,32 @@ object ImageLoader {
         imageView: ImageView,
         url: String?
     ) {
-        val opts = artistImageOptions.clone().onlyRetrieveFromCache(!NetworkUtils.isNetworkAvailable(context))
+        android.util.Log.d("ImageLoader", "loadArtistImage called with URL: $url")
+        
+        if (url.isNullOrEmpty()) {
+            android.util.Log.w("ImageLoader", "Artist image URL is null or empty")
+            imageView.setImageResource(R.drawable.ic_person)
+            return
+        }
+        
+        val isNetworkAvailable = NetworkUtils.isNetworkAvailable(context)
+        android.util.Log.d("ImageLoader", "Network available for artist image: $isNetworkAvailable")
+        
+        val opts = artistImageOptions.clone().onlyRetrieveFromCache(!isNetworkAvailable)
+        android.util.Log.d("ImageLoader", "Cache-only mode for artist image: ${!isNetworkAvailable}")
 
-        Glide.with(context)
-            .load(url)
-            .apply(opts)
-            .transition(DrawableTransitionOptions.withCrossFade(250))
-            .into(imageView)
+        try {
+            android.util.Log.d("ImageLoader", "Starting Glide load for artist image URL: $url")
+            Glide.with(context)
+                .load(url)
+                .apply(opts)
+                .transition(DrawableTransitionOptions.withCrossFade(250))
+                .into(imageView)
+            android.util.Log.d("ImageLoader", "Glide load request submitted for artist image")
+        } catch (e: Exception) {
+            android.util.Log.e("ImageLoader", "Exception in loadArtistImage", e)
+            imageView.setImageResource(R.drawable.ic_person)
+        }
     }
 
     /**
@@ -186,12 +220,32 @@ object ImageLoader {
         imageView: ImageView,
         url: String?
     ) {
-        val opts = thumbnailOptions.clone().onlyRetrieveFromCache(!NetworkUtils.isNetworkAvailable(context))
-        Glide.with(imageView)
-            .load(url)
-            .apply(opts)
-            .transition(DrawableTransitionOptions.withCrossFade(200))
-            .into(imageView)
+        android.util.Log.d("ImageLoader", "loadThumbnail called with URL: $url")
+        
+        if (url.isNullOrEmpty()) {
+            android.util.Log.w("ImageLoader", "Thumbnail URL is null or empty")
+            imageView.setImageResource(R.drawable.ic_music_note)
+            return
+        }
+        
+        val isNetworkAvailable = NetworkUtils.isNetworkAvailable(context)
+        android.util.Log.d("ImageLoader", "Network available for thumbnail: $isNetworkAvailable")
+        
+        val opts = thumbnailOptions.clone().onlyRetrieveFromCache(!isNetworkAvailable)
+        android.util.Log.d("ImageLoader", "Cache-only mode for thumbnail: ${!isNetworkAvailable}")
+        
+        try {
+            android.util.Log.d("ImageLoader", "Starting Glide load for thumbnail URL: $url")
+            Glide.with(imageView)
+                .load(url)
+                .apply(opts)
+                .transition(DrawableTransitionOptions.withCrossFade(200))
+                .into(imageView)
+            android.util.Log.d("ImageLoader", "Glide load request submitted for thumbnail")
+        } catch (e: Exception) {
+            android.util.Log.e("ImageLoader", "Exception in loadThumbnail", e)
+            imageView.setImageResource(R.drawable.ic_music_note)
+        }
     }
 
     /**

@@ -146,6 +146,11 @@
     <string name="quality_basic_title">Calidad básica</string>
     <string name="quality_basic_desc">Transcodifica a MP3 de 128 kbps para ahorrar datos y ancho de banda.</string>
 
+    <!-- Song Transitions Settings -->
+    <string name="settings_song_transitions_title">Transiciones entre canciones</string>
+    <string name="settings_seamless_playback_title">Reproducción sin pausas</string>
+    <string name="settings_seamless_playback_desc">Elimina las pausas que podrían ocurrir entre canciones</string>
+
     <!-- Storage settings -->
     <string name="storage_delete_downloads_title">Eliminar todas las descargas</string>
     <string name="storage_delete_downloads_desc">Elimina todo el contenido que hayas descargado para liberar espacio</string>
