@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources>
+<resources xmlns:tools="http://schemas.android.com/tools">
     <!-- Estilos para botones -->
     <style name="Button.Primary" parent="Widget.MaterialComponents.Button">
         <item name="android:textColor">@color/text_on_primary</item>
@@ -153,5 +153,7 @@
     <!-- Tema específico para PlayerActivity con animaciones de entrada/salida -->
     <style name="Theme.Castafiore.Player" parent="Theme.Castafiore">
         <item name="android:windowAnimationStyle">@style/Animation.Castafiore.Player</item>
+        <!-- Opt-out del edge-to-edge enforcement en Android 15+ para permitir colores dinámicos -->
+        <item name="android:windowOptOutEdgeToEdgeEnforcement" tools:targetApi="35">true</item>
     </style>
 </resources>

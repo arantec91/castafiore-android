@@ -98,6 +98,8 @@ object StatusBarUtils {
 
     /**
      * Applies a specific color to BOTH status and navigation bars with automatic icon contrast.
+     * For Android 15+ (API 35+), the activity must opt-out of edge-to-edge enforcement via
+     * android:windowOptOutEdgeToEdgeEnforcement in the theme to prevent automatic scrim overlay.
      */
     private fun applySystemBarsColor(window: Window, color: Int) {
         // Ensure we draw behind system bars
@@ -105,6 +107,8 @@ object StatusBarUtils {
         window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS)
         window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_TRANSLUCENT_NAVIGATION)
 
+        // Set the colors directly - works on all Android versions
+        // On Android 15+, requires windowOptOutEdgeToEdgeEnforcement=true in theme
         window.statusBarColor = color
         window.navigationBarColor = color
 

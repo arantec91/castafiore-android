@@ -101,6 +101,7 @@ class PlayerActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        
         binding = ActivityPlayerBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
