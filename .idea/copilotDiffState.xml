@@ -3,6 +3,23 @@
   <component name="CopilotDiffPersistence">
     <option name="pendingDiffs">
       <map>
+        <entry key="$PROJECT_DIR$/.gitignore">
+          <value>
+            <PendingDiffInfo>
+              <option name="filePath" value="$PROJECT_DIR$/.gitignore" />
+              <option name="originalContent" value="*.iml&#10;.gradle&#10;/local.properties&#10;/.idea/caches&#10;/.idea/libraries&#10;/.idea/modules.xml&#10;/.idea/workspace.xml&#10;/.idea/navEditor.xml&#10;/.idea/assetWizardSettings.xml&#10;.DS_Store&#10;/build&#10;/captures&#10;.externalNativeBuild&#10;.cxx&#10;local.properties&#10;&#10;" />
+              <option name="updatedContent" value="*.iml&#10;.gradle&#10;/local.properties&#10;/.idea/caches&#10;/.idea/libraries&#10;/.idea/modules.xml&#10;/.idea/workspace.xml&#10;/.idea/navEditor.xml&#10;/.idea/assetWizardSettings.xml&#10;.DS_Store&#10;/build&#10;/captures&#10;.externalNativeBuild&#10;.cxx&#10;local.properties&#10;# Added sensitive/signing &amp; build artifacts exclusions&#10;keystore.jks&#10;*.jks&#10;*.keystore&#10;# Generated release/output bundles&#10;*.apk&#10;*.aab&#10;/app/release/&#10;/app/build/&#10;/lrcview/build/&#10;/build/&#10;# Gradle caches (already partly ignored but being explicit)&#10;.gradle/&#10;# IDE misc&#10;/.idea/&#10;.idea/&#10;# Kotlin/Java compile outputs&#10;**/out/&#10;# Crashlytics / mapping (if generated later)&#10;app/mappings/&#10;# Misc&#10;captures/&#10;.cxx/&#10;.externalNativeBuild/&#10;# Kotlin compiler local error logs (no subir)&#10;.kotlin/&#10;# End of custom additions" />
+            </PendingDiffInfo>
+          </value>
+        </entry>
+        <entry key="$PROJECT_DIR$/README.md">
+          <value>
+            <PendingDiffInfo>
+              <option name="filePath" value="$PROJECT_DIR$/README.md" />
+              <option name="updatedContent" value="# Castafiore&#10;&#10;Aplicación Android (Kotlin) para interactuar con un servidor Navidrome/Subsonic.&#10;&#10;## Características (resumen)&#10;- Reproducción de música desde servidor Navidrome&#10;- Búsqueda de artistas, álbumes y canciones&#10;- Marcado (star) y elementos favoritos&#10;- Recuperación de canciones aleatorias y similares&#10;&#10;## Estructura del proyecto&#10;- `app/` Módulo principal Android&#10;- `lrcview/` Módulo adicional (por ejemplo para letras / vistas personalizadas)&#10;- `build.gradle.kts`, `settings.gradle.kts` Configuración de Gradle Kotlin DSL&#10;&#10;## Requisitos&#10;- Android Studio (Giraffe+ recomendado)&#10;- JDK 17 (si el wrapper de Gradle lo requiere)&#10;- Servidor Navidrome operativo para pruebas&#10;&#10;## Comandos Gradle principales&#10;```bash&#10;./gradlew assembleDebug&#10;./gradlew assembleRelease&#10;```&#10;En Windows CMD:&#10;```cmd&#10;gradlew.bat assembleDebug&#10;```&#10;&#10;## Publicación (resumen rápido)&#10;1. Ajustar `gradle.properties` y versión en `app/build.gradle.kts`.&#10;2. Ejecutar script `build_release_apk.bat` o `gradlew.bat assembleRelease`.&#10;3. El APK quedará en `app/build/outputs/apk/release/`.&#10;&#10;## Seguridad&#10;- El archivo `keystore.jks` está ignorado en `.gitignore` para no exponerse.&#10;- No subir `local.properties` ni credenciales.&#10;&#10;## Licencia&#10;(Indica aquí la licencia que desees usar, por ejemplo MIT, Apache 2.0, etc.)&#10;" />
+            </PendingDiffInfo>
+          </value>
+        </entry>
         <entry key="$PROJECT_DIR$/app/src/main/java/com/arantec/castafiore/data/repositories/MusicRepository.kt">
           <value>
             <PendingDiffInfo>

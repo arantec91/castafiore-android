@@ -13,3 +13,30 @@
 .externalNativeBuild
 .cxx
 local.properties
+# Added sensitive/signing & build artifacts exclusions
+keystore.jks
+*.jks
+*.keystore
+# Generated release/output bundles
+*.apk
+*.aab
+/app/release/
+/app/build/
+/lrcview/build/
+/build/
+# Gradle caches (already partly ignored but being explicit)
+.gradle/
+# IDE misc
+/.idea/
+.idea/
+# Kotlin/Java compile outputs
+**/out/
+# Crashlytics / mapping (if generated later)
+app/mappings/
+# Misc
+captures/
+.cxx/
+.externalNativeBuild/
+# Kotlin compiler local error logs (no subir)
+.kotlin/
+# End of custom additions
