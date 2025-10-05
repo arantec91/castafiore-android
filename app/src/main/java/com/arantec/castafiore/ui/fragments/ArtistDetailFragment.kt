@@ -157,6 +157,11 @@ class ArtistDetailFragment : Fragment(), HasContentState {
         musicRepository = MusicRepository.getInstance(requireContext())
         downloadManager = SongDownloadManager.getInstance(requireContext())
 
+        // Para Android 16+, configurar window insets manualmente para edge-to-edge
+        if (Build.VERSION.SDK_INT >= 36) {
+            setupWindowInsetsForAndroid16()
+        }
+
         setupToolbar()
         setupRecyclerViews()
         setupClickListeners()
@@ -198,6 +203,37 @@ class ArtistDetailFragment : Fragment(), HasContentState {
             // Estado desconocido: ocultar hasta confirmar por red
             binding.btnFollow.visibility = View.INVISIBLE
             binding.btnFollow.isEnabled = false
+        }
+    }
+
+    /**
+     * Configura el manejo manual de window insets para Android 16+.
+     * 
+     * Estrategia:
+     * - El root (CoordinatorLayout) NO consume los insets -> permite que el fondo se extienda
+     * - El AppBarLayout recibe padding superior -> el contenido no se oculta detrás de la status bar
+     * - El gradientBackground se extiende detrás de la status bar mostrando el color dinámico
+     */
+    private fun setupWindowInsetsForAndroid16() {
+        // Deshabilitar fitsSystemWindows en el root para permitir edge-to-edge
+        binding.root.fitsSystemWindows = false
+        
+        // Aplicar insets solo al AppBarLayout para que tenga el padding superior necesario
+        androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(binding.appBarLayout) { view, windowInsets ->
+            val insets = windowInsets.getInsets(
+                androidx.core.view.WindowInsetsCompat.Type.systemBars()
+            )
+            
+            // Aplicar padding superior para que el contenido no se oculte detrás de la status bar
+            view.setPadding(
+                view.paddingLeft,
+                insets.top,
+                view.paddingRight,
+                view.paddingBottom
+            )
+            
+            // Retornar los insets sin consumirlos para que otros views también puedan usarlos si es necesario
+            windowInsets
         }
     }
 
@@ -539,7 +575,14 @@ class ArtistDetailFragment : Fragment(), HasContentState {
         binding.toolbar.navigationIcon?.setTint(android.graphics.Color.WHITE)
         // Aplicar también el color dinámico al status bar con contraste automático y recordarlo
         lastStatusBarTopColor = topColor
-        StatusBarUtils.setStatusBarColor(this, topColor)
+        
+        // Para Android 16+ (API 36), usar el método especial que solo afecta la status bar
+        // Para versiones anteriores, usar el método estándar
+        if (Build.VERSION.SDK_INT >= 36) {
+            StatusBarUtils.setDynamicStatusBarForAndroid16(this, topColor)
+        } else {
+            StatusBarUtils.setStatusBarColor(this, topColor)
+        }
     }
 
     private fun buildSmoothGradient(baseColor: Int, topColor: Int): GradientDrawable {
@@ -1081,8 +1124,15 @@ class ArtistDetailFragment : Fragment(), HasContentState {
         }
 
         // Ensure consistent status bar color on resume: reapply last dynamic if available
-        lastStatusBarTopColor?.let { StatusBarUtils.setStatusBarColor(this, it) }
-            ?: StatusBarUtils.setStatusBarColor(this)
+        if (Build.VERSION.SDK_INT >= 36) {
+            // Para Android 16+, usar el método especial que solo afecta la status bar
+            lastStatusBarTopColor?.let { StatusBarUtils.setDynamicStatusBarForAndroid16(this, it) }
+                ?: StatusBarUtils.setStatusBarColor(this)
+        } else {
+            // Para versiones anteriores, usar el método estándar
+            lastStatusBarTopColor?.let { StatusBarUtils.setStatusBarColor(this, it) }
+                ?: StatusBarUtils.setStatusBarColor(this)
+        }
     }
 
     override fun onStop() {

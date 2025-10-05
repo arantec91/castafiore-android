@@ -24,6 +24,9 @@ class SplashActivity : AppCompatActivity() {
         // Ensure consistent status bar color on splash
         StatusBarUtils.setStatusBarColor(this)
 
+        // Mostrar la versión de la aplicación desde BuildConfig
+        binding.tvVersion.text = "v${com.arantec.castafiore.BuildConfig.VERSION_NAME}"
+
         musicRepository = MusicRepository.getInstance(this)
 
         // Verificar sesión después de un pequeño delay para mostrar la splash

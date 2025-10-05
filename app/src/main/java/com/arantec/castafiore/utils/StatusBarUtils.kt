@@ -6,6 +6,8 @@ import android.os.Build
 import android.view.View
 import android.view.Window
 import android.view.WindowInsetsController
+import androidx.activity.ComponentActivity
+import androidx.activity.enableEdgeToEdge
 import androidx.core.content.ContextCompat
 import androidx.core.graphics.ColorUtils
 import androidx.core.view.ViewCompat
@@ -98,8 +100,14 @@ object StatusBarUtils {
 
     /**
      * Applies a specific color to BOTH status and navigation bars with automatic icon contrast.
-     * For Android 15+ (API 35+), the activity must opt-out of edge-to-edge enforcement via
-     * android:windowOptOutEdgeToEdgeEnforcement in the theme to prevent automatic scrim overlay.
+     * 
+     * Android version handling:
+     * - Android 14 and below: Direct color assignment works
+     * - Android 15 (API 35): Requires windowOptOutEdgeToEdgeEnforcement=true in theme
+     * - Android 16+ (API 36+): Uses enableEdgeToEdge() with SystemBarStyle (must be called from Activity)
+     * 
+     * NOTE: For Android 16+, the Activity must call enableEdgeToEdge() BEFORE setContentView().
+     * This method only sets the colors and icon appearance for older Android versions.
      */
     private fun applySystemBarsColor(window: Window, color: Int) {
         // Ensure we draw behind system bars
@@ -107,8 +115,7 @@ object StatusBarUtils {
         window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS)
         window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_TRANSLUCENT_NAVIGATION)
 
-        // Set the colors directly - works on all Android versions
-        // On Android 15+, requires windowOptOutEdgeToEdgeEnforcement=true in theme
+        // Set the colors directly
         window.statusBarColor = color
         window.navigationBarColor = color
 
@@ -138,6 +145,95 @@ object StatusBarUtils {
                 flags and View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR.inv() and View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR.inv()
             }
             window.decorView.systemUiVisibility = flags
+        }
+    }
+    
+    /**
+     * Applies edge-to-edge with transparent system bars for Android 16+.
+     * This makes the system bars fully transparent so the app's background color shows through.
+     * This method must be called from a ComponentActivity BEFORE setContentView().
+     * 
+     * The app's layout background color will show through the transparent bars.
+     * Icon colors are automatically adjusted based on the detectDarkMode parameter.
+     * 
+     * @param activity The ComponentActivity to apply edge-to-edge to
+     * @param detectDarkMode If true, uses light icons (for dark backgrounds). If false, uses dark icons (for light backgrounds).
+     */
+    fun applyEdgeToEdgeWithTransparentBars(activity: ComponentActivity, detectDarkMode: Boolean) {
+        if (Build.VERSION.SDK_INT >= 36) {
+            // Use fully transparent bars (0x00000000 = transparent black)
+            // detectDarkMode controls icon colors:
+            // - true = light icons (for dark backgrounds)
+            // - false = dark icons (for light backgrounds)
+            val statusBarStyle = androidx.activity.SystemBarStyle.auto(
+                lightScrim = android.graphics.Color.TRANSPARENT,
+                darkScrim = android.graphics.Color.TRANSPARENT,
+                detectDarkMode = { detectDarkMode }
+            )
+            
+            val navigationBarStyle = androidx.activity.SystemBarStyle.auto(
+                lightScrim = android.graphics.Color.TRANSPARENT,
+                darkScrim = android.graphics.Color.TRANSPARENT,
+                detectDarkMode = { detectDarkMode }
+            )
+            
+            // Enable edge-to-edge with fully transparent system bars
+            activity.enableEdgeToEdge(
+                statusBarStyle = statusBarStyle,
+                navigationBarStyle = navigationBarStyle
+            )
+        }
+    }
+
+    /**
+     * Applies a dynamic status bar color for Android 16+ (API 36+) while keeping navigation bar transparent.
+     * For older Android versions, uses the standard applyStatusBarColor method.
+     * 
+     * This is specifically designed for fragments that need dynamic status bar colors based on image palette
+     * while maintaining the default navigation bar appearance.
+     * 
+     * @param fragment The Fragment to apply the status bar color to
+     * @param color The color to apply to the status bar
+     */
+    fun setDynamicStatusBarForAndroid16(fragment: Fragment, color: Int) {
+        val activity = fragment.requireActivity()
+        
+        if (Build.VERSION.SDK_INT >= 36) {
+            // For Android 16+, use enableEdgeToEdge with dynamic status bar color
+            if (activity is ComponentActivity) {
+                // Determine if we need light or dark icons based on the color luminance
+                val isLightBackground = try {
+                    ColorUtils.calculateLuminance(color) > 0.5
+                } catch (_: Throwable) {
+                    false
+                }
+                
+                // Create status bar style with the dynamic color
+                // detectDarkMode = !isLightBackground means:
+                // - If background is light, use dark icons (detectDarkMode = false)
+                // - If background is dark, use light icons (detectDarkMode = true)
+                val statusBarStyle = androidx.activity.SystemBarStyle.auto(
+                    lightScrim = color,
+                    darkScrim = color,
+                    detectDarkMode = { !isLightBackground }
+                )
+                
+                // Keep navigation bar transparent (default app behavior)
+                val navigationBarStyle = androidx.activity.SystemBarStyle.auto(
+                    lightScrim = android.graphics.Color.TRANSPARENT,
+                    darkScrim = android.graphics.Color.TRANSPARENT,
+                    detectDarkMode = { true } // Dark mode for navigation bar (light icons)
+                )
+                
+                // Apply edge-to-edge with dynamic status bar and transparent navigation bar
+                activity.enableEdgeToEdge(
+                    statusBarStyle = statusBarStyle,
+                    navigationBarStyle = navigationBarStyle
+                )
+            }
+        } else {
+            // For older Android versions, use the standard method
+            applyStatusBarColor(activity.window, color)
         }
     }
 

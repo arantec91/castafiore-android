@@ -107,7 +107,9 @@ interface NavidromeApiService {
         @Query("s") salt: String,
         @Query("v") version: String,
         @Query("c") client: String,
-        @Query("id") id: String,
+        @Query("id") id: String? = null,           // Para canciones
+        @Query("albumId") albumId: String? = null,  // Para álbumes
+        @Query("artistId") artistId: String? = null, // Para artistas
         @Query("f") format: String = "json"
     ): Response<StarResponse>
 
@@ -118,11 +120,13 @@ interface NavidromeApiService {
         @Query("s") salt: String,
         @Query("v") version: String,
         @Query("c") client: String,
-        @Query("id") id: String,
+        @Query("id") id: String? = null,
+        @Query("albumId") albumId: String? = null,
+        @Query("artistId") artistId: String? = null,
         @Query("f") format: String = "json"
     ): Response<StarResponse>
 
-    @GET("rest/getStarred.view")
+    @GET("rest/getStarred2.view")
     suspend fun getStarredItems(
         @Query("u") username: String,
         @Query("t") token: String,

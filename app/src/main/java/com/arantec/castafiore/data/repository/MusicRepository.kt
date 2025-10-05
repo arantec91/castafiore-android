@@ -393,7 +393,7 @@ class MusicRepository private constructor(private val context: Context) {
                 salt = salt,
                 version = "1.16.1",
                 client = "Castafiore",
-                id = albumId
+                albumId = albumId  // ✅ CAMBIO: usar albumId en lugar de id
             )
 
             if (response.isSuccessful) {
@@ -424,7 +424,7 @@ class MusicRepository private constructor(private val context: Context) {
                 salt = salt,
                 version = "1.16.1",
                 client = "Castafiore",
-                id = albumId
+                albumId = albumId  // ✅ CAMBIO: usar albumId en lugar de id
             )
 
             if (response.isSuccessful) {
@@ -570,7 +570,7 @@ class MusicRepository private constructor(private val context: Context) {
                 salt = salt,
                 version = "1.16.1",
                 client = "Castafiore",
-                id = artistId
+                artistId = artistId
             )
 
             if (response.isSuccessful) {

@@ -4,7 +4,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@color/background_primary"
-    android:fitsSystemWindows="true">
+    android:fitsSystemWindows="false">
 
     <!-- Gradient background overlay -->
     <View
@@ -14,10 +14,12 @@
         android:background="@color/background_primary" />
 
     <ScrollView
+        android:id="@+id/scrollViewContent"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:fillViewport="true"
-        android:scrollbars="none">
+        android:scrollbars="none"
+        android:clipToPadding="false">
 
         <LinearLayout
             android:layout_width="match_parent"

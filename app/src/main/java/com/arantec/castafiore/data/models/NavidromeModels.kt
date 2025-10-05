@@ -177,6 +177,7 @@ data class StarredResponse(
 data class StarredResult(
     val status: String,
     val version: String,
+    @SerializedName(value = "starred", alternate = ["starred2"])
     val starred: StarredItems?
 )
 

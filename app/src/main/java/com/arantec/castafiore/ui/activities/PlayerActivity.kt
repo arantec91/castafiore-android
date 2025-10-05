@@ -102,11 +102,23 @@ class PlayerActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         
+        // Para Android 16+, habilitar edge-to-edge con barras transparentes ANTES de setContentView
+        // El color de fondo del layout se verá a través de las barras transparentes
+        // detectDarkMode=true porque el fondo por defecto (#121212) es oscuro -> iconos claros
+        if (Build.VERSION.SDK_INT >= 36) {
+            StatusBarUtils.applyEdgeToEdgeWithTransparentBars(this, detectDarkMode = true)
+        }
+        
         binding = ActivityPlayerBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
         // Configurar pantalla completa inmersiva
         setupFullScreenMode()
+        
+        // Para Android 16+, manejar insets manualmente ya que decorFitsSystemWindows=false
+        if (Build.VERSION.SDK_INT >= 36) {
+            setupWindowInsetsForAndroid16()
+        }
 
         musicRepository = MusicRepository.getInstance(this)
 
@@ -141,6 +153,40 @@ class PlayerActivity : AppCompatActivity() {
         // Set consistent bars color: use last dynamic if available, else default
         lastSystemBarsColor?.let { StatusBarUtils.setSystemBarsColor(this, it) }
             ?: StatusBarUtils.setSystemBarsColor(this, "#121212".toColorInt())
+    }
+
+    /**
+     * Configura el manejo manual de window insets para Android 16+.
+     * 
+     * Estrategia:
+     * - El root (CoordinatorLayout) NO tiene padding -> el fondo se extiende detrás de las barras
+     * - El ScrollView SÍ tiene padding -> el contenido no se oculta detrás de las barras
+     * - El gradientBackground se extiende detrás de las barras transparentes mostrando el color dinámico
+     */
+    private fun setupWindowInsetsForAndroid16() {
+        // NO aplicar padding al root para que el fondo se extienda detrás de las barras
+        androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(binding.root) { _, windowInsets ->
+            // Solo pasar los insets sin consumirlos
+            windowInsets
+        }
+        
+        // Aplicar padding al ScrollView para que el contenido no se oculte
+        androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(binding.scrollViewContent) { view, windowInsets ->
+            val insets = windowInsets.getInsets(
+                androidx.core.view.WindowInsetsCompat.Type.systemBars()
+            )
+            
+            // Aplicar padding solo en los lados donde hay barras del sistema
+            // Esto evita que el contenido se dibuje debajo de las barras
+            view.setPadding(
+                insets.left,
+                insets.top,
+                insets.right,
+                insets.bottom
+            )
+            
+            androidx.core.view.WindowInsetsCompat.CONSUMED
+        }
     }
 
     private fun setupClickListeners() {
@@ -392,8 +438,8 @@ class PlayerActivity : AppCompatActivity() {
             } else {
                 null
             }
-
             if (coverUrl != null) {
+                android.util.Log.d("PlayerActivity", "[DEBUG_LOG] About to load cover art with Glide: $coverUrl")
                 val previous = binding.ivAlbumCover.drawable
                 var request = Glide.with(this)
                     .load(coverUrl)
@@ -460,6 +506,13 @@ class PlayerActivity : AppCompatActivity() {
         binding.gradientBackground.setBackgroundColor(staticColor)
         // Reset memory and apply fixed bars color
         lastSystemBarsColor = null
+        
+        // Para Android 16+, actualizar iconos de las barras del sistema
+        // detectDarkMode=true porque #121212 es oscuro -> iconos claros
+        if (Build.VERSION.SDK_INT >= 36) {
+            StatusBarUtils.applyEdgeToEdgeWithTransparentBars(this, detectDarkMode = true)
+        }
+        
         StatusBarUtils.setSystemBarsColor(this, staticColor)
         // Apply foreground contrast for default background
         applyForegroundContrastForBackground(staticColor)
@@ -470,6 +523,20 @@ class PlayerActivity : AppCompatActivity() {
         binding.gradientBackground.setBackgroundColor(color)
         // Remember and apply to both status and navigation bars
         lastSystemBarsColor = color
+        
+        // Para Android 16+, actualizar iconos de las barras del sistema según la luminancia del color
+        if (Build.VERSION.SDK_INT >= 36) {
+            // Calcular si el fondo es oscuro o claro
+            val isLightBackground = try {
+                androidx.core.graphics.ColorUtils.calculateLuminance(color) > 0.5
+            } catch (_: Throwable) {
+                false
+            }
+            // detectDarkMode=true para fondos oscuros (iconos claros)
+            // detectDarkMode=false para fondos claros (iconos oscuros)
+            StatusBarUtils.applyEdgeToEdgeWithTransparentBars(this, detectDarkMode = !isLightBackground)
+        }
+        
         StatusBarUtils.setSystemBarsColor(this, color)
         // Apply foreground contrast for dynamic background
         applyForegroundContrastForBackground(color)
@@ -900,8 +967,8 @@ class PlayerActivity : AppCompatActivity() {
             } else {
                 null
             }
-
             if (coverUrl != null) {
+                android.util.Log.d("PlayerActivity", "Requesting cover art (info dialog): $coverUrl")
                 Glide.with(this)
                     .load(coverUrl)
                     .placeholder(R.drawable.ic_album_placeholder)
