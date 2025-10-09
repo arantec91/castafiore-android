@@ -23,6 +23,8 @@ import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.Lifecycle
 import com.arantec.castafiore.data.download.SongDownloadManager
+import com.arantec.castafiore.data.model.PlaybackSource
+import com.arantec.castafiore.data.model.SourceType
 import kotlinx.coroutines.flow.collect
 
 class SongsFragment : Fragment(), HasContentState {
@@ -115,8 +117,8 @@ class SongsFragment : Fragment(), HasContentState {
         if (isBound && musicService != null) {
             musicService?.playSong(
                 song,
-                MusicService.PlaybackSource(
-                    MusicService.SourceType.SONGS,
+                PlaybackSource(
+                    SourceType.SONGS,
                     null,
                     "Canciones"
                 )
@@ -193,7 +195,8 @@ class SongsFragment : Fragment(), HasContentState {
                     musicRepository.searchMusic(query)
                 }
 
-                result.onSuccess { (songs, _, _) ->
+                result.onSuccess { searchResult ->
+                    val (songs, _, _) = searchResult
                     if (songs.isNotEmpty()) {
                         songAdapter.updateSongs(songs)
                         binding.recyclerView.visibility = View.VISIBLE

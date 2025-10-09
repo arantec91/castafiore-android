@@ -24,6 +24,7 @@ import com.arantec.castafiore.data.models.Album
 import com.arantec.castafiore.data.models.Artist
 import com.arantec.castafiore.data.models.Song
 import com.arantec.castafiore.data.models.Playlist
+import com.arantec.castafiore.data.models.AlbumDetail
 import com.arantec.castafiore.data.repository.MusicRepository
 import com.arantec.castafiore.databinding.FragmentSearchBinding
 import com.arantec.castafiore.ui.adapters.PublicPlaylistsGridAdapter
@@ -364,7 +365,7 @@ class SearchFragment : Fragment(), HasContentState {
                         // Verificar si el binding aún existe antes de navegar
                         if (_binding == null) return@onSuccess
                         
-                        handleAlbumNavigation(album)
+                        handleAlbumNavigation(albumDetailToAlbum(album))
                     }.onFailure {
                         if (_binding == null) return@onFailure
                         Toast.makeText(requireContext(), "No se pudo abrir el álbum", Toast.LENGTH_SHORT).show()
@@ -718,7 +719,7 @@ class SearchFragment : Fragment(), HasContentState {
                         ?: artists.firstOrNull { it.name.contains(query, ignoreCase = true) }?.name
                         ?: songs.firstOrNull { it.artist.equals(query, ignoreCase = true) }?.artist
                     if (matchedArtistName != null) {
-                        val topRes = musicRepository.getArtistTopSongs(matchedArtistName, 100)
+                        val topRes = musicRepository.getArtistTopSongs(matchedArtistName, count = 100)
                         if (topRes.isSuccess) {
                             val top = topRes.getOrNull().orEmpty()
                             if (top.isNotEmpty()) {
@@ -980,7 +981,7 @@ class SearchFragment : Fragment(), HasContentState {
                     viewLifecycleOwner.lifecycleScope.launch {
                         musicRepository.getAlbumDetail(albumId).fold(
                             onSuccess = { album ->
-                                val action = SearchFragmentDirections.actionSearchToAlbumDetail(album)
+                                val action = SearchFragmentDirections.actionSearchToAlbumDetail(albumDetailToAlbum(album))
                                 findNavController().navigate(action)
                             },
                             onFailure = {
@@ -1355,7 +1356,7 @@ class SearchFragment : Fragment(), HasContentState {
 
                 // Build radio list
                 val similar: List<Song> = seedOrRandom?.let {
-                    musicRepository.getSimilarSongs(it.id, size = 25).getOrNull().orEmpty()
+                    musicRepository.getSimilarSongs(it.id, count = 25).getOrNull().orEmpty()
                 } ?: emptyList()
 
                 var toPlay: List<Song> = similar.filter { it.id != seedOrRandom?.id }
@@ -1383,5 +1384,19 @@ class SearchFragment : Fragment(), HasContentState {
                 if (dialog.isShowing) dialog.dismiss()
             }
         }
+    }
+
+    private fun albumDetailToAlbum(albumDetail: AlbumDetail): Album {
+        return Album(
+            id = albumDetail.id,
+            name = albumDetail.title,
+            artist = albumDetail.artist,
+            artistId = albumDetail.artistId,
+            songCount = albumDetail.songCount,
+            duration = albumDetail.duration,
+            year = albumDetail.year,
+            genre = albumDetail.genre,
+            coverArt = albumDetail.coverArt
+        )
     }
 }

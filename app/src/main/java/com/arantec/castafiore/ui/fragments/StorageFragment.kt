@@ -3,6 +3,7 @@ package com.arantec.castafiore.ui.fragments
 import android.os.Bundle
 import android.os.Environment
 import android.os.StatFs
+import android.text.format.Formatter
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -75,7 +76,7 @@ class StorageFragment : Fragment() {
                     val dm = com.arantec.castafiore.data.download.SongDownloadManager.getInstance(requireContext())
                     val songs = try { dm.getAllDownloadedSongs() } catch (_: Exception) { emptyList() }
                     if (songs.isNotEmpty()) {
-                        val ids = songs.map { it.id }
+                        val ids = songs // songs is List<String> (song IDs)
                         val deleted = try { dm.deleteMultipleSongs(ids) } catch (_: Exception) { 0 }
                         if (deleted != ids.size) {
                             allOk = false
@@ -183,7 +184,7 @@ class StorageFragment : Fragment() {
                 val downloadedSongs = runCatching { dm.getAllDownloadedSongs() }.getOrElse { emptyList() }
                 var downloadsBytes = 0L
                 downloadedSongs.forEach { s ->
-                    downloadsBytes += runCatching { dm.getSongFileSize(s.id) }.getOrDefault(0L)
+                    downloadsBytes += runCatching { dm.getSongFileSize(s) }.getOrDefault(0L)
                 }
                 val legacyMusicDir = requireContext().getExternalFilesDir(Environment.DIRECTORY_MUSIC)?.resolve("Castafiore")
                 downloadsBytes += sizeOfRecursively(legacyMusicDir)
@@ -212,7 +213,7 @@ class StorageFragment : Fragment() {
             if (!isAdded || _binding == null) return@launch
 
             // Apply to UI
-            val fmt = { b: Long -> dm.formatFileSize(b) }
+            val fmt = { b: Long -> Formatter.formatFileSize(requireContext(), b) }
             binding.tvStorageSummary.text = getString(
                 R.string.storage_summary_format,
                 fmt(stats.used), fmt(stats.total), stats.percent

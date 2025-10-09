@@ -32,6 +32,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.isActive
 import kotlin.coroutines.coroutineContext
+import com.arantec.castafiore.data.models.getCoverArtUrl
 
 class LibraryFragment : Fragment(), HasContentState {
 
@@ -419,8 +420,8 @@ class LibraryFragment : Fragment(), HasContentState {
                 try {
                     musicRepository.getPlaylistSongs(playlistId).onSuccess { songs ->
                         fullyDownloaded = songs.isNotEmpty() && songs.all { song ->
-                            val path = dm.createDownloadPath(song)
-                            File(path).exists()
+                            val path = dm.createDownloadPath(song.id)
+                            path != null && File(path).exists()
                         }
                     }
                 } catch (_: Exception) {
@@ -436,10 +437,9 @@ class LibraryFragment : Fragment(), HasContentState {
     private suspend fun loadAlbums() {
         try {
             val result = musicRepository.getStarredAlbums()
-            result.onSuccess { albumsFromApi ->
+            result.onSuccess { albumsFromApi: List<Album> ->
                 albums.clear()
-
-                albumsFromApi.forEach { album ->
+                albumsFromApi.forEach { album: Album ->
                     val (username, token, salt) = musicRepository.getAuthParams()
                     val imageUrl = ImageLoader.buildCoverArtUrl(
                         musicRepository.serverUrl!!,
@@ -449,7 +449,6 @@ class LibraryFragment : Fragment(), HasContentState {
                         salt,
                         200
                     )
-
                     albums.add(
                         LibraryItem(
                             id = album.id,
@@ -459,8 +458,6 @@ class LibraryFragment : Fragment(), HasContentState {
                             type = LibraryItemType.ALBUM
                         )
                     )
-
-                    // Agregar al mapa de álbumes
                     albumsMap[album.id] = album
                 }
             }.onFailure {
@@ -489,11 +486,7 @@ class LibraryFragment : Fragment(), HasContentState {
                     )
 
                     // Construir subtítulo basado en si albumCount está disponible
-                    val subtitle = if (artist.albumCount != null && artist.albumCount > 0) {
-                        "Artista • ${artist.albumCount} álbumes"
-                    } else {
-                        "Artista"
-                    }
+                    val subtitle = "Artista • ${artist.albumCount} álbumes"
 
                     artists.add(
                         LibraryItem(
@@ -667,8 +660,8 @@ class LibraryFragment : Fragment(), HasContentState {
                     var fullyDownloaded = false
                     musicRepository.getAlbumSongs(al.id).onSuccess { songs ->
                         fullyDownloaded = songs.isNotEmpty() && songs.all { song ->
-                            val path = dm.createDownloadPath(song)
-                            File(path).exists()
+                            val path = dm.createDownloadPath(song.id)
+                            path != null && File(path).exists()
                         }
                     }
                     downloadedAlbumsCache[al.id] = fullyDownloaded

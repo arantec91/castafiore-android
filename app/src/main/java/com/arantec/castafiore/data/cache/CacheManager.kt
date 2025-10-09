@@ -5,15 +5,25 @@ import android.content.SharedPreferences
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import java.lang.reflect.Type
-import java.util.concurrent.ConcurrentHashMap
 
 /**
- * Sistema de cache híbrido que combina cache en memoria y en disco
- * con estrategias de TTL (Time To Live) para optimizar las llamadas a la API
+ * Manages caching for the application using SharedPreferences
  */
-class CacheManager private constructor(private val context: Context) {
+class CacheManager private constructor(context: Context) {
+
+    private val sharedPreferences: SharedPreferences =
+        context.getSharedPreferences("castafiore_cache", Context.MODE_PRIVATE)
+    private val gson = Gson()
 
     companion object {
+        // Cache TTL constants (in milliseconds)
+        const val DEFAULT_TTL = 30 * 60 * 1000L // 30 minutes
+        const val FAVORITE_TTL = 60 * 60 * 1000L // 1 hour
+        const val SEARCH_TTL = 15 * 60 * 1000L // 15 minutes
+        const val ARTIST_TTL = 60 * 60 * 1000L // 1 hour
+
+        private const val TTL_SUFFIX = "_ttl"
+
         @Volatile
         private var INSTANCE: CacheManager? = null
 
@@ -22,338 +32,143 @@ class CacheManager private constructor(private val context: Context) {
                 INSTANCE ?: CacheManager(context.applicationContext).also { INSTANCE = it }
             }
         }
-
-        // TTL (Time To Live) en milisegundos para diferentes tipos de contenido
-        private const val SONGS_TTL = 5 * 60 * 1000L           // 5 minutos
-        private const val ALBUMS_TTL = 10 * 60 * 1000L         // 10 minutos
-        private const val ARTISTS_TTL = 15 * 60 * 1000L        // 15 minutos
-        private const val ALBUM_DETAIL_TTL = 30 * 60 * 1000L   // 30 minutos
-        private const val ARTIST_DETAIL_TTL = 30 * 60 * 1000L  // 30 minutos
-        private const val SEARCH_TTL = 2 * 60 * 1000L          // 2 minutos
-        private const val PLAYLISTS_TTL = 5 * 60 * 1000L       // 5 minutos
-        private const val RANDOM_SONGS_TTL = 1 * 60 * 1000L    // 1 minuto (cambian frecuentemente)
-
-        // Tamaños máximos de cache en memoria
-        private const val MAX_MEMORY_CACHE_SIZE = 100
-        private const val MAX_SEARCH_CACHE_SIZE = 50
-    }
-
-    private val gson = Gson()
-    private val diskCache: SharedPreferences = context.getSharedPreferences("navidrome_cache", Context.MODE_PRIVATE)
-
-    // Cache en memoria con acceso concurrente seguro
-    private val memoryCache = ConcurrentHashMap<String, CacheEntry<Any>>()
-    private val searchCache = ConcurrentHashMap<String, CacheEntry<Any>>()
-
-    /**
-     * Entrada de cache que incluye los datos y metadata de expiración
-     */
-    private data class CacheEntry<T>(
-        val data: T,
-        val timestamp: Long,
-        val ttl: Long
-    ) {
-        fun isExpired(): Boolean = System.currentTimeMillis() - timestamp > ttl
     }
 
     /**
-     * Estrategia de cache: buscar primero en memoria, luego en disco, finalmente llamar al proveedor
+     * Data class for cache statistics
      */
-    suspend fun <T> getOrFetch(
-        key: String,
-        ttl: Long,
-        type: Type,
-        provider: suspend () -> Result<T>
-    ): Result<T> {
-        return try {
-            // 1. Intentar obtener desde cache en memoria
-            val memoryResult = getFromMemory<T>(key)
-            if (memoryResult != null) {
-                return Result.success(memoryResult)
-            }
-
-            // 2. Intentar obtener desde cache en disco (respetando TTL)
-            val diskResult = getFromDisk<T>(key, ttl, type)
-            if (diskResult != null) {
-                // Guardar en memoria para futuras consultas
-                putInMemory(key, diskResult, ttl)
-                return Result.success(diskResult)
-            }
-
-            // 3. Cache miss - obtener datos frescos del proveedor
-            val result = provider()
-
-            // En caso de éxito, persistir en cache
-            result.onSuccess { data ->
-                putInMemory(key, data, ttl)
-                putOnDisk(key, data)
-            }
-
-            // En caso de error, intentar devolver entrada obsoleta (stale) desde disco
-            if (result.isFailure) {
-                val stale = getFromDiskStale<T>(key, type)
-                if (stale != null) {
-                    @Suppress("UNCHECKED_CAST")
-                    return Result.success(stale as T)
-                }
-            }
-
-            result
-        } catch (e: Exception) {
-            // En excepción, intentar también fallback a entrada obsoleta
-            val stale = getFromDiskStale<T>(key, type)
-            if (stale != null) {
-                @Suppress("UNCHECKED_CAST")
-                return Result.success(stale as T)
-            }
-            Result.failure(e)
-        }
-    }
+    data class CacheStats(
+        val memoryEntries: Int,
+        val searchEntries: Int,
+        val diskEntries: Int,
+        val totalSize: Int
+    )
 
     /**
-     * Cache específico para búsquedas con TTL corto
+     * Store data in cache with TTL
      */
-    suspend fun <T> getOrFetchSearch(
-        query: String,
-        type: Type,
-        provider: suspend () -> Result<T>
-    ): Result<T> {
-        return try {
-            val key = "search_$query"
-
-            // Buscar en cache de búsquedas
-            val cached = searchCache[key]
-            if (cached != null && !cached.isExpired()) {
-                @Suppress("UNCHECKED_CAST")
-                return Result.success(cached.data as T)
-            }
-
-            // Cache miss - obtener datos frescos
-            val result = provider()
-            result.onSuccess { data ->
-                // Guardar en cache de búsquedas con TTL corto
-                searchCache[key] = CacheEntry(data as Any, System.currentTimeMillis(), SEARCH_TTL)
-
-                // Limpiar cache de búsquedas si está muy lleno
-                if (searchCache.size > MAX_SEARCH_CACHE_SIZE) {
-                    clearExpiredSearchEntries()
-                }
-            }
-            result
-        } catch (e: Exception) {
-            Result.failure(e)
-        }
-    }
-
-    private fun <T> getFromMemory(key: String): T? {
-        val entry = memoryCache[key]
-        return if (entry != null && !entry.isExpired()) {
-            @Suppress("UNCHECKED_CAST")
-            entry.data as T
-        } else {
-            // Remover entrada expirada
-            if (entry != null) {
-                memoryCache.remove(key)
-            }
-            null
-        }
-    }
-
-    private fun <T> getFromDisk(key: String, ttl: Long, type: Type): T? {
-        return try {
-            val jsonData = diskCache.getString(key, null)
-            val timestamp = diskCache.getLong("${key}_timestamp", 0)
-
-            if (jsonData != null && timestamp > 0) {
-                val isExpired = System.currentTimeMillis() - timestamp > ttl
-                if (!isExpired) {
-                    gson.fromJson<T>(jsonData, type)
-                } else {
-                    // Limpiar entrada expirada
-                    diskCache.edit()
-                        .remove(key)
-                        .remove("${key}_timestamp")
-                        .apply()
-                    null
-                }
-            } else {
-                null
-            }
-        } catch (e: Exception) {
-            null
-        }
-    }
-
-    /**
-     * Versión que ignora TTL para recuperar datos viejos (stale) cuando no hay red.
-     * No limpia ni modifica timestamps.
-     */
-    private fun <T> getFromDiskStale(key: String, type: Type): T? {
-        return try {
-            val jsonData = diskCache.getString(key, null)
-            if (jsonData != null) {
-                gson.fromJson<T>(jsonData, type)
-            } else {
-                null
-            }
-        } catch (e: Exception) {
-            null
-        }
-    }
-
-    private fun <T> putInMemory(key: String, data: T, ttl: Long) {
-        memoryCache[key] = CacheEntry(data as Any, System.currentTimeMillis(), ttl)
-
-        // Limpiar cache si está muy lleno
-        if (memoryCache.size > MAX_MEMORY_CACHE_SIZE) {
-            clearExpiredMemoryEntries()
-        }
-    }
-
-    private fun <T> putOnDisk(key: String, data: T) {
+    fun <T> putCache(key: String, data: T, type: Type, ttl: Long = DEFAULT_TTL) {
         try {
-            val jsonData = gson.toJson(data)
-            diskCache.edit()
-                .putString(key, jsonData)
-                .putLong("${key}_timestamp", System.currentTimeMillis())
+            val json = gson.toJson(data, type)
+            val expirationTime = System.currentTimeMillis() + ttl
+
+            sharedPreferences.edit()
+                .putString(key, json)
+                .putLong(key + TTL_SUFFIX, expirationTime)
                 .apply()
         } catch (e: Exception) {
-            // Log error pero no fallar
-        }
-    }
-
-    private fun clearExpiredMemoryEntries() {
-        val iterator = memoryCache.entries.iterator()
-        while (iterator.hasNext()) {
-            val entry = iterator.next()
-            if (entry.value.isExpired()) {
-                iterator.remove()
-            }
-        }
-    }
-
-    private fun clearExpiredSearchEntries() {
-        val iterator = searchCache.entries.iterator()
-        while (iterator.hasNext()) {
-            val entry = iterator.next()
-            if (entry.value.isExpired()) {
-                iterator.remove()
-            }
+            e.printStackTrace()
         }
     }
 
     /**
-     * Métodos de utilidad para diferentes tipos de contenido con TTL específicos
+     * Get data from cache
      */
-    suspend fun <T> getSongs(key: String, type: Type, provider: suspend () -> Result<T>): Result<T> {
-        return getOrFetch(key, SONGS_TTL, type, provider)
-    }
+    fun <T> getCache(key: String, type: Type): T? {
+        try {
+            // Check if cache has expired
+            val expirationTime = sharedPreferences.getLong(key + TTL_SUFFIX, 0)
+            if (System.currentTimeMillis() > expirationTime) {
+                invalidateCache(key)
+                return null
+            }
 
-    suspend fun <T> getAlbums(key: String, type: Type, provider: suspend () -> Result<T>): Result<T> {
-        return getOrFetch(key, ALBUMS_TTL, type, provider)
-    }
-
-    suspend fun <T> getArtists(key: String, type: Type, provider: suspend () -> Result<T>): Result<T> {
-        return getOrFetch(key, ARTISTS_TTL, type, provider)
-    }
-
-    suspend fun <T> getAlbumDetail(albumId: String, type: Type, provider: suspend () -> Result<T>): Result<T> {
-        return getOrFetch("album_detail_$albumId", ALBUM_DETAIL_TTL, type, provider)
-    }
-
-    suspend fun <T> getArtistDetail(artistId: String, type: Type, provider: suspend () -> Result<T>): Result<T> {
-        return getOrFetch("artist_detail_$artistId", ARTIST_DETAIL_TTL, type, provider)
-    }
-
-    suspend fun <T> getPlaylists(key: String, type: Type, provider: suspend () -> Result<T>): Result<T> {
-        return getOrFetch(key, PLAYLISTS_TTL, type, provider)
-    }
-
-    suspend fun <T> getRandomSongs(key: String, type: Type, provider: suspend () -> Result<T>): Result<T> {
-        return getOrFetch(key, RANDOM_SONGS_TTL, type, provider)
-    }
-
-    suspend fun <T> getRandomAlbums(key: String, type: Type, provider: suspend () -> Result<T>): Result<T> {
-        return getOrFetch(key, RANDOM_SONGS_TTL, type, provider)
+            val json = sharedPreferences.getString(key, null) ?: return null
+            return gson.fromJson(json, type)
+        } catch (e: Exception) {
+            e.printStackTrace()
+            return null
+        }
     }
 
     /**
-     * Invalidar cache específico
+     * Check if cache exists and is valid
+     */
+    fun isCacheValid(key: String): Boolean {
+        val expirationTime = sharedPreferences.getLong(key + TTL_SUFFIX, 0)
+        return System.currentTimeMillis() <= expirationTime &&
+               sharedPreferences.contains(key)
+    }
+
+    /**
+     * Invalidate specific cache entry
      */
     fun invalidateCache(key: String) {
-        memoryCache.remove(key)
-        diskCache.edit()
+        sharedPreferences.edit()
             .remove(key)
-            .remove("${key}_timestamp")
+            .remove(key + TTL_SUFFIX)
             .apply()
     }
 
     /**
-     * Invalidar todo el cache (útil al cambiar de servidor o usuario)
+     * Clear all cache
      */
     fun clearAllCache() {
-        memoryCache.clear()
-        searchCache.clear()
-        diskCache.edit().clear().apply()
+        sharedPreferences.edit().clear().apply()
     }
 
     /**
-     * Limpiar solo cache expirado
+     * Get cache statistics
+     */
+    fun getCacheStats(): CacheStats {
+        val allKeys = getAllCacheKeys()
+        val memoryEntries = allKeys.count { !it.startsWith("search_") && !it.startsWith("disk_") }
+        val searchEntries = allKeys.count { it.startsWith("search_") }
+        val diskEntries = allKeys.count { it.startsWith("disk_") }
+
+        return CacheStats(
+            memoryEntries = memoryEntries,
+            searchEntries = searchEntries,
+            diskEntries = diskEntries,
+            totalSize = allKeys.size
+        )
+    }
+
+    /**
+     * Clean expired cache entries
      */
     fun cleanupExpiredCache() {
-        clearExpiredMemoryEntries()
-        clearExpiredSearchEntries()
+        cleanupCache() // Reuse existing cleanup method
+    }
 
-        // Limpiar cache en disco expirado (operación costosa, hacer esporádicamente)
-        val editor = diskCache.edit()
-        val allKeys = diskCache.all.keys
+    /**
+     * Clean expired cache entries
+     */
+    fun cleanupCache() {
+        val currentTime = System.currentTimeMillis()
+        val editor = sharedPreferences.edit()
+        val keysToRemove = mutableListOf<String>()
 
-        allKeys.forEach { key ->
-            if (key.endsWith("_timestamp")) {
-                val dataKey = key.removeSuffix("_timestamp")
-                val timestamp = diskCache.getLong(key, 0)
+        sharedPreferences.all.forEach { (key, _) ->
+            if (key.endsWith(TTL_SUFFIX)) {
+                val baseKey = key.removeSuffix(TTL_SUFFIX)
+                val expirationTime = sharedPreferences.getLong(key, 0)
 
-                // Usar TTL más conservador para limpeza general
-                if (System.currentTimeMillis() - timestamp > ALBUM_DETAIL_TTL) {
-                    editor.remove(dataKey)
-                    editor.remove(key)
+                if (currentTime > expirationTime) {
+                    keysToRemove.add(baseKey)
+                    keysToRemove.add(key)
                 }
             }
+        }
+
+        keysToRemove.forEach { key ->
+            editor.remove(key)
         }
 
         editor.apply()
     }
 
     /**
-     * Obtener estadísticas del cache para debugging
+     * Get cache size (number of entries)
      */
-    fun getCacheStats(): CacheStats {
-        val memorySize = memoryCache.size
-        val searchSize = searchCache.size
-        val diskSize = diskCache.all.size / 2 // Dividir por 2 porque guardamos datos + timestamp
-
-        return CacheStats(
-            memoryEntries = memorySize,
-            searchEntries = searchSize,
-            diskEntries = diskSize
-        )
+    fun getCacheSize(): Int {
+        return sharedPreferences.all.size / 2 // Divide by 2 because each entry has a TTL entry
     }
 
-    data class CacheStats(
-        val memoryEntries: Int,
-        val searchEntries: Int,
-        val diskEntries: Int
-    )
-
     /**
-     * Peek sincronamente en el cache (memoria o disco) sin llamar al proveedor.
-     * Respeta TTL. Devuelve null si no hay dato válido.
+     * Get all cache keys
      */
-    fun <T> peek(key: String, ttl: Long, type: Type): T? {
-        // Primero memoria
-        val mem = getFromMemory<T>(key)
-        if (mem != null) return mem
-        // Luego disco con validación de TTL
-        return getFromDisk<T>(key, ttl, type)
+    fun getAllCacheKeys(): Set<String> {
+        return sharedPreferences.all.keys.filter { !it.endsWith(TTL_SUFFIX) }.toSet()
     }
 }

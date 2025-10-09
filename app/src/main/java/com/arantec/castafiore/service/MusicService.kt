@@ -46,6 +46,11 @@ import com.arantec.castafiore.ui.activities.MainActivity
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ProcessLifecycleOwner
+import androidx.core.net.toUri
+import androidx.core.content.edit
+import java.io.File
+import com.arantec.castafiore.data.model.PlaybackSource
+import com.arantec.castafiore.data.model.SourceType
 
 
 class MusicService : Service() {
@@ -72,6 +77,9 @@ class MusicService : Service() {
     // Scrobble tracking
     private var scrobbleSentForCurrent = false
     private var trackStartTimeMillis: Long = 0L
+    // Track last now playing report to avoid spamming server
+    private var lastNowPlayingSongId: String? = null
+    private var lastNowPlayingReportTime: Long = 0L
 
     // Gestión de persistencia del estado
     private lateinit var playbackStateManager: PlaybackStateManager
@@ -80,7 +88,13 @@ class MusicService : Service() {
     private var stateSaveRunnable: Runnable? = null
     private var periodicSaveRunnable: Runnable? = null
 
+    // Additional missing properties
+    private var lastNotifPostedAt = 0L
+    private var pendingNotifUpdate: Runnable? = null
+    private val mainHandler = Handler(Looper.getMainLooper())
 
+    // Track playback source
+    private var playbackSource: com.arantec.castafiore.data.model.PlaybackSource? = null
 
     // Receiver to pause when audio becomes noisy (e.g., headphones unplugged)
     private val noisyReceiver = object : BroadcastReceiver() {
@@ -166,11 +180,11 @@ class MusicService : Service() {
                 .setUsage(com.google.android.exoplayer2.C.USAGE_MEDIA)
                 .setContentType(com.google.android.exoplayer2.C.AUDIO_CONTENT_TYPE_MUSIC)
                 .build(),
-            /* handleAudioFocus= */ true
+            true
         )
         exoPlayer?.addListener(object : com.google.android.exoplayer2.Player.Listener {
-            override fun onPlaybackStateChanged(state: Int) {
-                if (state == com.google.android.exoplayer2.Player.STATE_ENDED) {
+            override fun onPlaybackStateChanged(playbackState: Int) {
+                if (playbackState == com.google.android.exoplayer2.Player.STATE_ENDED) {
                     // Enviar scrobble si aún no se envió (canción completada)
                     sendScrobbleIfNeeded(force = true)
                     when (repeatMode) {
@@ -392,31 +406,32 @@ class MusicService : Service() {
     private fun startNewSong() {
         val song = currentSong ?: return
         val dm = com.arantec.castafiore.data.download.SongDownloadManager.getInstance(this)
-        // Prefer MediaStore content URI if downloaded
-        val downloadedUri: Uri? = try { dm.getDownloadedContentUri(song.id) } catch (_: Exception) { null }
-        val localPath = try { dm.createDownloadPath(song) } catch (_: Exception) { null }
+        // Get downloaded content path, noting that getDownloadedContentUri returns String?
+        val downloadedPath: String? = try { dm.getDownloadedContentUri(song.id) } catch (_: Exception) { null }
+        val localPath = try { dm.createDownloadPath(song.id) } catch (_: Exception) { null }
         val localFile = if (!localPath.isNullOrEmpty()) java.io.File(localPath) else null
 
         val mediaItemBuilder = MediaItem.Builder()
-        if (downloadedUri != null) {
-            mediaItemBuilder.setUri(downloadedUri)
+        if (!downloadedPath.isNullOrEmpty()) {
+            // Convert downloaded path to URI
+            mediaItemBuilder.setUri(downloadedPath.toUri())
         } else if (song.path?.startsWith("content:") == true) {
-            mediaItemBuilder.setUri(Uri.parse(song.path))
+            mediaItemBuilder.setUri(song.path.toUri())
         } else if (localFile != null && localFile.exists()) {
-            val uri = android.net.Uri.fromFile(localFile)
+            val uri = Uri.fromFile(localFile)
             mediaItemBuilder.setUri(uri)
         } else {
             val serverUrl = musicRepository.serverUrl ?: return
             val (username, token, salt) = musicRepository.getAuthParams()
             // Apply quality preference: high quality = original; basic = 128 kbps mp3
             val highQuality = musicRepository.highQualityEnabled
-            val maxBitRate = if (highQuality) null else 128
+            val maxBitRateStr = if (highQuality) null else "128"
             val format = if (highQuality) null else "mp3"
-            val streamUrl = song.getStreamUrl(serverUrl, username, token, salt, maxBitRate, format)
+            val streamUrl = song.getStreamUrl(serverUrl, username, token, salt, maxBitRateStr, format)
             val qualityTag = if (highQuality) "orig" else "128"
             val cacheKey = "song_${song.id}_$qualityTag"
             mediaItemBuilder
-                .setUri(streamUrl)
+                .setUri(streamUrl.toUri())
                 .setCustomCacheKey(cacheKey)
         }
         val mediaItem = mediaItemBuilder.build()
@@ -549,12 +564,12 @@ class MusicService : Service() {
         if (song == null || player == null) return
         currentPosition = position
         val dm = com.arantec.castafiore.data.download.SongDownloadManager.getInstance(this)
-        val downloadedUri: Uri? = try { dm.getDownloadedContentUri(song.id) } catch (_: Exception) { null }
-        val localPath = try { dm.createDownloadPath(song) } catch (_: Exception) { null }
+        val downloadedPath: String? = try { dm.getDownloadedContentUri(song.id) } catch (_: Exception) { null }
+        val localPath = try { dm.createDownloadPath(song.id) } catch (_: Exception) { null }
         val localFile = if (!localPath.isNullOrEmpty()) java.io.File(localPath) else null
         val highQuality = musicRepository.highQualityEnabled
 
-        if (downloadedUri != null || song.path?.startsWith("content:") == true) {
+        if (!downloadedPath.isNullOrEmpty() || song.path?.startsWith("content:") == true) {
             // Local (MediaStore) file is fully seekable
             player.seekTo(position)
             updatePlaybackState()
@@ -578,10 +593,10 @@ class MusicService : Service() {
         val serverUrl = musicRepository.serverUrl ?: return
         val (username, token, salt) = musicRepository.getAuthParams()
         val offsetSec = (position / 1000L).toInt().coerceAtLeast(0)
-        val streamUrl = song.getStreamUrl(serverUrl, username, token, salt, maxBitRate = 128, format = "mp3", timeOffsetSeconds = offsetSec)
+        val streamUrl = song.getStreamUrl(serverUrl, username, token, salt, "128", "mp3")
         val cacheKey = "song_${song.id}_128_offset_${offsetSec}"
         val newItem = MediaItem.Builder()
-            .setUri(streamUrl)
+            .setUri(streamUrl.toUri())
             .setCustomCacheKey(cacheKey)
             .build()
         val wasPlaying = isPlaying && player.playWhenReady
@@ -601,7 +616,6 @@ class MusicService : Service() {
         playlist.addAll(songs)
         currentIndex = startIndex
         currentSong = if (songs.isNotEmpty()) songs[startIndex] else null
-        // Set playback source (default to SONGS if not provided)
         playbackSource = source ?: PlaybackSource(SourceType.SONGS, null, "Canciones")
 
         // If shuffle is enabled, reorder queue so current is first and the rest are shuffled
@@ -637,7 +651,6 @@ class MusicService : Service() {
         playlist.add(song)
         currentIndex = 0
         currentSong = song
-        // Set playback source (default to SONGS if not provided)
         playbackSource = source ?: PlaybackSource(SourceType.SONGS, null, "Canciones")
         originalQueue = null
         notifySongChanged(currentSong)
@@ -770,12 +783,12 @@ class MusicService : Service() {
         val wantsForeground = exoPlayer?.playWhenReady == true
         val enteringFg = wantsForeground && !isInForegroundNotification
         if (!enteringFg && now - lastNotifPostedAt < 200L) {
-            if (!pendingNotifUpdate) {
-                pendingNotifUpdate = true
-                mainHandler.postDelayed({
-                    pendingNotifUpdate = false
+            if (pendingNotifUpdate == null) {
+                pendingNotifUpdate = Runnable {
+                    pendingNotifUpdate = null
                     showOrUpdateNotification()
-                }, 200L)
+                }
+                mainHandler.postDelayed(pendingNotifUpdate!!, 200L)
             }
             return
         }
@@ -823,17 +836,17 @@ class MusicService : Service() {
             CoroutineScope(Dispatchers.IO).launch {
                 // Primero intentar carátula local
                 val dm = com.arantec.castafiore.data.download.SongDownloadManager.getInstance(this@MusicService)
-                val coverPath = try { dm.createCoverPath(song) } catch (_: Exception) { null }
-                var bitmap: android.graphics.Bitmap? = null
+                val coverPath = try { dm.createDownloadPath(song.id) } catch (_: Exception) { null }
+                var bitmap: Bitmap? = null
                 if (!coverPath.isNullOrEmpty()) {
-                    val file = java.io.File(coverPath)
+                    val file = File(coverPath)
                     if (file.exists()) {
                         bitmap = android.graphics.BitmapFactory.decodeFile(coverPath)
-                    }
+                      }
                 }
                 if (bitmap == null && musicRepository.serverUrl != null) {
-                    val (u, t, s) = musicRepository.getAuthParams()
-                    val coverUrl = song.getCoverArtUrl(musicRepository.serverUrl!!, u, t, s)
+                    val (username, token, salt) = musicRepository.getAuthParams()
+                    val coverUrl = song.getCoverImageUrl(musicRepository.serverUrl!!, username, token, salt)
                     try {
                         if (coverUrl != null) {
                             val future = com.bumptech.glide.Glide.with(this@MusicService)
@@ -1046,8 +1059,11 @@ class MusicService : Service() {
     fun setShuffleEnabled(enabled: Boolean) {
         if (isShuffleEnabled == enabled) return
         isShuffleEnabled = enabled
-        val prefs = getSharedPreferences("player_prefs", Context.MODE_PRIVATE)
-        prefs.edit().putBoolean("shuffle_mode", isShuffleEnabled).apply()
+        val prefs = getSharedPreferences("player_prefs", MODE_PRIVATE)
+        prefs.edit().apply {
+            putBoolean("shuffle_mode", isShuffleEnabled)
+            apply()
+        }
         if (enabled) {
             shuffleQueue()
         } else {
@@ -1113,13 +1129,16 @@ class MusicService : Service() {
 
     // Inicia y detiene actualizaciones periódicas del progreso para la notificación/lockscreen
     private fun startProgressUpdates() {
-        progressJob?.cancel()
+        stopProgressUpdates()
         progressJob = CoroutineScope(Dispatchers.Main).launch {
-            while (isPlaying) {
+            while (isPlaying && currentSong != null) {
                 updatePlaybackState()
-                // Verificar umbral de scrobble (50% o 240s, lo que ocurra primero)
-                maybeScrobbleByProgress()
-                delay(1000L)
+                savePlaybackStateThrottled()
+
+                // Check if we need to send scrobble (50% of song duration)
+                sendScrobbleIfNeeded()
+
+                delay(1000)
             }
         }
     }
@@ -1133,7 +1152,7 @@ class MusicService : Service() {
         val base = currentSong ?: return
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                val result = musicRepository.getSimilarSongs(base.id, size = 15)
+                val result = musicRepository.getSimilarSongs(base.id, 15)
                 val list = result.getOrNull().orEmpty()
                     .filter { it.id != base.id }
                     .filter { s -> playlist.none { it.id == s.id } }
@@ -1154,7 +1173,7 @@ class MusicService : Service() {
         }
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                val similarResult = musicRepository.getSimilarSongs(baseSong.id, size = 15)
+                val similarResult = musicRepository.getSimilarSongs(baseSong.id, 15)
                 val similar = similarResult.getOrNull()
                     ?.filter { it.id != baseSong.id }
                     ?.filter { s -> playlist.none { it.id == s.id } }
@@ -1169,7 +1188,7 @@ class MusicService : Service() {
                         prefetchSimilarForCurrentSong()
                     }
                 } else {
-                    val randomResult = musicRepository.getRandomSongs(size = 15)
+                    val randomResult = musicRepository.getRandomSongs(15)
                     val randomSongs = randomResult.getOrNull()?.filter { s -> playlist.none { it.id == s.id } } ?: emptyList()
                     if (randomSongs.isNotEmpty()) {
                         withContext(Dispatchers.Main) {
@@ -1208,116 +1227,55 @@ class MusicService : Service() {
         }
     }
 
-    private fun sendScrobbleIfNeeded(force: Boolean) {
+    /**
+     * Send scrobble if the song has been played for more than 50% of its duration
+     * or if force is true (song completed)
+     */
+    private fun sendScrobbleIfNeeded(force: Boolean = false) {
         val song = currentSong ?: return
-        if (!force && scrobbleSentForCurrent) return
-        scrobbleSentForCurrent = true
-        CoroutineScope(Dispatchers.IO).launch {
-            try {
-                musicRepository.scrobbleSong(song.id, playedAtMillis = trackStartTimeMillis, submission = true)
-            } catch (_: Exception) { /* Ignorar errores de red */ }
-        }
-    }
-
-    private fun reportNowPlayingSafe(song: Song) {
-        CoroutineScope(Dispatchers.IO).launch {
-            try {
-                musicRepository.reportNowPlaying(song.id)
-            } catch (_: Exception) { /* Ignorar errores */ }
-        }
-    }
-
-    // Playback source tracking
-    data class PlaybackSource(val type: SourceType, val id: String? = null, val name: String? = null)
-    enum class SourceType { ALBUM, ARTIST, PLAYLIST, FAVORITES, SONGS, DOWNLOADS, UNKNOWN }
-
-    private var playbackSource: PlaybackSource? = null
-
-    // Notification update throttling state
-    private val mainHandler = android.os.Handler(Looper.getMainLooper())
-    private var lastNotifPostedAt: Long = 0L
-    private var pendingNotifUpdate: Boolean = false
-
-    // Helper: add only the immediate next song as a queued MediaItem
-    private fun enqueueNextMediaItem() {
-        if (repeatMode == RepeatMode.ONE) return
-        val nextSong = playlist.getOrNull(currentIndex + 1) ?: return
-        val dm = com.arantec.castafiore.data.download.SongDownloadManager.getInstance(this)
-        val downloadedUri: Uri? = try { dm.getDownloadedContentUri(nextSong.id) } catch (_: Exception) { null }
-        val localPath = try { dm.createDownloadPath(nextSong) } catch (_: Exception) { null }
-        val localFile = if (!localPath.isNullOrEmpty()) java.io.File(localPath) else null
-
-        val builder = MediaItem.Builder()
-        if (downloadedUri != null) {
-            builder.setUri(downloadedUri)
-        } else if (nextSong.path?.startsWith("content:") == true) {
-            builder.setUri(Uri.parse(nextSong.path))
-        } else if (localFile != null && localFile.exists()) {
-            val uri = android.net.Uri.fromFile(localFile)
-            builder.setUri(uri)
-        } else {
-            val serverUrl = musicRepository.serverUrl ?: return
-            val (username, token, salt) = musicRepository.getAuthParams()
-            val highQuality = musicRepository.highQualityEnabled
-            val maxBitRate = if (highQuality) null else 128
-            val format = if (highQuality) null else "mp3"
-            val streamUrl = nextSong.getStreamUrl(serverUrl, username, token, salt, maxBitRate, format)
-            val qualityTag = if (highQuality) "orig" else "128"
-            val cacheKey = "song_${nextSong.id}_$qualityTag"
-            builder.setUri(streamUrl).setCustomCacheKey(cacheKey)
-        }
-        val nextItem = builder.build()
-        // Clear any items after current to avoid buildup, then add one next
-        val player = exoPlayer ?: return
-        val currentIdxInPlayer = player.currentMediaItemIndex
-        val total = player.mediaItemCount
-        if (total - 1 > currentIdxInPlayer) {
-            player.removeMediaItems(currentIdxInPlayer + 1, total)
-        }
-        player.addMediaItem(nextItem)
-    }
-
-    private fun refreshFavoriteStateForCurrentSong() {
-        val song = currentSong ?: run {
-            isCurrentSongFavorite = false
-            showOrUpdateNotification()
-            return
-        }
-        CoroutineScope(Dispatchers.IO).launch {
-            try {
-                val result = musicRepository.isSongStarred(song.id)
-                val favorite = result.getOrElse { false }
-                withContext(Dispatchers.Main) {
-                    isCurrentSongFavorite = favorite
-                    showOrUpdateNotification()
-                }
-            } catch (_: Exception) {
-                withContext(Dispatchers.Main) {
-                    isCurrentSongFavorite = false
-                    showOrUpdateNotification()
+        if (scrobbleSentForCurrent && !force) return
+        val currentTime = System.currentTimeMillis()
+        val playDuration = currentTime - trackStartTimeMillis
+        val songDurationMs = (song.duration * 1000).toLong()
+        val shouldScrobble = force || (songDurationMs > 0 && playDuration >= songDurationMs / 2)
+        if (shouldScrobble && !scrobbleSentForCurrent) {
+            scrobbleSentForCurrent = true
+            CoroutineScope(Dispatchers.IO).launch {
+                try {
+                    val result = musicRepository.scrobbleSong(song.id)
+                    if (result.isSuccess) {
+                        android.util.Log.d("MusicService", "Scrobble enviado para ${song.title}")
+                    } else {
+                        android.util.Log.w("MusicService", "Fallo scrobble: ${result.exceptionOrNull()?.message}")
+                    }
+                } catch (e: Exception) {
+                    android.util.Log.e("MusicService", "Error enviando scrobble", e)
                 }
             }
         }
     }
 
-    private fun toggleFavoriteFromNotification() {
-        val song = currentSong ?: return
-        // Optimistic UI
-        isCurrentSongFavorite = !isCurrentSongFavorite
-        showOrUpdateNotification()
+    /**
+     * Report now playing status to the server
+     */
+    private fun reportNowPlayingSafe(song: Song) {
+        // Throttle: no report if same song within 20s
+        val now = System.currentTimeMillis()
+        if (song.id == lastNowPlayingSongId && now - lastNowPlayingReportTime < 20_000) {
+            return
+        }
+        lastNowPlayingSongId = song.id
+        lastNowPlayingReportTime = now
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                if (isCurrentSongFavorite) {
-                    musicRepository.starSong(song.id)
+                val result = musicRepository.reportNowPlaying(song.id)
+                if (result.isSuccess) {
+                    android.util.Log.d("MusicService", "Now playing report enviado: ${song.title}")
                 } else {
-                    musicRepository.unstarSong(song.id)
+                    android.util.Log.w("MusicService", "Fallo now playing: ${result.exceptionOrNull()?.message}")
                 }
-            } catch (_: Exception) {
-                withContext(Dispatchers.Main) {
-                    // Revert on failure
-                    isCurrentSongFavorite = !isCurrentSongFavorite
-                    showOrUpdateNotification()
-                }
+            } catch (e: Exception) {
+                android.util.Log.e("MusicService", "Error reportando now playing", e)
             }
         }
     }
@@ -1479,7 +1437,7 @@ class MusicService : Service() {
                 val serverUrl = musicRepository.serverUrl ?: return
                 val (username, token, salt) = musicRepository.getAuthParams()
                 val highQuality = musicRepository.highQualityEnabled
-                val maxBitRate = if (highQuality) null else 128
+                val maxBitRateStr = if (highQuality) null else "128"
                 val format = if (highQuality) null else "mp3"
                 
                 // Agregar todos los items de la playlist
@@ -1487,7 +1445,7 @@ class MusicService : Service() {
                     val uri = if (song.path?.startsWith("http") == true) {
                         Uri.parse(song.path)
                     } else {
-                        val streamUrl = song.getStreamUrl(serverUrl, username, token, salt, maxBitRate, format)
+                        val streamUrl = song.getStreamUrl(serverUrl, username, token, salt, maxBitRateStr, format)
                         Uri.parse(streamUrl)
                     }
                     MediaItem.fromUri(uri)
@@ -1503,5 +1461,106 @@ class MusicService : Service() {
         }
     }
 
+    /**
+     * Enqueue the next media item for seamless playback
+     */
+    private fun enqueueNextMediaItem() {
+        val nextIndex = when (repeatMode) {
+            RepeatMode.ONE -> currentIndex // Same song
+            RepeatMode.ALL -> if (currentIndex + 1 < playlist.size) currentIndex + 1 else 0
+            RepeatMode.OFF -> if (currentIndex + 1 < playlist.size) currentIndex + 1 else -1
+        }
 
+        if (nextIndex >= 0 && nextIndex < playlist.size) {
+            val nextSong = playlist[nextIndex]
+            try {
+                val dm = com.arantec.castafiore.data.download.SongDownloadManager.getInstance(this)
+                val downloadedPath: String? = try { dm.getDownloadedContentUri(nextSong.id) } catch (_: Exception) { null }
+                val localPath = try { dm.createDownloadPath(nextSong.id) } catch (_: Exception) { null }
+                val localFile = if (!localPath.isNullOrEmpty()) File(localPath) else null
+                val highQuality = musicRepository.highQualityEnabled
+
+                val mediaItem = if (!downloadedPath.isNullOrEmpty()) {
+                    MediaItem.fromUri(downloadedPath.toUri())
+                } else if (nextSong.path?.startsWith("content:") == true) {
+                    MediaItem.fromUri(nextSong.path.toUri())
+                } else if (localFile != null && localFile.exists()) {
+                    MediaItem.fromUri(Uri.fromFile(localFile))
+                } else {
+                    val serverUrl = musicRepository.serverUrl ?: return
+                    val (username, token, salt) = musicRepository.getAuthParams()
+                    val maxBitRateStr = if (highQuality) null else "128"
+                    val format = if (highQuality) null else "mp3"
+                    val streamUrl = nextSong.getStreamUrl(serverUrl, username, token, salt, maxBitRateStr, format)
+                    val qualityTag = if (highQuality) "orig" else "128"
+                    val cacheKey = "song_${nextSong.id}_$qualityTag"
+                    MediaItem.Builder()
+                        .setUri(streamUrl.toUri())
+                        .setCustomCacheKey(cacheKey)
+                        .build()
+                }
+
+                // Add next item to ExoPlayer queue if not already present
+                val currentQueueSize = exoPlayer?.mediaItemCount ?: 0
+                if (currentQueueSize <= nextIndex) {
+                    exoPlayer?.addMediaItem(mediaItem)
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("MusicService", "Error enqueuing next media item", e)
+            }
+        }
+    }
+
+    /**
+     * Refresh the favorite state for the current song
+     */
+    private fun refreshFavoriteStateForCurrentSong() {
+        val song = currentSong ?: return
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                val result = musicRepository.isSongStarred(song.id)
+                result.onSuccess { starred ->
+                    isCurrentSongFavorite = starred
+                    // Update notification to reflect the new favorite state
+                    withContext(Dispatchers.Main) {
+                        showOrUpdateNotification()
+                    }
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("MusicService", "Error refreshing favorite state", e)
+            }
+        }
+    }
+
+    /**
+     * Toggle favorite status from notification
+     */
+    private fun toggleFavoriteFromNotification() {
+        val song = currentSong ?: return
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                val result = if (isCurrentSongFavorite) {
+                    musicRepository.unstarSong(song.id)
+                } else {
+                    musicRepository.starSong(song.id)
+                }
+
+                result.onSuccess {
+                    isCurrentSongFavorite = !isCurrentSongFavorite
+                    withContext(Dispatchers.Main) {
+                        showOrUpdateNotification()
+                    }
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("MusicService", "Error toggling favorite from notification", e)
+            }
+        }
+    }
+
+    /**
+     * Save playback state with throttling to avoid excessive saves
+     */
+    private fun savePlaybackStateThrottled() {
+        scheduleStateSave(immediate = false)
+    }
 }

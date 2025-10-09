@@ -9,7 +9,7 @@ import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.lifecycleScope
 import com.arantec.castafiore.R
-import com.arantec.castafiore.data.network.NavidromeClient
+import com.arantec.castafiore.data.network.CastafioreClient
 import com.arantec.castafiore.data.repository.MusicRepository
 import com.arantec.castafiore.databinding.ActivitySetupBinding
 import com.arantec.castafiore.utils.StatusBarUtils
@@ -168,20 +168,14 @@ class SetupActivity : AppCompatActivity() {
         lifecycleScope.launch {
             try {
                 // Initialize client with fixed server URL
-                val client = NavidromeClient
-                client.initialize(serverUrl)
+                val client = CastafioreClient.initialize(this@SetupActivity, serverUrl)
+                client.setCredentials(username, password)
 
-                val (user, token, salt) = NavidromeClient.generateAuthParams(username, password)
-                val response = client.getApiService().ping(
-                    username = user,
-                    token = token,
-                    salt = salt,
-                    version = "1.16.1",
-                    client = "Castafiore"
-                )
+                val response = client.ping()
 
                 if (response.isSuccessful) {
                     val body = response.body()
+                    android.util.Log.d("SetupActivity", "Respuesta exitosa: $body")
                     if (body?.subsonicResponse?.status == "ok") {
                         // Save credentials with fixed server
                         musicRepository.serverUrl = serverUrl
@@ -196,6 +190,7 @@ class SetupActivity : AppCompatActivity() {
                         finish()
                     } else {
                         val errorMessage = body?.subsonicResponse?.error?.message ?: "Error desconocido"
+                        android.util.Log.e("SetupActivity", "Error en respuesta exitosa: $body")
                         when (body?.subsonicResponse?.error?.code) {
                             40 -> {
                                 binding.tilUsername.error = getString(R.string.invalid_credentials)
@@ -207,6 +202,7 @@ class SetupActivity : AppCompatActivity() {
                         }
                     }
                 } else {
+                    android.util.Log.e("SetupActivity", "Respuesta fallida: code=${response.code()} message=${response.message()} errorBody=${response.errorBody()?.string()}")
                     when (response.code()) {
                         401 -> {
                             binding.tilUsername.error = getString(R.string.invalid_credentials)
@@ -220,15 +216,20 @@ class SetupActivity : AppCompatActivity() {
                     }
                 }
 
-            } catch (_: java.net.UnknownHostException) {
+            } catch (e: java.net.UnknownHostException) {
+                android.util.Log.e("SetupActivity", "UnknownHostException", e)
                 showStatus("No se puede conectar al servidor", true)
-            } catch (_: java.net.ConnectException) {
+            } catch (e: java.net.ConnectException) {
+                android.util.Log.e("SetupActivity", "ConnectException", e)
                 showStatus("Error de conexión. Reintenta más tarde", true)
-            } catch (_: java.net.SocketTimeoutException) {
+            } catch (e: java.net.SocketTimeoutException) {
+                android.util.Log.e("SetupActivity", "SocketTimeoutException", e)
                 showStatus("Tiempo de conexión agotado. Intenta nuevamente", true)
-            } catch (_: javax.net.ssl.SSLException) {
+            } catch (e: javax.net.ssl.SSLException) {
+                android.util.Log.e("SetupActivity", "SSLException", e)
                 showStatus("Error de certificado SSL", true)
             } catch (e: Exception) {
+                android.util.Log.e("SetupActivity", "Excepción inesperada", e)
                 showStatus("Error inesperado: ${e.message}", true)
             } finally {
                 setLoading(false)

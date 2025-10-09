@@ -7,6 +7,7 @@ import android.content.ServiceConnection
 import android.graphics.Color
 import android.graphics.Bitmap
 import android.graphics.drawable.GradientDrawable
+import android.graphics.drawable.ColorDrawable
 import android.os.Bundle
 import android.os.IBinder
 import android.view.LayoutInflater
@@ -24,6 +25,7 @@ import com.arantec.castafiore.R
 import com.arantec.castafiore.data.models.Artist
 import com.arantec.castafiore.data.models.Album
 import com.arantec.castafiore.data.models.Song
+import com.arantec.castafiore.data.models.ArtistInfo
 import com.arantec.castafiore.data.repository.MusicRepository
 import com.arantec.castafiore.databinding.FragmentArtistDetailBinding
 import com.arantec.castafiore.service.MusicService
@@ -46,10 +48,14 @@ import com.arantec.castafiore.utils.snack
 import androidx.core.content.ContextCompat
 import com.arantec.castafiore.ui.helpers.HasContentState
 import com.arantec.castafiore.ui.helpers.LoadingHost
-import androidx.core.graphics.drawable.toDrawable
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.repeatOnLifecycle
 import com.arantec.castafiore.data.download.SongDownloadManager
+import androidx.core.content.res.ResourcesCompat
+import androidx.core.graphics.drawable.DrawableCompat
+import com.arantec.castafiore.data.models.getCoverArtUrl
+import com.arantec.castafiore.data.model.PlaybackSource
+import com.arantec.castafiore.data.model.SourceType
 
 class ArtistDetailFragment : Fragment(), HasContentState {
 
@@ -182,25 +188,26 @@ class ArtistDetailFragment : Fragment(), HasContentState {
         }
 
         loadArtistData()
+
+        // Cargar estado de favorito una vez que se haya inicializado
+        loadFollowState()
     }
 
+    // Update isStarred to check if artist is favorited
     private fun initializeFollowUI() {
-        // Si no tenemos un ID aún, ocultar temporalmente
         val id = artistId
         if (id.isNullOrEmpty()) {
             binding.btnFollow.visibility = View.INVISIBLE
             binding.btnFollow.isEnabled = false
             return
         }
-        // Intentar leer el estado desde cache (memoria/disco)
-        val cached = musicRepository.peekArtistStarred(id)
+        val cached: Boolean? = musicRepository.getArtistStarredSync(id)
         if (cached != null) {
             isFollowing = cached
             binding.btnFollow.visibility = View.VISIBLE
             binding.btnFollow.isEnabled = true
             updateFollowButton()
         } else {
-            // Estado desconocido: ocultar hasta confirmar por red
             binding.btnFollow.visibility = View.INVISIBLE
             binding.btnFollow.isEnabled = false
         }
@@ -338,8 +345,8 @@ class ArtistDetailFragment : Fragment(), HasContentState {
         artist = Artist(
             id = artistId ?: "",
             name = artistName ?: "",
-            albumCount = null,
-            starred = null
+            albumCount = 0, // Use 0 as default
+            starred = false // Use false as default
         )
 
         withContext(Dispatchers.Main) {
@@ -353,28 +360,35 @@ class ArtistDetailFragment : Fragment(), HasContentState {
     }
 
     private suspend fun loadArtistAlbums() {
-        val result = withContext(Dispatchers.IO) {
-            musicRepository.getArtistAlbums(artistId ?: "")
+        if (artistId.isNullOrEmpty()) {
+            // No artist ID available, show empty albums list
+            withContext(Dispatchers.Main) {
+                if (!isAdded || _binding == null) return@withContext
+                albumAdapter.updateAlbums(emptyList())
+                updateArtistInfo()
+            }
+            return
+        }
+
+        val result: Result<List<Album>> = withContext(Dispatchers.IO) {
+            musicRepository.getArtistAlbums(artistId!!)
         }
 
         result.fold(
-            onSuccess = { albumList ->
-                // Ordenar álbumes del más reciente al más antiguo por año
-                albums = albumList.sortedByDescending { album ->
-                    album.year ?: 0 // Si no hay año, poner al final
-                }
-
+            onSuccess = { albumList: List<Album> ->
+                albums = albumList.sortedByDescending { it.year ?: 0 }
                 withContext(Dispatchers.Main) {
                     if (!isAdded || _binding == null) return@withContext
-                    // Mostrar TODOS los álbumes, no solo los primeros 10
                     albumAdapter.updateAlbums(albums)
                     updateArtistInfo()
                 }
             },
-            onFailure = {
+            onFailure = { exception ->
                 withContext(Dispatchers.Main) {
                     if (!isAdded || _binding == null) return@withContext
-                    showError("Error al cargar álbumes")
+                    showError("Error al cargar álbumes: ${exception.message}")
+                    albumAdapter.updateAlbums(emptyList())
+                    updateArtistInfo()
                 }
             }
         )
@@ -382,26 +396,32 @@ class ArtistDetailFragment : Fragment(), HasContentState {
 
     private suspend fun loadArtistTopSongs() {
         songsLoading = true
-        // Deshabilitar botón Play durante la carga para evitar taps rápidos
         withContext(Dispatchers.Main) {
             if (isAdded && _binding != null) {
                 binding.btnPlay.isEnabled = false
             }
         }
-        // Usar la API específica getTopSongs.view de Navidrome
-        val result = withContext(Dispatchers.IO) {
-            musicRepository.getArtistTopSongs(artistName ?: "", 25)
+
+        val artistNameToUse = artistName ?: run {
+            val artistResult: Result<Artist>? = artistId?.let { id ->
+                withContext(Dispatchers.IO) {
+                    musicRepository.getArtist(id)
+                }
+            }
+            artistResult?.getOrNull()?.name ?: return
+        }
+
+        val result: Result<List<Song>> = withContext(Dispatchers.IO) {
+            musicRepository.getArtistTopSongs(artistNameToUse, count = 25)
         }
 
         result.fold(
-            onSuccess = { songs ->
+            onSuccess = { songs: List<Song> ->
                 topSongs = songs
                 withContext(Dispatchers.Main) {
                     if (!isAdded || _binding == null) return@withContext
                     updateSongsListUI()
-                    // Rehabilitar botón Play cuando termina la carga
                     binding.btnPlay.isEnabled = true
-                    // Si el usuario pidió reproducir mientras cargaba, y ahora hay canciones, ejecutar
                     if (pendingPlayTopSongs && topSongs.isNotEmpty()) {
                         pendingPlayTopSongs = false
                         playArtistTopSongs()
@@ -421,25 +441,35 @@ class ArtistDetailFragment : Fragment(), HasContentState {
 
     private suspend fun loadSimilarArtists() {
         val id = artistId ?: return
-        val result = withContext(Dispatchers.IO) {
-            musicRepository.getSimilarArtists(id)
+        if (id.isEmpty()) {
+            // No artist ID available, hide similar artists section
+            withContext(Dispatchers.Main) {
+                if (!isAdded || _binding == null) return@withContext
+                binding.similarArtistsSection.visibility = View.GONE
+            }
+            return
         }
+        val result: Result<ArtistInfo> = withContext(Dispatchers.IO) {
+            musicRepository.getArtistInfo2(id)
+        }
+
         result.fold(
-            onSuccess = { list ->
-                similarArtists = list
+            onSuccess = { info: ArtistInfo ->
+                similarArtists = info.view
                 withContext(Dispatchers.Main) {
                     if (!isAdded || _binding == null) return@withContext
-                    if (list.isNotEmpty()) {
+                    if (info.view.isNotEmpty()) {
                         binding.similarArtistsSection.visibility = View.VISIBLE
-                        similarAdapter.submit(list)
+                        similarAdapter.submit(info.view)
                     } else {
                         binding.similarArtistsSection.visibility = View.GONE
                     }
                 }
             },
-            onFailure = {
+            onFailure = { exception ->
                 withContext(Dispatchers.Main) {
                     if (!isAdded || _binding == null) return@withContext
+                    showError("Error al cargar artistas similares: ${exception.message}")
                     binding.similarArtistsSection.visibility = View.GONE
                 }
             }
@@ -563,21 +593,22 @@ class ArtistDetailFragment : Fragment(), HasContentState {
     // Kotlin
     private fun applyAppBarGradient(topColor: Int) {
         val baseColor = "#121212".toColorInt()
-
-        // Mantener el degradado solo en el fondo estático
         val bgGradient = buildSmoothGradient(baseColor, topColor)
         binding.gradientBackground.background = bgGradient
 
-        // Para el AppBar y el scrim, usar colores sólidos estables para evitar glitches/crashes al colapsar
-        binding.appBarLayout.background = android.graphics.drawable.ColorDrawable(baseColor)
+        // Use ResourcesCompat for backward compatibility
+        val drawable = ResourcesCompat.getDrawable(resources, R.drawable.solid_color, null)?.let { original ->
+            DrawableCompat.wrap(original).apply {
+                DrawableCompat.setTint(this, baseColor)
+            }
+        }
+        binding.appBarLayout.background = drawable
         binding.collapsingToolbar.setContentScrimColor(baseColor)
         binding.collapsingToolbar.setStatusBarScrimColor(baseColor)
-        binding.toolbar.navigationIcon?.setTint(android.graphics.Color.WHITE)
-        // Aplicar también el color dinámico al status bar con contraste automático y recordarlo
+        binding.toolbar.navigationIcon?.setTint(Color.WHITE)
+
         lastStatusBarTopColor = topColor
         
-        // Para Android 16+ (API 36), usar el método especial que solo afecta la status bar
-        // Para versiones anteriores, usar el método estándar
         if (Build.VERSION.SDK_INT >= 36) {
             StatusBarUtils.setDynamicStatusBarForAndroid16(this, topColor)
         } else {
@@ -613,11 +644,11 @@ class ArtistDetailFragment : Fragment(), HasContentState {
     // Función auxiliar para mezclar colores
     private fun blendColors(color1: Int, color2: Int, ratio: Float): Int {
         val inverseRatio = 1f - ratio
-        val r = (android.graphics.Color.red(color1) * ratio + android.graphics.Color.red(color2) * inverseRatio).toInt()
-        val g = (android.graphics.Color.green(color1) * ratio + android.graphics.Color.green(color2) * inverseRatio).toInt()
-        val b = (android.graphics.Color.blue(color1) * ratio + android.graphics.Color.blue(color2) * inverseRatio).toInt()
-        val a = (android.graphics.Color.alpha(color1) * ratio + android.graphics.Color.alpha(color2) * inverseRatio).toInt()
-        return android.graphics.Color.argb(a, r, g, b)
+        val r = (Color.red(color1) * ratio + Color.red(color2) * inverseRatio).toInt()
+        val g = (Color.green(color1) * ratio + Color.green(color2) * inverseRatio).toInt()
+        val b = (Color.blue(color1) * ratio + Color.blue(color2) * inverseRatio).toInt()
+        val a = (Color.alpha(color1) * ratio + Color.alpha(color2) * inverseRatio).toInt()
+        return Color.argb(a, r, g, b)
     }
 
     private fun setStaticBackground() {
@@ -644,25 +675,23 @@ class ArtistDetailFragment : Fragment(), HasContentState {
     }
 
     private fun checkFollowStatus() {
-        // Launch on viewLifecycleOwner scope so it's cancelled when the view is destroyed
         viewLifecycleOwner.lifecycleScope.launch {
             try {
-                val result = withContext(Dispatchers.IO) {
-                    musicRepository.isArtistStarred(artistId ?: "")
+                val result: Result<Boolean> = withContext(Dispatchers.IO) {
+                    musicRepository.getArtistStarred(artistId ?: "")
                 }
 
-                result.fold(
-                    onSuccess = { starred ->
-                        isFollowing = starred
-                        // Only touch UI if the view still exists
+                when {
+                    result.isSuccess -> {
+                        isFollowing = result.getOrThrow()
                         val hasView = isAdded && _binding != null
                         if (hasView) {
                             _binding?.btnFollow?.visibility = View.VISIBLE
                             _binding?.btnFollow?.isEnabled = true
                             updateFollowButton()
                         }
-                    },
-                    onFailure = {
+                    }
+                    else -> {
                         isFollowing = false
                         val hasView = isAdded && _binding != null
                         if (hasView) {
@@ -671,7 +700,7 @@ class ArtistDetailFragment : Fragment(), HasContentState {
                             updateFollowButton()
                         }
                     }
-                )
+                }
             } catch (_: Exception) {
                 isFollowing = false
                 val hasView = isAdded && _binding != null
@@ -685,39 +714,67 @@ class ArtistDetailFragment : Fragment(), HasContentState {
     }
 
     private fun toggleFollowArtist() {
-        // Deshabilitar mientras se procesa para evitar taps repetidos y parpadeo
+        val id = artistId
+        if (id.isNullOrEmpty()) {
+            showError("Error: ID de artista no disponible")
+            return
+        }
+
         binding.btnFollow.isEnabled = false
-        // Launch on viewLifecycleOwner scope so it cancels when the view is destroyed
+
         viewLifecycleOwner.lifecycleScope.launch {
             try {
-                val result = withContext(Dispatchers.IO) {
+                val result: Result<Boolean> = withContext(Dispatchers.IO) {
                     if (isFollowing) {
-                        musicRepository.unstarArtist(artistId ?: "")
+                        musicRepository.setArtistStarred(id, false)
                     } else {
-                        musicRepository.starArtist(artistId ?: "")
+                        musicRepository.setArtistStarred(id, true)
                     }
                 }
 
-                result.fold(
-                    onSuccess = {
+                when {
+                    result.isSuccess -> {
                         isFollowing = !isFollowing
-                        if (_binding != null) {
-                            updateFollowButton()
-                            _binding?.btnFollow?.isEnabled = true
+                        updateFollowButton()
+                        val message = if (isFollowing) {
+                            "Artista agregado a favoritos"
+                        } else {
+                            "Artista removido de favoritos"
                         }
-                    },
-                    onFailure = {
-                        if (_binding != null) {
-                            _binding?.btnFollow?.isEnabled = true
-                            showError("Error al actualizar el estado de seguimiento")
-                        }
+                        showMessage(message)
                     }
-                )
-            } catch (_: Exception) {
-                if (_binding != null) {
-                    _binding?.btnFollow?.isEnabled = true
-                    showError("Error al actualizar el estado de seguimiento")
+                    else -> {
+                        val error = result.exceptionOrNull()?.message ?: "Error desconocido"
+                        showError("Error al actualizar favoritos: $error")
+                    }
                 }
+            } catch (e: Exception) {
+                showError("Error al actualizar favoritos: ${e.message}")
+            } finally {
+                if (isAdded && _binding != null) {
+                    binding.btnFollow.isEnabled = true
+                }
+            }
+        }
+    }
+
+    private fun loadFollowState() {
+        val id = artistId
+        if (id.isNullOrEmpty()) return
+
+        viewLifecycleOwner.lifecycleScope.launch {
+            try {
+                val result: Boolean = withContext<Result<Boolean>>(Dispatchers.IO) {
+                    musicRepository.getArtistStarred(id)
+                }.getOrThrow()
+
+                isFollowing = result
+                updateFollowButton()
+                binding.btnFollow.visibility = View.VISIBLE
+                binding.btnFollow.isEnabled = true
+            } catch (_: Exception) {
+                binding.btnFollow.visibility = View.VISIBLE
+                binding.btnFollow.isEnabled = false
             }
         }
     }
@@ -762,10 +819,10 @@ class ArtistDetailFragment : Fragment(), HasContentState {
                 service?.playQueue(
                     topSongs,
                     startIndex,
-                    MusicService.PlaybackSource(
-                        MusicService.SourceType.ARTIST,
+                    PlaybackSource(
+                        SourceType.ARTIST,
                         artistId,
-                        artistName
+                        artistName ?: ""
                     )
                 )
             }
@@ -794,10 +851,10 @@ class ArtistDetailFragment : Fragment(), HasContentState {
                 musicService?.playQueue(
                     topSongs,
                     position,
-                    MusicService.PlaybackSource(
-                        MusicService.SourceType.ARTIST,
+                    PlaybackSource(
+                        SourceType.ARTIST,
                         artistId,
-                        artistName
+                        artistName ?: ""
                     )
                 )
             } else {
@@ -805,10 +862,10 @@ class ArtistDetailFragment : Fragment(), HasContentState {
                 musicService?.playQueue(
                     listOf(song),
                     0,
-                    MusicService.PlaybackSource(
-                        MusicService.SourceType.ARTIST,
+                    PlaybackSource(
+                        SourceType.ARTIST,
                         artistId,
-                        artistName
+                        artistName ?: ""
                     )
                 )
             }
@@ -850,7 +907,6 @@ class ArtistDetailFragment : Fragment(), HasContentState {
                             coverArt = selectedSong.coverArt,
                             songCount = 0,
                             duration = 0,
-                            created = "",
                             year = selectedSong.year,
                             genre = selectedSong.genre
                         )
@@ -941,7 +997,7 @@ class ArtistDetailFragment : Fragment(), HasContentState {
     private fun isCurrentArtistPlaying(): Boolean {
         val service = musicService ?: return false
         val src = service.getPlaybackSource() ?: return false
-        return src.type == MusicService.SourceType.ARTIST && src.id == artistId
+        return src.type == SourceType.ARTIST && src.id == artistId
     }
 
     private fun updatePlayButton() {

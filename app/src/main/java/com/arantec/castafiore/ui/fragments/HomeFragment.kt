@@ -449,14 +449,17 @@ class HomeFragment : Fragment(), HasContentState {
         android.util.Log.d("HomeFragment", "Server URL: ${musicRepository.serverUrl}")
         android.util.Log.d("HomeFragment", "Username: ${musicRepository.username}")
 
-        // IMPORTANTE: Reinicializar NavidromeClient con la URL guardada
+        // IMPORTANTE: Reinicializar CastafioreClient con la URL guardada
         try {
             musicRepository.serverUrl?.let { serverUrl ->
-                com.arantec.castafiore.data.network.NavidromeClient.initialize(serverUrl)
-                android.util.Log.d("HomeFragment", "NavidromeClient initialized with: $serverUrl")
+                val client = com.arantec.castafiore.data.network.CastafioreClient.initialize(requireContext(), serverUrl)
+                val username = musicRepository.username ?: ""
+                val password = musicRepository.password ?: ""
+                client.setCredentials(username, password)
+                android.util.Log.d("HomeFragment", "CastafioreClient initialized with: $serverUrl")
             }
         } catch (e: Exception) {
-            android.util.Log.e("HomeFragment", "Error initializing NavidromeClient: ${e.message}")
+            android.util.Log.e("HomeFragment", "Error initializing CastafioreClient: ${e.message}")
             // Importante: ocultar overlay de loading si hay error de configuración
             showLoading(false)
             showError("Error de configuración del servidor")
@@ -527,18 +530,17 @@ class HomeFragment : Fragment(), HasContentState {
 
     private suspend fun loadRecentlyPlayedAlbums() {
         try {
-            musicRepository.getRecentlyPlayedAlbums().fold(
-                onSuccess = { albums ->
+            val result = musicRepository.getRecentlyPlayedAlbums()
+            result.fold(
+                onSuccess = { albums: List<Album> ->
                     val unique = albums.distinctBy { it.id }
                     if (unique.isNotEmpty()) {
                         withContext(Dispatchers.Main) { recentlyPlayedAdapter.updateAlbums(unique.take(10)) }
                     } else {
-                        // Usuario sin historial: no usar fallback para evitar datos no relevantes
                         android.util.Log.d("HomeFragment", "RecentlyPlayed vacío para el usuario; se ocultará la sección")
                     }
                 },
                 onFailure = {
-                    // Error al cargar historial: no usar fallback, mantener sección oculta si está vacía
                     android.util.Log.w("HomeFragment", "getRecentlyPlayedAlbums falló: ${it.message}")
                 }
             )
@@ -553,18 +555,17 @@ class HomeFragment : Fragment(), HasContentState {
 
     private suspend fun loadMostPlayedAlbums() {
         try {
-            musicRepository.getMostPlayedAlbums().fold(
-                onSuccess = { albums ->
+            val result = musicRepository.getMostPlayedAlbums()
+            result.fold(
+                onSuccess = { albums: List<Album> ->
                     val unique = albums.distinctBy { it.id }
                     if (unique.isNotEmpty()) {
                         withContext(Dispatchers.Main) { mostPlayedAdapter.updateAlbums(unique.take(10)) }
                     } else {
-                        // Usuario sin datos de "más reproducidos": no usar fallback
                         android.util.Log.d("HomeFragment", "MostPlayed vacío para el usuario; se ocultará la sección")
                     }
                 },
                 onFailure = {
-                    // Error al cargar: no usar fallback
                     android.util.Log.w("HomeFragment", "getMostPlayedAlbums falló: ${it.message}")
                 }
             )
@@ -625,12 +626,11 @@ class HomeFragment : Fragment(), HasContentState {
 
     private suspend fun loadSimilarArtists() {
         try {
-            // Base artist should come from Navidrome "recently played" API, not local player state
             val recentAlbumsResult = musicRepository.getRecentlyPlayedAlbums()
             recentAlbumsResult.fold(
-                onSuccess = { recentAlbums ->
+                onSuccess = { recentAlbums: List<Album> ->
                     val first = recentAlbums.firstOrNull()
-                    val artistId = first?.artistId?.takeIf { it.isNotBlank() }
+                    val artistId = first?.artistId?.takeIf { it?.isNotBlank() == true }
                     val artistName = first?.artist?.takeIf { it.isNotBlank() }
 
                     if (artistId.isNullOrEmpty() || artistName.isNullOrEmpty()) {
@@ -642,7 +642,7 @@ class HomeFragment : Fragment(), HasContentState {
                     viewLifecycleOwner.lifecycleScope.launch {
                         val result = musicRepository.getSimilarArtists(artistId)
                         result.fold(
-                            onSuccess = { artists ->
+                            onSuccess = { artists: List<com.arantec.castafiore.data.models.Artist> ->
                                 val list = artists.filter { it.id != artistId }.distinctBy { it.id }.take(10)
                                 if (list.isNotEmpty()) {
                                     similarArtistsAdapter.submit(list)
@@ -697,8 +697,9 @@ class HomeFragment : Fragment(), HasContentState {
 
     private suspend fun loadFavoriteArtists() {
         try {
-            musicRepository.getStarredArtists().fold(
-                onSuccess = { artists ->
+            val result = musicRepository.getStarredArtists()
+            result.fold(
+                onSuccess = { artists: List<com.arantec.castafiore.data.models.Artist> ->
                     val list = artists.distinctBy { it.id }.take(10)
                     // Actualizar UI de forma síncrona para evitar parpadeos
                     withContext(Dispatchers.Main) {

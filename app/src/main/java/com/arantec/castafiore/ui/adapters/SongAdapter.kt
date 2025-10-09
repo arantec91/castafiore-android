@@ -12,6 +12,9 @@ import com.arantec.castafiore.R
 import android.view.View
 import java.io.File
 import androidx.recyclerview.widget.AsyncListDiffer
+import com.arantec.castafiore.data.download.DownloadState
+import com.arantec.castafiore.data.download.DownloadStatus
+import com.arantec.castafiore.data.download.SongDownloadManager
 
 class SongAdapter(
     private val onSongClick: (Song, Int) -> Unit,
@@ -29,7 +32,7 @@ class SongAdapter(
     }
 
     private var playingSongId: String? = null
-    private val downloadStates = mutableMapOf<String, com.arantec.castafiore.data.download.SongDownloadManager.DownloadState>()
+    private val downloadStates = mutableMapOf<String, DownloadState>()
 
     // Async differ to compute diffs off the main thread
     private val diffCallback = object : DiffUtil.ItemCallback<Song>() {
@@ -63,7 +66,7 @@ class SongAdapter(
         // Avoid notifyDataSetChanged() with stable IDs to prevent animation conflicts
     }
 
-    fun updateDownloadState(state: com.arantec.castafiore.data.download.SongDownloadManager.DownloadState) {
+    fun updateDownloadState(state: DownloadState) {
         downloadStates[state.songId] = state
         val idx = songs.indexOfFirst { it.id == state.songId }
         if (idx >= 0) notifyItemChanged(idx, PAYLOAD_DOWNLOAD)
@@ -87,7 +90,7 @@ class SongAdapter(
                         ivSongCover.setImageResource(R.drawable.ic_music_note)
 
                         // 1) Local-first: si existe una portada descargada para el álbum
-                        val dm = com.arantec.castafiore.data.download.SongDownloadManager.getInstance(root.context)
+                        val dm = SongDownloadManager.getInstance(root.context)
                         val localPath = try { dm.createCoverPath(song) } catch (_: Exception) { null }
                         if (!localPath.isNullOrEmpty() && File(localPath).exists()) {
                             ImageLoader.loadLocalThumbnail(root.context, ivSongCover, localPath)
@@ -150,17 +153,17 @@ class SongAdapter(
         }
 
         // Partial update handler for download status changes only
-        fun partialUpdateDownloadUi(song: Song, dState: com.arantec.castafiore.data.download.SongDownloadManager.DownloadState?) {
+        fun partialUpdateDownloadUi(song: Song, dState: DownloadState?) {
             binding.apply {
                 applyDownloadUi(song, dState)
             }
         }
 
-        private fun applyDownloadUi(song: Song, dState: com.arantec.castafiore.data.download.SongDownloadManager.DownloadState?) {
+        private fun applyDownloadUi(song: Song, dState: DownloadState?) {
             binding.apply {
                 // Reset visibilities minimally; do not touch title/artist/cover here
                 when (dState?.status) {
-                    com.arantec.castafiore.data.download.SongDownloadManager.DownloadStatus.PENDING -> {
+                    DownloadStatus.IDLE -> {
                         if (circularDownloadInIcon) {
                             containerDownload.visibility = View.GONE
                             containerIconDownload.visibility = View.GONE
@@ -172,7 +175,7 @@ class SongAdapter(
                             tvDownloadStatus.text = root.context.getString(R.string.downloading_pending)
                         }
                     }
-                    com.arantec.castafiore.data.download.SongDownloadManager.DownloadStatus.DOWNLOADING -> {
+                    DownloadStatus.DOWNLOADING -> {
                         if (circularDownloadInIcon) {
                             containerDownload.visibility = View.GONE
                             containerIconDownload.visibility = View.VISIBLE
@@ -198,12 +201,12 @@ class SongAdapter(
                             tvDownloadStatus.text = root.context.getString(R.string.downloading_progress, dState.progress.coerceIn(0, 100))
                         }
                     }
-                    com.arantec.castafiore.data.download.SongDownloadManager.DownloadStatus.COMPLETED -> {
+                    DownloadStatus.COMPLETED -> {
                         containerDownload.visibility = View.GONE
                         cpiDownload.visibility = View.GONE
                         // handled below with isDownloaded check
                     }
-                    com.arantec.castafiore.data.download.SongDownloadManager.DownloadStatus.FAILED -> {
+                    DownloadStatus.FAILED -> {
                         if (circularDownloadInIcon) {
                             containerDownload.visibility = View.GONE
                             cpiDownload.visibility = View.GONE
@@ -215,7 +218,7 @@ class SongAdapter(
                             tvDownloadStatus.text = root.context.getString(R.string.downloading_failed)
                         }
                     }
-                    com.arantec.castafiore.data.download.SongDownloadManager.DownloadStatus.CANCELLED -> {
+                    DownloadStatus.CANCELLED -> {
                         containerDownload.visibility = View.GONE
                         cpiDownload.visibility = View.GONE
                         containerIconDownload.visibility = View.GONE
@@ -229,9 +232,9 @@ class SongAdapter(
 
                 // Downloaded icon handling (avoid toggling while spinner visible)
                 try {
-                    val dm = com.arantec.castafiore.data.download.SongDownloadManager.getInstance(root.context)
+                    val dm = SongDownloadManager.getInstance(root.context)
                     val isDownloaded = dm.isSongDownloadedFast(song.id)
-                        || (dState?.status == com.arantec.castafiore.data.download.SongDownloadManager.DownloadStatus.COMPLETED)
+                        || (dState?.status == DownloadStatus.COMPLETED)
                     val isSpinnerVisible = cpiDownload.visibility == View.VISIBLE
                     if (!isSpinnerVisible && isDownloaded) {
                         ivDownloaded.visibility = View.VISIBLE

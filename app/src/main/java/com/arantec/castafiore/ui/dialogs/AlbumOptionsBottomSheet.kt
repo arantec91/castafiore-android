@@ -10,6 +10,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import com.arantec.castafiore.data.models.Album
 import com.arantec.castafiore.databinding.BottomSheetAlbumOptionsBinding
+import com.arantec.castafiore.utils.ImageLoader
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment
 
 class AlbumOptionsBottomSheet : BottomSheetDialogFragment() {
@@ -104,9 +105,10 @@ class AlbumOptionsBottomSheet : BottomSheetDialogFragment() {
             viewLifecycleOwner.lifecycleScope.launch {
                 try {
                     val musicRepository = com.arantec.castafiore.data.repository.MusicRepository.getInstance(requireContext())
-                    val isStarred = withContext(Dispatchers.IO) {
+                    val result = withContext(Dispatchers.IO) {
                         musicRepository.isAlbumStarred(albumData.id)
-                    }.getOrElse { false }
+                    }
+                    val isStarred = result.getOrElse { false }
 
                     isFavorited = isStarred
                     updateFavoriteButton()
@@ -124,23 +126,19 @@ class AlbumOptionsBottomSheet : BottomSheetDialogFragment() {
 
             if (musicRepository.serverUrl != null && album.coverArt != null) {
                 val (username, token, salt) = musicRepository.getAuthParams()
-                val coverUrl = album.getCoverArtUrl(
+                val coverUrl = ImageLoader.buildCoverArtUrl(
                     musicRepository.serverUrl!!,
+                    album.coverArt!!,
                     username,
                     token,
                     salt
                 )
 
-                com.bumptech.glide.Glide.with(this)
-                    .load(coverUrl)
-                    .placeholder(com.arantec.castafiore.R.drawable.ic_album_placeholder)
-                    .error(com.arantec.castafiore.R.drawable.ic_album_placeholder)
-                    .centerCrop()
-                    .into(binding.ivAlbumCover)
+                ImageLoader.loadAlbumCover(requireContext(), binding.ivAlbumCover, coverUrl)
             } else {
                 binding.ivAlbumCover.setImageResource(com.arantec.castafiore.R.drawable.ic_album_placeholder)
             }
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             binding.ivAlbumCover.setImageResource(com.arantec.castafiore.R.drawable.ic_album_placeholder)
         }
     }

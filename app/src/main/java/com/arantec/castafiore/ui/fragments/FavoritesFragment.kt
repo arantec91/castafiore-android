@@ -30,10 +30,16 @@ import java.util.Locale
 import kotlin.random.Random
 import com.arantec.castafiore.ui.helpers.HasContentState
 import android.content.res.ColorStateList
-import com.arantec.castafiore.data.download.SongDownloadManager
-import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.FlowPreview
 import com.arantec.castafiore.ui.helpers.LoadingHost
+import com.arantec.castafiore.data.download.SongDownloadManager
+import kotlinx.coroutines.flow.sample
+import com.arantec.castafiore.data.download.DownloadState
+import com.arantec.castafiore.data.download.DownloadStatus
+import com.arantec.castafiore.data.download.DownloadOrigin
+import android.os.Parcelable
+import com.arantec.castafiore.data.model.PlaybackSource
+import com.arantec.castafiore.data.model.SourceType
 
 class FavoritesFragment : Fragment(), HasContentState {
 
@@ -123,8 +129,8 @@ class FavoritesFragment : Fragment(), HasContentState {
                     musicService?.playQueue(
                         favoriteSongs,
                         position,
-                        MusicService.PlaybackSource(
-                            MusicService.SourceType.FAVORITES,
+                        PlaybackSource(
+                            SourceType.FAVORITES,
                             null,
                             getString(R.string.favorite_songs_title)
                         )
@@ -161,8 +167,8 @@ class FavoritesFragment : Fragment(), HasContentState {
                 service.playQueue(
                     favoriteSongs,
                     startIndex,
-                    MusicService.PlaybackSource(
-                        MusicService.SourceType.FAVORITES,
+                    PlaybackSource(
+                        SourceType.FAVORITES,
                         null,
                         getString(R.string.favorite_songs_title)
                     )
@@ -177,8 +183,8 @@ class FavoritesFragment : Fragment(), HasContentState {
                 service.playQueue(
                     shuffled,
                     0,
-                    MusicService.PlaybackSource(
-                        MusicService.SourceType.FAVORITES,
+                    PlaybackSource(
+                        SourceType.FAVORITES,
                         null,
                         getString(R.string.favorite_songs_title)
                     )
@@ -246,7 +252,7 @@ class FavoritesFragment : Fragment(), HasContentState {
 
         viewLifecycleOwner.lifecycleScope.launch {
             musicRepository.getStarredSongs().fold(
-                onSuccess = { songs ->
+                onSuccess = { songs: List<Song> ->
                     if (!isAdded || _binding == null) return@fold
 
                     favoriteSongs.clear()
@@ -281,7 +287,7 @@ class FavoritesFragment : Fragment(), HasContentState {
                     binding.loadingOverlay.visibility = View.GONE
                     binding.progressBar.visibility = View.GONE
                 },
-                onFailure = {
+                onFailure = { throwable: Throwable ->
                     if (!isAdded || _binding == null) return@fold
                     binding.emptyLayout.visibility = View.VISIBLE
                     binding.tvEmpty.text = getString(R.string.error_loading_favorites)
@@ -332,8 +338,7 @@ class FavoritesFragment : Fragment(), HasContentState {
     private fun isFavoritesQueuePlaying(): Boolean {
         val service = musicService ?: return false
         val src = service.getPlaybackSource()
-        // Solo considerar FAVORITES explícito
-        return src?.type == MusicService.SourceType.FAVORITES
+        return src?.type == SourceType.FAVORITES
     }
 
     private fun setupMusicServiceListeners() {
@@ -422,7 +427,7 @@ class FavoritesFragment : Fragment(), HasContentState {
                         musicRepository.getAlbumDetail(albumId).fold(
                             onSuccess = { album ->
                                 val args = Bundle().apply {
-                                    putParcelable("album", album)
+                                    putParcelable("album", album as? Parcelable)
                                 }
                                 try {
                                     findNavController().navigate(R.id.albumDetailFragment, args)
@@ -501,7 +506,7 @@ class FavoritesFragment : Fragment(), HasContentState {
         try {
             if (musicRepository.serverUrl != null && song.coverArt != null) {
                 val (username, token, salt) = musicRepository.getAuthParams()
-                val coverUrl = song.getCoverArtUrl(
+                val coverUrl = song.getCoverImageUrl(
                     musicRepository.serverUrl!!,
                     username,
                     token,
@@ -550,7 +555,7 @@ class FavoritesFragment : Fragment(), HasContentState {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 downloadManager.downloadStates
                     .sample(250)
-                    .collect { states: Map<String, SongDownloadManager.DownloadState> ->
+                    .collect { states: Map<String, DownloadState> ->
                         if (!isAdded || _binding == null) return@collect
 
                         // Update only visible items to minimize rebind churn and flicker
@@ -578,7 +583,7 @@ class FavoritesFragment : Fragment(), HasContentState {
     }
 
     // Update group circular progress and toggle visibility like in AlbumDetail
-    private fun updateFavoritesGroupDownloadUi(states: Map<String, SongDownloadManager.DownloadState>) {
+    private fun updateFavoritesGroupDownloadUi(states: Map<String, DownloadState>) {
         if (!isAdded || _binding == null) return
         if (favoriteSongs.isEmpty()) {
             binding.groupDownloadProgressFav.visibility = View.GONE
@@ -586,7 +591,7 @@ class FavoritesFragment : Fragment(), HasContentState {
             return
         }
         val ids = favoriteSongs.map { it.id }.toSet()
-        val active = states.values.any { it.songId in ids && (it.status == SongDownloadManager.DownloadStatus.PENDING || it.status == SongDownloadManager.DownloadStatus.DOWNLOADING) }
+        val active = states.values.any { it.songId in ids && (it.status == DownloadStatus.PENDING || it.status == DownloadStatus.DOWNLOADING) }
 
         if (!active) {
             binding.groupDownloadProgressFav.visibility = View.GONE
@@ -603,13 +608,13 @@ class FavoritesFragment : Fragment(), HasContentState {
         favoriteSongs.forEach { song ->
             val st = states[song.id]
             when (st?.status) {
-                SongDownloadManager.DownloadStatus.COMPLETED -> units += 1.0
-                SongDownloadManager.DownloadStatus.DOWNLOADING -> {
+                DownloadStatus.COMPLETED -> units += 1.0
+                DownloadStatus.DOWNLOADING -> {
                     val p = st.progress.coerceIn(0, 100) / 100.0
                     units += p
                     if (st.progress > 0) hasDeterminate = true
                 }
-                SongDownloadManager.DownloadStatus.PENDING -> { /* +0 */ }
+                DownloadStatus.PENDING -> { /* +0 */ }
                 else -> {
                     if (downloadManager.isSongDownloadedFast(song.id)) units += 1.0
                 }
@@ -630,7 +635,7 @@ class FavoritesFragment : Fragment(), HasContentState {
             val ids = favoriteSongs.map { it.id }.toSet()
             val states = downloadManager.downloadStates.value
             states.values.filter { it.songId in ids }
-                .filter { it.status == SongDownloadManager.DownloadStatus.PENDING || it.status == SongDownloadManager.DownloadStatus.DOWNLOADING }
+                .filter { it.status == DownloadStatus.PENDING || it.status == DownloadStatus.DOWNLOADING }
                 .forEach { st -> downloadManager.cancelDownload(st.songId) }
             binding.groupDownloadProgressFav.visibility = View.GONE
             binding.btnDownload.visibility = View.VISIBLE
@@ -656,9 +661,8 @@ class FavoritesFragment : Fragment(), HasContentState {
                 showDeleteFavoritesDownloadsConfirm()
                 return@setOnClickListener
             }
-            downloadManager.downloadSongsSequentially(toQueue, com.arantec.castafiore.data.download.DownloadOrigin.PLAYLIST)
+            downloadManager.downloadSongsSequentially(toQueue, DownloadOrigin.PLAYLIST_DETAIL)
             // Provide immediate visual feedback that downloads are in-progress
-            setDownloadButtonTintSecondary()
             binding.btnDownload.visibility = View.GONE
             binding.groupDownloadProgressFav.visibility = View.VISIBLE
             snack("Descargando: ${toQueue.size} canciones")

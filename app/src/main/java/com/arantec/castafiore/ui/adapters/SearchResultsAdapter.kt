@@ -201,7 +201,7 @@ class SearchResultsAdapter(
                     .build()
             }
 
-            val coverUrl = song.getCoverArtUrl(serverUrl, username, token, salt)
+            val coverUrl = song.getCoverImageUrl(serverUrl, username, token, salt, 300)
             ImageLoader.loadThumbnail(
                 binding.root.context,
                 binding.ivArtwork,
@@ -241,7 +241,9 @@ class SearchResultsAdapter(
                     .build()
             }
 
-            val coverUrl = album.getCoverArtUrl(serverUrl, username, token, salt)
+            val coverUrl = album.coverArt?.let {
+                ImageLoader.buildCoverArtUrl(serverUrl, it, username, token, salt, 300)
+            }
             ImageLoader.loadThumbnail(
                 binding.root.context,
                 binding.ivArtwork,

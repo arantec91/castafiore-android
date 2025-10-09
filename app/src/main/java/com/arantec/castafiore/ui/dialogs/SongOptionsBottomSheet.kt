@@ -182,9 +182,10 @@ class SongOptionsBottomSheet : BottomSheetDialogFragment() {
             }
 
             // Fallback a URL remota si hay servidor/config disponible
-            if (musicRepository.serverUrl != null) {
+            if (musicRepository.serverUrl != null && song.coverArt != null) {
                 val (username, token, salt) = musicRepository.getAuthParams()
-                val coverUrl = song.getCoverArtUrl(
+                val coverUrl = musicRepository.getCoverArtUrl(
+                    song.coverArt,
                     musicRepository.serverUrl!!,
                     username,
                     token,
@@ -309,8 +310,8 @@ class SongOptionsBottomSheet : BottomSheetDialogFragment() {
                                     musicService?.playQueue(
                                         queue,
                                         0,
-                                        MusicService.PlaybackSource(
-                                            MusicService.SourceType.SONGS,
+                                        com.arantec.castafiore.data.model.PlaybackSource(
+                                            com.arantec.castafiore.data.model.SourceType.SEARCH,
                                             null,
                                             "Radio"
                                         )
@@ -345,7 +346,17 @@ class SongOptionsBottomSheet : BottomSheetDialogFragment() {
             // Descargar a dispositivo
             binding.optionDownload.setOnClickListener {
                 if (!downloadManager.isSongDownloaded(currentSong.id)) {
-                    downloadManager.downloadSong(currentSong)
+                    downloadManager.downloadSong(
+                        songId = currentSong.id,
+                        title = currentSong.title,
+                        artist = currentSong.artist,
+                        album = currentSong.album,
+                        track = currentSong.track,
+                        durationSec = currentSong.duration,
+                        suffix = currentSong.suffix,
+                        albumId = currentSong.albumId,
+                        coverArtId = currentSong.coverArt
+                    )
                     showSnackbar(getString(R.string.download_started))
                     dismiss()
                 } else {

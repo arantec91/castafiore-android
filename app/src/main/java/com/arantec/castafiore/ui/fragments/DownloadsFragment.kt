@@ -18,7 +18,10 @@ import androidx.navigation.fragment.findNavController
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.arantec.castafiore.R
+import com.arantec.castafiore.data.model.PlaybackSource
+import com.arantec.castafiore.data.model.SourceType
 import com.arantec.castafiore.data.models.Song
+import com.arantec.castafiore.data.models.getCoverArtUrl
 import com.arantec.castafiore.databinding.FragmentDownloadsBinding
 import com.arantec.castafiore.service.MusicService
 import com.arantec.castafiore.ui.adapters.SongAdapter
@@ -27,10 +30,15 @@ import com.arantec.castafiore.ui.helpers.LoadingHost
 import com.arantec.castafiore.utils.StatusBarUtils
 import com.arantec.castafiore.utils.snack
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.random.Random
 import android.os.SystemClock
+import com.arantec.castafiore.data.repository.MusicRepository
+import com.arantec.castafiore.data.download.DownloadStatus
 
 class DownloadsFragment : Fragment(), HasContentState {
 
@@ -109,8 +117,8 @@ class DownloadsFragment : Fragment(), HasContentState {
                     service.playQueue(
                         downloadedSongs,
                         position,
-                        MusicService.PlaybackSource(
-                            MusicService.SourceType.DOWNLOADS,
+                        PlaybackSource(
+                            SourceType.DOWNLOADS,
                             null,
                             getString(R.string.bottom_downloads)
                         )
@@ -157,8 +165,8 @@ class DownloadsFragment : Fragment(), HasContentState {
                 service.playQueue(
                     downloadedSongs,
                     startIndex,
-                    MusicService.PlaybackSource(
-                        MusicService.SourceType.DOWNLOADS,
+                    PlaybackSource(
+                        SourceType.DOWNLOADS,
                         null,
                         getString(R.string.bottom_downloads)
                     )
@@ -173,8 +181,8 @@ class DownloadsFragment : Fragment(), HasContentState {
                 service.playQueue(
                     shuffled,
                     0,
-                    MusicService.PlaybackSource(
-                        MusicService.SourceType.DOWNLOADS,
+                    PlaybackSource(
+                        SourceType.DOWNLOADS,
                         null,
                         getString(R.string.bottom_downloads)
                     )
@@ -236,12 +244,14 @@ class DownloadsFragment : Fragment(), HasContentState {
         }
 
         viewLifecycleOwner.lifecycleScope.launch {
-            // Offload I/O to a background dispatcher to avoid blocking the main thread
+            val repo = MusicRepository.getInstance(requireContext())
+            val ids = downloadManager.getAllDownloadedSongs()
             val songs = withContext(Dispatchers.IO) {
-                try {
-                    downloadManager.getAllDownloadedSongs()
-                } catch (_: Exception) {
-                    emptyList()
+                coroutineScope {
+                    ids.map { id ->
+                        async { repo.getSongById(id) }
+                    }.awaitAll()
+                        .mapNotNull { result -> result.getOrNull() }
                 }
             }
             if (!isAdded || _binding == null) return@launch
@@ -298,7 +308,7 @@ class DownloadsFragment : Fragment(), HasContentState {
     private fun isDownloadsQueuePlaying(): Boolean {
         val service = musicService ?: return false
         val src = service.getPlaybackSource()
-        return src?.type == MusicService.SourceType.DOWNLOADS
+        return src?.type == SourceType.DOWNLOADS
     }
 
     private fun setupMusicServiceListeners() {
@@ -368,8 +378,8 @@ class DownloadsFragment : Fragment(), HasContentState {
                         // Remove items that were deleted in real time
                         val toRemove = states.values
                             .filter { st ->
-                                (st.status == com.arantec.castafiore.data.download.SongDownloadManager.DownloadStatus.CANCELLED ||
-                                 st.status == com.arantec.castafiore.data.download.SongDownloadManager.DownloadStatus.FAILED) &&
+                                (st.status == DownloadStatus.CANCELLED ||
+                                 st.status == DownloadStatus.FAILED) &&
                                 downloadedSongs.any { it.id == st.songId } &&
                                 !downloadManager.isSongDownloaded(st.songId)
                             }
@@ -433,15 +443,8 @@ class DownloadsFragment : Fragment(), HasContentState {
             .setOnViewAlbumClickListener { selectedSong ->
                 val albumId = selectedSong.albumId
                 if (!albumId.isNullOrEmpty()) {
-                    viewLifecycleOwner.lifecycleScope.launch {
-                        com.arantec.castafiore.data.repository.MusicRepository.getInstance(requireContext()).getAlbumDetail(albumId).fold(
-                            onSuccess = { album ->
-                                val args = Bundle().apply { putParcelable("album", album) }
-                                try { findNavController().navigate(R.id.albumDetailFragment, args) } catch (_: Exception) { snack("No se pudo abrir el álbum") }
-                            },
-                            onFailure = { snack("No se pudo abrir el álbum") }
-                        )
-                    }
+                    val args = Bundle().apply { putString("albumId", albumId) }
+                    try { findNavController().navigate(R.id.albumDetailFragment, args) } catch (_: Exception) { snack("No se pudo abrir el álbum") }
                 } else {
                     snack("Álbum no disponible")
                 }
@@ -481,11 +484,9 @@ class DownloadsFragment : Fragment(), HasContentState {
                 tvInfoYear.text = selectedSong.year?.toString() ?: "Desconocido"
                 tvInfoBitrate.text = if (selectedSong.bitRate != null) "${selectedSong.bitRate} kbps" else "Desconocido"
                 tvInfoFormat.text = selectedSong.suffix?.uppercase() ?: "Desconocido"
-                tvInfoFileSize.text = com.arantec.castafiore.data.download.SongDownloadManager.getInstance(requireContext()).formatFileSize(
-                    com.arantec.castafiore.data.download.SongDownloadManager.getInstance(requireContext()).getSongFileSize(selectedSong.id)
-                )
+                tvInfoFileSize.text = formatFileSize(downloadManager.getSongFileSize(selectedSong.id))
                 try {
-                    val repo = com.arantec.castafiore.data.repository.MusicRepository.getInstance(requireContext())
+                    val repo = MusicRepository.getInstance(requireContext())
                     if (repo.serverUrl != null && selectedSong.coverArt != null) {
                         val (username, token, salt) = repo.getAuthParams()
                         val coverUrl = selectedSong.getCoverArtUrl(repo.serverUrl!!, username, token, salt)
@@ -512,6 +513,13 @@ class DownloadsFragment : Fragment(), HasContentState {
         val minutes = seconds / 60
         val remainingSeconds = seconds % 60
         return String.format(java.util.Locale.getDefault(), "%d:%02d", minutes, remainingSeconds)
+    }
+
+    private fun formatFileSize(size: Long): String {
+        if (size <= 0) return "0 B"
+        val units = arrayOf("B", "KB", "MB", "GB", "TB")
+        val digitGroups = (Math.log10(size.toDouble()) / Math.log10(1024.0)).toInt()
+        return String.format("%.1f %s", size / Math.pow(1024.0, digitGroups.toDouble()), units[digitGroups])
     }
 
     override fun onStart() {

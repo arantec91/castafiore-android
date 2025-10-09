@@ -23,20 +23,17 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 
 // Added for dynamic theming
-import androidx.palette.graphics.Palette
 import androidx.core.graphics.toColorInt
 import androidx.core.graphics.ColorUtils
 import android.graphics.Color
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.graphics.drawable.Drawable
 import com.bumptech.glide.Glide
-import com.arantec.castafiore.data.download.SongDownloadManager
 import com.bumptech.glide.request.target.CustomTarget
 import com.bumptech.glide.request.transition.Transition
 import com.arantec.castafiore.data.repository.MusicRepository
 import com.arantec.castafiore.utils.StatusBarUtils
-
+import java.util.Locale
 
 class LyricsActivity : AppCompatActivity() {
 
@@ -243,28 +240,17 @@ class LyricsActivity : AppCompatActivity() {
     }
 
     private fun tryLoadCoverAndApplyTheme(song: Song) {
-        // Preferir portada local como en PlayerActivity
-        val dm = SongDownloadManager.getInstance(this)
-        val localCoverPath = try { dm.createCoverPath(song) } catch (_: Exception) { null }
-        if (!localCoverPath.isNullOrEmpty()) {
-            val file = java.io.File(localCoverPath)
-            if (file.exists()) {
-                BitmapFactory.decodeFile(localCoverPath)?.let { bmp ->
-                    applyDynamicThemeFromBitmap(bmp)
-                    return
-                }
-            }
-        }
-
-        // Fallback a URL remota (mismo formato que PlayerActivity)
+        // Load cover art from remote URL only (simplified approach)
         val (username, token, salt) = musicRepository.getAuthParams()
         val coverUrl = if (song.albumId != null) {
             "${musicRepository.serverUrl}/rest/getCoverArt.view?id=${song.albumId}&u=$username&t=$token&s=$salt&v=1.16.1&c=Castafiore&size=500"
         } else null
+
         if (coverUrl == null) {
             applyDefaultTheme()
             return
         }
+
         Glide.with(this)
             .asBitmap()
             .load(coverUrl)
@@ -297,7 +283,7 @@ class LyricsActivity : AppCompatActivity() {
             val mm = totalSec / 60
             val ss = totalSec % 60
             val cs = (ms % 1000) / 10 // centésimas (00–99)
-            return String.format("[%02d:%02d.%02d]", mm, ss, cs)
+            return String.format(Locale.ROOT, "[%02d:%02d.%02d]", mm, ss, cs)
         }
         val sb = StringBuilder()
         for (line in lines) {

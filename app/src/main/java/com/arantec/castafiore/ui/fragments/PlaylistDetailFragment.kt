@@ -51,6 +51,13 @@ import android.os.SystemClock
 import kotlinx.coroutines.FlowPreview
 import android.view.ViewTreeObserver
 import android.util.Log
+import com.arantec.castafiore.data.download.DownloadState
+import com.arantec.castafiore.data.download.DownloadStatus
+import com.arantec.castafiore.data.models.getCoverArtUrl
+import com.arantec.castafiore.utils.placeholder
+import com.arantec.castafiore.utils.into
+import com.arantec.castafiore.data.model.PlaybackSource
+import com.arantec.castafiore.data.model.SourceType
 
 class PlaylistDetailFragment : Fragment(), HasContentState {
 
@@ -83,7 +90,7 @@ class PlaylistDetailFragment : Fragment(), HasContentState {
     private lateinit var downloadManager: com.arantec.castafiore.data.download.SongDownloadManager
 
     // Keep last known download states to compute aggregate status accurately in real-time
-    private var latestDownloadStates: Map<String, com.arantec.castafiore.data.download.SongDownloadManager.DownloadState> = emptyMap()
+    private var latestDownloadStates: Map<String, DownloadState> = emptyMap()
     private var lastAllDownloaded: Boolean = false
 
     // Track whether we've successfully applied a dynamic gradient to avoid redundant work
@@ -230,10 +237,10 @@ class PlaylistDetailFragment : Fragment(), HasContentState {
                 musicService?.playQueue(
                     playlistSongs,
                     position,
-                    MusicService.PlaybackSource(
-                        MusicService.SourceType.PLAYLIST,
+                    PlaybackSource(
+                        SourceType.PLAYLIST,
                         playlistId,
-                        playlistName
+                        playlistName ?: ""
                     )
                 )
             },
@@ -271,10 +278,10 @@ class PlaylistDetailFragment : Fragment(), HasContentState {
                     service.playQueue(
                         playlistSongs,
                         startIndex,
-                        MusicService.PlaybackSource(
-                            MusicService.SourceType.PLAYLIST,
+                        PlaybackSource(
+                            SourceType.PLAYLIST,
                             playlistId,
-                            playlistName
+                            playlistName ?: ""
                         )
                     )
                 }
@@ -291,10 +298,10 @@ class PlaylistDetailFragment : Fragment(), HasContentState {
                     service.playQueue(
                         shuffled,
                         0,
-                        MusicService.PlaybackSource(
-                            MusicService.SourceType.PLAYLIST,
+                        PlaybackSource(
+                            SourceType.PLAYLIST,
                             playlistId,
-                            playlistName
+                            playlistName ?: ""
                         )
                     )
                 }
@@ -619,7 +626,7 @@ class PlaylistDetailFragment : Fragment(), HasContentState {
     private fun isPlaylistQueuePlaying(): Boolean {
         val service = musicService ?: return false
         val src = service.getPlaybackSource() ?: return false
-        return src.type == MusicService.SourceType.PLAYLIST && src.id == playlistId
+        return src.type == SourceType.PLAYLIST && src.id == playlistId
     }
 
     private fun setupMusicServiceListeners() {
@@ -1091,7 +1098,7 @@ class PlaylistDetailFragment : Fragment(), HasContentState {
         if (states.isNotEmpty()) {
             for (song in playlistSongs) {
                 val st = states[song.id]
-                val completedByState = st?.status == com.arantec.castafiore.data.download.SongDownloadManager.DownloadStatus.COMPLETED
+                val completedByState = st?.status == DownloadStatus.COMPLETED
                 val completedByCache = downloadManager.isSongDownloadedFast(song.id)
                 if (!completedByState && !completedByCache) return false
             }
@@ -1118,7 +1125,7 @@ class PlaylistDetailFragment : Fragment(), HasContentState {
                 showDeletePlaylistDownloadsConfirm()
                 return@setOnClickListener
             }
-            downloadManager.downloadSongsSequentially(toQueue, com.arantec.castafiore.data.download.DownloadOrigin.PLAYLIST)
+            downloadManager.downloadSongsSequentially(toQueue, com.arantec.castafiore.data.download.DownloadOrigin.PLAYLIST_DETAIL)
             // Toggle to progress UI immediately
             binding.btnDownload.visibility = View.GONE
             binding.groupDownloadProgress.visibility = View.VISIBLE
@@ -1128,7 +1135,7 @@ class PlaylistDetailFragment : Fragment(), HasContentState {
     }
 
     // --- Group download UI helpers ---
-    private fun updatePlaylistGroupDownloadUi(states: Map<String, com.arantec.castafiore.data.download.SongDownloadManager.DownloadState>) {
+    private fun updatePlaylistGroupDownloadUi(states: Map<String, DownloadState>) {
         if (!isAdded || _binding == null) return
         if (playlistSongs.isEmpty()) {
             binding.groupDownloadProgress.visibility = View.GONE
@@ -1136,7 +1143,7 @@ class PlaylistDetailFragment : Fragment(), HasContentState {
             return
         }
         val ids = playlistSongs.map { it.id }.toSet()
-        val hasActive = states.values.any { it.songId in ids && (it.status == com.arantec.castafiore.data.download.SongDownloadManager.DownloadStatus.PENDING || it.status == com.arantec.castafiore.data.download.SongDownloadManager.DownloadStatus.DOWNLOADING) }
+        val hasActive = states.values.any { state: DownloadState -> state.songId in ids && (state.status == DownloadStatus.PENDING || state.status == DownloadStatus.DOWNLOADING) }
 
         if (!hasActive) {
             binding.groupDownloadProgress.visibility = View.GONE
@@ -1154,13 +1161,13 @@ class PlaylistDetailFragment : Fragment(), HasContentState {
         playlistSongs.forEach { song ->
             val st = states[song.id]
             when (st?.status) {
-                com.arantec.castafiore.data.download.SongDownloadManager.DownloadStatus.COMPLETED -> units += 1.0
-                com.arantec.castafiore.data.download.SongDownloadManager.DownloadStatus.DOWNLOADING -> {
+                DownloadStatus.COMPLETED -> units += 1.0
+                DownloadStatus.DOWNLOADING -> {
                     val p = st.progress.coerceIn(0, 100) / 100.0
                     units += p
                     if (st.progress > 0) hasDeterminate = true
                 }
-                com.arantec.castafiore.data.download.SongDownloadManager.DownloadStatus.PENDING -> { /* +0 */ }
+                DownloadStatus.PENDING -> { /* +0 */ }
                 else -> {
                     // Count as completed if already downloaded (fast cache)
                     if (downloadManager.isSongDownloadedFast(song.id)) units += 1.0
@@ -1182,7 +1189,7 @@ class PlaylistDetailFragment : Fragment(), HasContentState {
         val ids = playlistSongs.map { it.id }.toSet()
         states.values
             .filter { it.songId in ids }
-            .filter { it.status == com.arantec.castafiore.data.download.SongDownloadManager.DownloadStatus.PENDING || it.status == com.arantec.castafiore.data.download.SongDownloadManager.DownloadStatus.DOWNLOADING }
+            .filter { it.status == DownloadStatus.PENDING || it.status == DownloadStatus.DOWNLOADING }
             .forEach { st -> downloadManager.cancelDownload(st.songId) }
         binding.groupDownloadProgress.visibility = View.GONE
         binding.btnDownload.visibility = View.VISIBLE

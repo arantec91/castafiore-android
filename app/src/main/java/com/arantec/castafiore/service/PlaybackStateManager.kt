@@ -40,7 +40,7 @@ class PlaybackStateManager(private val context: Context) {
         val isPlaying: Boolean,
         val repeatMode: MusicService.RepeatMode,
         val shuffleEnabled: Boolean,
-        val playbackSource: MusicService.PlaybackSource?,
+        val playbackSource: com.arantec.castafiore.data.model.PlaybackSource?,
         val savedTime: Long
     )
     
@@ -56,7 +56,7 @@ class PlaybackStateManager(private val context: Context) {
         isPlaying: Boolean,
         repeatMode: MusicService.RepeatMode,
         shuffleEnabled: Boolean,
-        playbackSource: MusicService.PlaybackSource?
+        playbackSource: com.arantec.castafiore.data.model.PlaybackSource?
     ) {
         try {
             val editor = prefs.edit()
@@ -150,7 +150,7 @@ class PlaybackStateManager(private val context: Context) {
             // Restaurar fuente de reproducción
             val playbackSourceJson = prefs.getString(KEY_PLAYBACK_SOURCE, null)
             val playbackSource = if (playbackSourceJson != null) {
-                gson.fromJson(playbackSourceJson, MusicService.PlaybackSource::class.java)
+                gson.fromJson(playbackSourceJson, com.arantec.castafiore.data.model.PlaybackSource::class.java)
             } else null
             
             // Restaurar información básica

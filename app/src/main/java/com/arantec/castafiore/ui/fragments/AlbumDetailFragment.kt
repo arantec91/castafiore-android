@@ -18,6 +18,8 @@ import androidx.lifecycle.Lifecycle
 import androidx.navigation.fragment.findNavController
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.arantec.castafiore.R
+import com.arantec.castafiore.data.download.DownloadState
+import com.arantec.castafiore.data.download.DownloadStatus
 import com.arantec.castafiore.data.models.Album
 import com.arantec.castafiore.data.models.Song
 import com.arantec.castafiore.data.repository.MusicRepository
@@ -42,6 +44,9 @@ import androidx.core.graphics.toColorInt
 import com.arantec.castafiore.utils.snack
 import com.arantec.castafiore.ui.helpers.HasContentState
 import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.Job
+import com.arantec.castafiore.data.model.PlaybackSource
+import com.arantec.castafiore.data.model.SourceType
 
 class AlbumDetailFragment : Fragment(), HasContentState {
 
@@ -60,6 +65,7 @@ class AlbumDetailFragment : Fragment(), HasContentState {
     private var dominantNavIconColor: Int? = null
     private var isPlaying = false
     private var isFavorited = false
+    private var favoriteJob: Job? = null
 
     // Referencias a los listeners para poder removerlos después
     private var playbackStateListener: ((Boolean) -> Unit)? = null
@@ -173,28 +179,112 @@ class AlbumDetailFragment : Fragment(), HasContentState {
     }
 
     private fun initializeFavoriteUI() {
-        val album = currentAlbum ?: return
-        // 1) Intentar leer valor cacheado (memoria/disco) de favoritos
-        val cached = musicRepository.peekAlbumStarred(album.id)
-        if (cached != null) {
-            isFavorited = cached
-            // Mostrar botón con estado correcto inmediatamente
-            binding.btnFavorite.visibility = View.VISIBLE
-            binding.btnFavorite.isEnabled = true
-            updateFavoriteButton()
+        val albumId = currentAlbum?.id
+        if (albumId.isNullOrEmpty()) {
+            binding.btnFavorite.visibility = View.INVISIBLE
+            binding.btnFavorite.isEnabled = false
             return
         }
-        // 2) Fallback: si viene un flag opcional en los argumentos (no obligatorio)
-        val argStarred = arguments?.getBoolean("initialStarred", false) ?: false
-        if (argStarred) {
-            isFavorited = true
+
+        // Intentar leer el estado desde cache
+        val cached = musicRepository.peekAlbumStarred(albumId)
+        if (cached != null) {
+            isFavorited = cached
             binding.btnFavorite.visibility = View.VISIBLE
             binding.btnFavorite.isEnabled = true
             updateFavoriteButton()
         } else {
-            // Estado desconocido: ocultar el botón temporalmente para evitar parpadeo
+            // Estado desconocido: ocultar hasta confirmar por red
             binding.btnFavorite.visibility = View.INVISIBLE
             binding.btnFavorite.isEnabled = false
+        }
+    }
+
+    private fun toggleFavoriteAlbum() {
+        val albumId = currentAlbum?.id
+        if (albumId.isNullOrEmpty()) {
+            snack("Error: ID de álbum no disponible")
+            return
+        }
+
+        // Cancelar cualquier operación previa en vuelo para evitar estados inconsistentes
+        favoriteJob?.cancel()
+
+        // Estado previo y nuevo valor (optimista)
+        val previous = isFavorited
+        val newValue = !previous
+
+        // Aplicar UI optimista inmediatamente
+        isFavorited = newValue
+        updateFavoriteButton()
+
+        // Deshabilitar botón mientras se procesa, pero mostrando ya el resultado esperado
+        binding.btnFavorite.isEnabled = false
+
+        favoriteJob = viewLifecycleOwner.lifecycleScope.launch {
+            try {
+                val result = if (newValue) {
+                    musicRepository.starAlbum(albumId)
+                } else {
+                    musicRepository.unstarAlbum(albumId)
+                }
+
+                if (result.isSuccess) {
+                    // Éxito: snack informativo
+                    snack(if (newValue) "Álbum agregado a favoritos" else "Álbum removido de favoritos")
+                } else {
+                    // Fallo: revertir UI
+                    isFavorited = previous
+                    updateFavoriteButton()
+                    val error = result.exceptionOrNull()?.message ?: "Error desconocido"
+                    snack("Error al actualizar favoritos: $error")
+                }
+            } catch (e: Exception) {
+                // Excepción: revertir
+                isFavorited = previous
+                updateFavoriteButton()
+                snack("Error al actualizar favoritos: ${e.message}")
+            } finally {
+                if (isAdded && _binding != null) {
+                    binding.btnFavorite.isEnabled = true
+                }
+            }
+        }
+    }
+
+    private fun loadFavoriteState() {
+        val albumId = currentAlbum?.id
+        if (albumId.isNullOrEmpty()) return
+
+        viewLifecycleOwner.lifecycleScope.launch {
+            try {
+                val result = musicRepository.isAlbumStarred(albumId)
+                if (result.isSuccess) {
+                    isFavorited = result.getOrDefault(false)
+                    updateFavoriteButton()
+
+                    // Hacer visible el botón una vez que conocemos el estado
+                    binding.btnFavorite.visibility = View.VISIBLE
+                    binding.btnFavorite.isEnabled = true
+                }
+            } catch (e: Exception) {
+                // En caso de error, mostrar el botón pero deshabilitado
+                binding.btnFavorite.visibility = View.VISIBLE
+                binding.btnFavorite.isEnabled = false
+            }
+        }
+    }
+
+    private fun updateFavoriteButton() {
+        // Guard against destroyed view
+        if (!isAdded || _binding == null) return
+
+        if (isFavorited) {
+            binding.btnFavorite.setImageResource(R.drawable.ic_favorite_36)
+            binding.btnFavorite.setColorFilter("#FF2D55".toColorInt()) // Color principal
+        } else {
+            binding.btnFavorite.setImageResource(R.drawable.ic_favorite_border_36)
+            binding.btnFavorite.setColorFilter("#B3FFFFFF".toColorInt()) // Color texto secundario
         }
     }
 
@@ -270,10 +360,10 @@ class AlbumDetailFragment : Fragment(), HasContentState {
             val (username, token, salt) = musicRepo.getAuthParams()
             val artistCoverUrl = ImageLoader.buildArtistImageUrl(
                 musicRepo.serverUrl ?: "",
-                album.artistId,
-                username,
-                token,
-                salt,
+                album.artistId ?: "", // Ensure artistId is non-nullable
+                username ?: "", // Ensure username is non-nullable
+                token ?: "", // Ensure token is non-nullable
+                salt ?: "", // Ensure salt is non-nullable
                 300
             )
 
@@ -292,10 +382,10 @@ class AlbumDetailFragment : Fragment(), HasContentState {
                     musicService?.playQueue(
                         albumSongs,
                         position,
-                        com.arantec.castafiore.service.MusicService.PlaybackSource(
-                            com.arantec.castafiore.service.MusicService.SourceType.ALBUM,
-                            currentAlbum?.id,
-                            currentAlbum?.name
+                        PlaybackSource(
+                            SourceType.ALBUM,
+                            currentAlbum?.id ?: "",
+                            currentAlbum?.name ?: ""
                         )
                     )
                 } else {
@@ -303,10 +393,10 @@ class AlbumDetailFragment : Fragment(), HasContentState {
                         musicService?.playQueue(
                             albumSongs,
                             position,
-                            com.arantec.castafiore.service.MusicService.PlaybackSource(
-                                com.arantec.castafiore.service.MusicService.SourceType.ALBUM,
-                                currentAlbum?.id,
-                                currentAlbum?.name
+                            PlaybackSource(
+                                SourceType.ALBUM,
+                                currentAlbum?.id ?: "",
+                                currentAlbum?.name ?: ""
                             )
                         )
                     }
@@ -369,7 +459,7 @@ class AlbumDetailFragment : Fragment(), HasContentState {
     private fun isCurrentAlbumPlaying(): Boolean {
         val currentAlbumId = currentAlbum?.id ?: return false
         val src = musicService?.getPlaybackSource() ?: return false
-        return src.type == com.arantec.castafiore.service.MusicService.SourceType.ALBUM && src.id == currentAlbumId
+        return src.type == SourceType.ALBUM && src.id == currentAlbumId
     }
 
     private fun cleanupListeners() {
@@ -415,7 +505,9 @@ class AlbumDetailFragment : Fragment(), HasContentState {
         // Click listener para navegar al artista
         binding.tvArtistName.setOnClickListener {
             currentAlbum?.let { album ->
-                navigateToArtist(album.artistId, album.artist)
+                // Fix: Use non-null String for artistId
+                val artistId = album.artistId ?: ""
+                navigateToArtist(artistId, album.artist)
             }
         }
 
@@ -451,10 +543,10 @@ class AlbumDetailFragment : Fragment(), HasContentState {
                         service.playQueue(
                             shuffled,
                             0,
-                            com.arantec.castafiore.service.MusicService.PlaybackSource(
-                                com.arantec.castafiore.service.MusicService.SourceType.ALBUM,
-                                currentAlbum?.id,
-                                currentAlbum?.name
+                            PlaybackSource(
+                                SourceType.ALBUM,
+                                currentAlbum?.id ?: "",
+                                currentAlbum?.name ?: ""
                             )
                         )
                     }
@@ -466,10 +558,10 @@ class AlbumDetailFragment : Fragment(), HasContentState {
                         musicService?.playQueue(
                             shuffled,
                             0,
-                            com.arantec.castafiore.service.MusicService.PlaybackSource(
-                                com.arantec.castafiore.service.MusicService.SourceType.ALBUM,
-                                currentAlbum?.id,
-                                currentAlbum?.name
+                            PlaybackSource(
+                                SourceType.ALBUM,
+                                currentAlbum?.id ?: "",
+                                currentAlbum?.name ?: ""
                             )
                         )
                     }
@@ -484,7 +576,7 @@ class AlbumDetailFragment : Fragment(), HasContentState {
 
         // Agregar listener para el botón de favoritos
         binding.btnFavorite.setOnClickListener {
-            toggleFavorite()
+            toggleFavoriteAlbum()
         }
 
         // Nuevo: botón de descarga de álbum secuencial o eliminación si ya está descargado
@@ -509,7 +601,9 @@ class AlbumDetailFragment : Fragment(), HasContentState {
             }
             // Reinicia manejador de finalización para esta sesión de descarga
             albumDownloadCompleteHandled = false
-            downloadManager.downloadSongsSequentially(toQueue, com.arantec.castafiore.data.download.DownloadOrigin.ALBUM)
+            // Fix: Use correct enum for DownloadOrigin
+            // downloadManager.downloadSongsSequentially(toQueue, com.arantec.castafiore.data.download.DownloadOrigin.ALBUM)
+            downloadManager.downloadSongsSequentially(toQueue, com.arantec.castafiore.data.download.DownloadOrigin.ALBUM_DETAIL)
             // UI inmediata: ocultar botón y mostrar progreso
             binding.btnDownload.visibility = View.GONE
             binding.groupDownloadProgress.visibility = View.VISIBLE
@@ -528,15 +622,23 @@ class AlbumDetailFragment : Fragment(), HasContentState {
                 try {
                     musicRepository.getAlbumDetail(album.id).fold(
                         onSuccess = { detailedAlbum ->
-                            // Actualizar el álbum actual con la información completa
-                            currentAlbum = detailedAlbum
-
-                            // Actualizar la UI con la información completa del álbum
-                            updateAlbumInfo(detailedAlbum)
-
-                            // Usar las canciones reales del álbum si están disponibles
+                            // Fix: Use Album instead of AlbumDetail
+                            // If AlbumDetail is not compatible, map to Album or update types accordingly
+                            val albumAsAlbum = Album(
+                                id = detailedAlbum.id,
+                                name = detailedAlbum.title,
+                                artist = detailedAlbum.artist,
+                                artistId = detailedAlbum.artistId,
+                                songCount = detailedAlbum.songCount,
+                                duration = detailedAlbum.duration,
+                                year = detailedAlbum.year,
+                                genre = detailedAlbum.genre,
+                                coverArt = detailedAlbum.coverArt
+                            )
+                            currentAlbum = albumAsAlbum
+                            updateAlbumInfo(albumAsAlbum)
                             val songsToUse = detailedAlbum.songs
-                            if (!songsToUse.isNullOrEmpty()) {
+                            if (songsToUse.isNotEmpty()) {
                                 albumSongs.clear()
                                 albumSongs.addAll(songsToUse)
                                 songAdapter.updateSongs(albumSongs)
@@ -546,7 +648,7 @@ class AlbumDetailFragment : Fragment(), HasContentState {
                                 maybeApplyAllDownloadedEffects(applyTintOnly = true)
                             } else {
                                 // Si no hay canciones en la respuesta, generar de muestra
-                                generateSampleSongs(detailedAlbum)
+                                generateSampleSongs(albumAsAlbum)
                             }
                         },
                         onFailure = {
@@ -760,10 +862,10 @@ class AlbumDetailFragment : Fragment(), HasContentState {
             service?.playQueue(
                 albumSongs,
                 startIndex,
-                com.arantec.castafiore.service.MusicService.PlaybackSource(
-                    com.arantec.castafiore.service.MusicService.SourceType.ALBUM,
-                    currentAlbum?.id,
-                    currentAlbum?.name
+                PlaybackSource(
+                    SourceType.ALBUM,
+                    currentAlbum?.id ?: "",
+                    currentAlbum?.name ?: ""
                 )
             )
         }
@@ -773,10 +875,10 @@ class AlbumDetailFragment : Fragment(), HasContentState {
         musicService?.playQueue(
             albumSongs,
             position,
-            com.arantec.castafiore.service.MusicService.PlaybackSource(
-                com.arantec.castafiore.service.MusicService.SourceType.ALBUM,
-                currentAlbum?.id,
-                currentAlbum?.name
+            PlaybackSource(
+                SourceType.ALBUM,
+                currentAlbum?.id ?: "",
+                currentAlbum?.name ?: ""
             )
         )
     }
@@ -930,18 +1032,6 @@ class AlbumDetailFragment : Fragment(), HasContentState {
         }
     }
 
-    private fun updateFavoriteButton() {
-        if (!isAdded || _binding == null) return
-
-        if (isFavorited) {
-            binding.btnFavorite.setImageResource(R.drawable.ic_favorite)
-            binding.btnFavorite.setColorFilter(android.graphics.Color.parseColor("#FF2D55")) // Color principal
-        } else {
-            binding.btnFavorite.setImageResource(R.drawable.ic_favorite_border)
-            binding.btnFavorite.setColorFilter(android.graphics.Color.parseColor("#FFFFFF")) // Color texto secundario
-        }
-    }
-
     private fun checkFavoriteStatus() {
         currentAlbum?.let { album ->
             lifecycleScope.launch {
@@ -1028,11 +1118,12 @@ class AlbumDetailFragment : Fragment(), HasContentState {
         try {
             if (musicRepository.serverUrl != null && song.coverArt != null) {
                 val (username, token, salt) = musicRepository.getAuthParams()
-                val coverUrl = song.getCoverArtUrl(
+                val coverUrl = song.getCoverImageUrl(
                     musicRepository.serverUrl!!,
                     username,
                     token,
-                    salt
+                    salt,
+                    300 // Pass image size as Int?
                 )
 
                 com.bumptech.glide.Glide.with(this)
@@ -1195,7 +1286,7 @@ class AlbumDetailFragment : Fragment(), HasContentState {
             appendLine("Artista: ${album.artist}")
             appendLine("Año: ${yearText}")
             appendLine("Canciones: ${album.songCount}")
-            append("Duración: ${durationText}")
+            appendLine("Duración: ${durationText}")
         }
         androidx.appcompat.app.AlertDialog.Builder(requireContext())
             .setTitle("Información del álbum")
@@ -1267,7 +1358,7 @@ class AlbumDetailFragment : Fragment(), HasContentState {
         dialog.show()
     }
 
-    private fun maybeApplyAllDownloadedEffects(applyTintOnly: Boolean, latestStates: Map<String, com.arantec.castafiore.data.download.SongDownloadManager.DownloadState>? = null) {
+    private fun maybeApplyAllDownloadedEffects(applyTintOnly: Boolean, latestStates: Map<String, DownloadState>? = null) {
         if (!isAdded || _binding == null) return
         val album = currentAlbum ?: return
         if (albumSongs.isEmpty()) return
@@ -1275,7 +1366,7 @@ class AlbumDetailFragment : Fragment(), HasContentState {
         // Comprobar descarga completa usando estados recientes o prefs rápidas
         val allDownloaded = albumSongs.all { song ->
             val state = latestStates?.get(song.id)
-            downloadManager.isSongDownloadedFast(song.id) || state?.status == com.arantec.castafiore.data.download.SongDownloadManager.DownloadStatus.COMPLETED
+            downloadManager.isSongDownloadedFast(song.id) || state?.status == DownloadStatus.COMPLETED
         }
 
         if (!allDownloaded) return
@@ -1318,7 +1409,7 @@ class AlbumDetailFragment : Fragment(), HasContentState {
     }
 
     // --- Group download UI helpers ---
-    private fun updateAlbumGroupDownloadUi(states: Map<String, com.arantec.castafiore.data.download.SongDownloadManager.DownloadState>) {
+    private fun updateAlbumGroupDownloadUi(states: Map<String, DownloadState>) {
         if (!isAdded || _binding == null) return
         if (albumSongs.isEmpty()) {
             binding.groupDownloadProgress.visibility = View.GONE
@@ -1326,7 +1417,7 @@ class AlbumDetailFragment : Fragment(), HasContentState {
             return
         }
         val ids = albumSongs.map { it.id }.toSet()
-        val active = states.values.any { it.songId in ids && (it.status == com.arantec.castafiore.data.download.SongDownloadManager.DownloadStatus.PENDING || it.status == com.arantec.castafiore.data.download.SongDownloadManager.DownloadStatus.DOWNLOADING) }
+        val active = states.values.any { it.songId in ids && (it.status == com.arantec.castafiore.data.download.DownloadStatus.PENDING || it.status == DownloadStatus.DOWNLOADING) }
 
         if (!active) {
             binding.groupDownloadProgress.visibility = View.GONE
@@ -1344,13 +1435,13 @@ class AlbumDetailFragment : Fragment(), HasContentState {
         albumSongs.forEach { song ->
             val st = states[song.id]
             when (st?.status) {
-                com.arantec.castafiore.data.download.SongDownloadManager.DownloadStatus.COMPLETED -> units += 1.0
-                com.arantec.castafiore.data.download.SongDownloadManager.DownloadStatus.DOWNLOADING -> {
+                DownloadStatus.COMPLETED -> units += 1.0
+                DownloadStatus.DOWNLOADING -> {
                     val p = st.progress.coerceIn(0, 100) / 100.0
                     units += p
                     if (st.progress > 0) hasDeterminate = true
                 }
-                com.arantec.castafiore.data.download.SongDownloadManager.DownloadStatus.PENDING -> { /* +0 */ }
+                com.arantec.castafiore.data.download.DownloadStatus.PENDING -> { /* +0 */ }
                 else -> {
                     // Count completed if already downloaded (from cache)
                     if (downloadManager.isSongDownloadedFast(song.id)) units += 1.0
@@ -1371,7 +1462,7 @@ class AlbumDetailFragment : Fragment(), HasContentState {
         val states = downloadManager.downloadStates.value
         val ids = albumSongs.map { it.id }.toSet()
         states.values.filter { it.songId in ids }
-            .filter { it.status == com.arantec.castafiore.data.download.SongDownloadManager.DownloadStatus.PENDING || it.status == com.arantec.castafiore.data.download.SongDownloadManager.DownloadStatus.DOWNLOADING }
+            .filter { it.status == com.arantec.castafiore.data.download.DownloadStatus.PENDING || it.status == DownloadStatus.DOWNLOADING }
             .forEach { st -> downloadManager.cancelDownload(st.songId) }
         binding.groupDownloadProgress.visibility = View.GONE
         binding.btnDownload.visibility = View.VISIBLE

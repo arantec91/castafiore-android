@@ -53,11 +53,8 @@ class AccountFragment : Fragment() {
         binding.progressBar.visibility = View.VISIBLE
         lifecycleScope.launch {
             try {
-                val result = musicRepository.getCurrentUserInfo()
-                val username = if (result.isSuccess) {
-                    result.getOrNull()?.get("username")?.asString
-                } else null
-                val display = username ?: musicRepository.username ?: ""
+                // Simply get the username from the repository directly
+                val display = musicRepository.username ?: ""
                 binding.tvUserValue.text = display
             } catch (_: Exception) {
                 val display = musicRepository.username ?: ""

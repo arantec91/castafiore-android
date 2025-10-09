@@ -2,6 +2,7 @@ package com.arantec.castafiore.ui.activities
 
 import android.Manifest
 import android.content.ComponentName
+import android.content.Context
 import android.content.Intent
 import android.content.ServiceConnection
 import android.content.pm.PackageManager
@@ -24,7 +25,6 @@ import com.arantec.castafiore.databinding.ActivityMainBinding
 import com.arantec.castafiore.service.MusicService
 import com.arantec.castafiore.utils.ImageLoader
 import com.arantec.castafiore.utils.StatusBarUtils
-import com.arantec.castafiore.data.network.NavidromeClient
 import com.arantec.castafiore.data.network.InFlightTracker
 import com.arantec.castafiore.ui.helpers.HasContentState
 import com.arantec.castafiore.ui.helpers.LoadingHost
@@ -34,7 +34,6 @@ import androidx.lifecycle.repeatOnLifecycle
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import android.content.Context.BIND_AUTO_CREATE
 import com.arantec.castafiore.ui.fragments.DownloadsFragment
 import com.arantec.castafiore.ui.fragments.FavoritesFragment
 import com.arantec.castafiore.ui.fragments.PlaylistDetailFragment
@@ -105,10 +104,15 @@ class MainActivity : AppCompatActivity(), LoadingHost {
         }
 
         // Initialize API client with saved server URL
-        musicRepository.serverUrl?.let { NavidromeClient.initialize(it) }
+        musicRepository.serverUrl?.let { url ->
+            val client = com.arantec.castafiore.data.network.CastafioreClient.initialize(this, url)
+            val username = musicRepository.username ?: ""
+            val password = musicRepository.password ?: ""
+            client.setCredentials(username, password)
+        }
 
         // Inicializar el sistema de cache
-        CacheConfig.initialize(this)
+        CacheConfig.initialize(this as Context)
 
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
@@ -434,8 +438,8 @@ class MainActivity : AppCompatActivity(), LoadingHost {
                 duration = 0, // Se cargará desde el servicio
                 coverArt = albumId, // Usar el albumId como coverArt para que pueda cargar la imagen
                 year = null,
-                genre = null,
-                songs = null
+                genre = null
+                // Removed songs parameter as it doesn't exist in Album constructor
             )
 
             val bundle = Bundle().apply {
@@ -565,34 +569,21 @@ class MainActivity : AppCompatActivity(), LoadingHost {
 
             // Preferir portada local si disponible; fallback a URL con ImageLoader
             try {
-                val dm = com.arantec.castafiore.data.download.SongDownloadManager.getInstance(this)
-                val localCoverPath = try { dm.createCoverPath(song) } catch (_: Exception) { null }
-                var usedLocal = false
-                if (!localCoverPath.isNullOrEmpty()) {
-                    val file = java.io.File(localCoverPath)
-                    if (file.exists()) {
-                        val bmp = android.graphics.BitmapFactory.decodeFile(localCoverPath)
-                        if (bmp != null) {
-                            binding.ivAlbumArt.setImageBitmap(bmp)
-                            usedLocal = true
-                        }
-                    }
+                // Skip local cover loading for now since getCoverPath method doesn't exist
+                // TODO: Implement local cover caching if needed
+                val (username, token, salt) = musicRepository.getAuthParams()
+                val coverId = song.coverArt ?: song.albumId
+                val coverUrl = coverId?.let { id ->
+                    ImageLoader.buildCoverArtUrl(
+                        musicRepository.serverUrl!!,
+                        id,
+                        username,
+                        token,
+                        salt,
+                        500 // match PlayerActivity size to share cache offline
+                    )
                 }
-                if (!usedLocal) {
-                    val (username, token, salt) = musicRepository.getAuthParams()
-                    val coverId = song.coverArt ?: song.albumId
-                    val coverUrl = coverId?.let { id ->
-                        ImageLoader.buildCoverArtUrl(
-                            musicRepository.serverUrl!!,
-                            id,
-                            username,
-                            token,
-                            salt,
-                            500 // match PlayerActivity size to share cache offline
-                        )
-                    }
-                    ImageLoader.loadThumbnail(this, binding.ivAlbumArt, coverUrl)
-                }
+                ImageLoader.loadThumbnail(this, binding.ivAlbumArt, coverUrl)
             } catch (_: Exception) {
                 // Si falla, usar placeholder
                 binding.ivAlbumArt.setImageResource(R.drawable.ic_album_placeholder)

@@ -4,7 +4,7 @@ import android.content.Intent
 import android.os.Bundle
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
-import com.arantec.castafiore.data.network.NavidromeClient
+import com.arantec.castafiore.data.network.CastafioreClient
 import com.arantec.castafiore.data.repository.MusicRepository
 import com.arantec.castafiore.databinding.ActivitySplashBinding
 import com.arantec.castafiore.utils.StatusBarUtils
@@ -43,15 +43,12 @@ class SplashActivity : AppCompatActivity() {
                 try {
                     val server = musicRepository.serverUrl
                     if (!server.isNullOrEmpty()) {
-                        NavidromeClient.initialize(server)
-                        val (user, token, salt) = musicRepository.getAuthParams()
-                        val response = NavidromeClient.getApiService().ping(
-                            username = user,
-                            token = token,
-                            salt = salt,
-                            version = "1.16.1",
-                            client = "Castafiore"
-                        )
+                        val client = CastafioreClient.initialize(this@SplashActivity, server)
+                        val username = musicRepository.username ?: ""
+                        val password = musicRepository.password ?: ""
+                        client.setCredentials(username, password)
+                        
+                        val response = client.ping()
 
                         if (response.isSuccessful) {
                             val body = response.body()

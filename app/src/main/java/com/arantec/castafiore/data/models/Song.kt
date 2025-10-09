@@ -14,49 +14,68 @@ data class Song(
     @SerializedName("track") val track: Int? = null,
     @SerializedName("year") val year: Int? = null,
     @SerializedName("genre") val genre: String? = null,
-    @SerializedName("coverArt") val coverArt: String? = null,
     @SerializedName("artistId") val artistId: String? = null,
     @SerializedName("albumId") val albumId: String? = null,
-    @SerializedName("path") val path: String? = null,
-    @SerializedName("suffix") val suffix: String? = null,
     @SerializedName("bitRate") val bitRate: Int? = null,
-    @SerializedName("size") val size: Long? = null
+    @SerializedName("size") val size: Long? = null,
+    @SerializedName("suffix") val suffix: String? = null,
+    @SerializedName("coverArt") val coverArt: String? = null,
+    @SerializedName("playCount") val playCount: Int? = null,
+    val path: String? = null
 ) : Parcelable {
-    fun getStreamUrl(
-        serverUrl: String,
-        username: String,
-        token: String,
-        salt: String,
-        maxBitRate: Int? = null,
-        format: String? = null,
-        timeOffsetSeconds: Int? = null
-    ): String {
-        val base = StringBuilder()
-            .append(serverUrl)
-            .append("/rest/stream?id=")
-            .append(id)
-            .append("&u=")
-            .append(username)
-            .append("&t=")
-            .append(token)
-            .append("&s=")
-            .append(salt)
-            .append("&v=1.16.1&c=Castafiore")
-        if (maxBitRate != null) base.append("&maxBitRate=").append(maxBitRate)
-        if (format != null) base.append("&format=").append(format)
-        if (timeOffsetSeconds != null && timeOffsetSeconds > 0) base.append("&timeOffset=").append(timeOffsetSeconds)
-        return base.toString()
+
+    // Get stream URL for Castafiore API
+    fun getStreamUrl(serverUrl: String, username: String, token: String, salt: String, quality: String? = null, format: String? = null): String {
+        // Clean the ID by removing any suffix (e.g., "56012_1" -> "56012")
+        val cleanId = id.substringBefore('_')
+        
+        val queryParams = mutableListOf(
+            "id=$cleanId",
+            "u=$username",
+            "t=$token",
+            "s=$salt",
+            "v=1.16.1",
+            "c=Castafiore"
+        )
+
+        quality?.let { queryParams.add("maxBitRate=$it") }
+        format?.let { queryParams.add("format=$it") }
+
+        val queryString = queryParams.joinToString("&")
+        return "$serverUrl/rest/stream.view?$queryString"
     }
 
-    fun getCoverArtUrl(serverUrl: String, username: String, token: String, salt: String): String? {
-        return coverArt?.let {
-            "$serverUrl/rest/getCoverArt?id=$it&u=$username&t=$token&s=$salt&v=1.16.1&c=Castafiore&size=300"
+    // Get cover art URL
+    fun getCoverImageUrl(serverUrl: String, username: String, token: String, salt: String, size: Int? = null): String? {
+        return coverArt?.let { coverArtId ->
+            val queryParams = mutableListOf(
+                "id=$coverArtId",
+                "u=$username",
+                "t=$token",
+                "s=$salt",
+                "v=1.16.1",
+                "c=Castafiore"
+            )
+
+            size?.let { queryParams.add("size=$it") }
+
+            val queryString = queryParams.joinToString("&")
+            "$serverUrl/rest/getCoverArt.view?$queryString"
         }
     }
+
+    // Compatibility properties
+    val trackNumber: Int? get() = track
 
     fun getFormattedDuration(): String {
         val minutes = duration / 60
         val seconds = duration % 60
         return String.format("%d:%02d", minutes, seconds)
+    }
+}
+
+fun Song.getCoverArtUrl(serverUrl: String, username: String, token: String, salt: String): String? {
+    return coverArt?.let {
+        "$serverUrl/rest/getCoverArt.view?id=$it&u=$username&t=$token&s=$salt&v=1.16.1&c=Castafiore"
     }
 }

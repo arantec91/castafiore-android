@@ -237,6 +237,9 @@ class PlaylistSelectorBottomSheet : BottomSheetDialogFragment() {
                             song?.let { currentSong ->
                                 addSongToPlaylist(newPlaylist)
                             }
+                            songs?.let { currentSongs ->
+                                addSongsToPlaylist(newPlaylist, currentSongs)
+                            }
                         }
                     },
                     onFailure = { error ->
@@ -273,7 +276,10 @@ class PlaylistSelectorBottomSheet : BottomSheetDialogFragment() {
                                 return@launch
                             }
                             // Determinar si la playlist estaba completamente descargada ANTES de agregar la canción
-                            wasFullyDownloaded = songs.isNotEmpty() && songs.all { File(dm.createDownloadPath(it)).exists() }
+                            wasFullyDownloaded = songs.isNotEmpty() && songs.all {
+                                val downloadPath = dm.createDownloadPath(it.id)
+                                downloadPath != null && File(downloadPath).exists()
+                            }
                         },
                         onFailure = { error ->
                             if (_binding == null) return@fold
@@ -291,7 +297,17 @@ class PlaylistSelectorBottomSheet : BottomSheetDialogFragment() {
                             snack("\"${currentSong.title}\" agregada a \"${playlist.name}\"")
                             // Si la playlist estaba completamente descargada, descargar la nueva canción automáticamente
                             if (wasFullyDownloaded && !dm.isSongDownloaded(currentSong.id) && !dm.isSongDownloading(currentSong.id)) {
-                                dm.downloadSong(currentSong)
+                                dm.downloadSong(
+                                    songId = currentSong.id,
+                                    title = currentSong.title,
+                                    artist = currentSong.artist,
+                                    album = currentSong.album,
+                                    track = currentSong.track,
+                                    durationSec = currentSong.duration,
+                                    suffix = currentSong.suffix,
+                                    albumId = currentSong.albumId,
+                                    coverArtId = currentSong.coverArt
+                                )
                             }
                             dismiss()
                         },
@@ -334,7 +350,10 @@ class PlaylistSelectorBottomSheet : BottomSheetDialogFragment() {
                 // Traer canciones existentes para deduplicar
                 val existingSongsResult = musicRepository.getPlaylistSongs(playlist.id)
                 val existing = existingSongsResult.getOrElse { emptyList() }
-                wasFullyDownloaded = existing.isNotEmpty() && existing.all { File(dm.createDownloadPath(it)).exists() }
+                wasFullyDownloaded = existing.isNotEmpty() && existing.all {
+                    val downloadPath = dm.createDownloadPath(it.id)
+                    downloadPath != null && File(downloadPath).exists()
+                }
                 val existingIds = existing.map { it.id }.toHashSet()
 
                 // Filtrar solo nuevas
@@ -358,7 +377,17 @@ class PlaylistSelectorBottomSheet : BottomSheetDialogFragment() {
                     if (r.isSuccess) {
                         addedCount++
                         if (wasFullyDownloaded && !dm.isSongDownloaded(s.id) && !dm.isSongDownloading(s.id)) {
-                            dm.downloadSong(s)
+                            dm.downloadSong(
+                                songId = s.id,
+                                title = s.title,
+                                artist = s.artist,
+                                album = s.album,
+                                track = s.track,
+                                durationSec = s.duration,
+                                suffix = s.suffix,
+                                albumId = s.albumId,
+                                coverArtId = s.coverArt
+                            )
                         }
                     }
                     // Actualizar mensaje cada pocos elementos para evitar exceso de redibujos

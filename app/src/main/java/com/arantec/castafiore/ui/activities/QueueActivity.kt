@@ -19,6 +19,8 @@ import com.arantec.castafiore.ui.adapters.QueueAdapter
 import com.arantec.castafiore.ui.helpers.QueueItemTouchHelperCallback
 import com.arantec.castafiore.utils.StatusBarUtils
 import com.bumptech.glide.Glide
+import com.bumptech.glide.request.RequestOptions
+import com.bumptech.glide.load.resource.drawable.DrawableTransitionOptions
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import com.arantec.castafiore.ui.dialogs.SongOptionsBottomSheet
@@ -29,7 +31,6 @@ import com.arantec.castafiore.utils.snack
 import com.arantec.castafiore.utils.ImageLoader
 import com.arantec.castafiore.utils.NetworkUtils
 import com.arantec.castafiore.data.download.SongDownloadManager
-import com.bumptech.glide.request.RequestOptions
 import java.io.File
 
 class QueueActivity : AppCompatActivity() {
@@ -302,10 +303,17 @@ class QueueActivity : AppCompatActivity() {
 
             val context = this
             val dm = SongDownloadManager.getInstance(context)
-            val localCoverFile = File(dm.createCoverPath(song))
+
+            // Check if song audio is downloaded (covers are usually downloaded with songs)
+            val isDownloaded = dm.isSongDownloaded(song.id)
+            val localCoverFile = if (isDownloaded) {
+                // Try to find a cover file in the downloads directory
+                val downloadsDir = File(context.getExternalFilesDir(null), "downloads")
+                File(downloadsDir, "${song.id}_cover.jpg")
+            } else null
 
             // 1) Portada local si existe
-            if (localCoverFile.exists()) {
+            if (localCoverFile?.exists() == true) {
                 Glide.with(context)
                     .load(localCoverFile)
                     .placeholder(R.drawable.ic_album_placeholder)
@@ -467,15 +475,22 @@ class QueueActivity : AppCompatActivity() {
             } else null
 
             val dm = SongDownloadManager.getInstance(this)
-            val localCoverFile = File(dm.createCoverPath(song))
+
+            // Check if song audio is downloaded (covers are usually downloaded with songs)
+            val isDownloaded = dm.isSongDownloaded(song.id)
+            val localCoverFile = if (isDownloaded) {
+                // Try to find a cover file in the downloads directory
+                val downloadsDir = File(this.getExternalFilesDir(null), "downloads")
+                File(downloadsDir, "${song.id}_cover.jpg")
+            } else null
 
             // 1) Local cover
-            if (localCoverFile.exists()) {
+            if (localCoverFile?.exists() == true) {
                 Glide.with(this)
                     .load(localCoverFile)
                     .placeholder(R.drawable.ic_album_placeholder)
                     .error(R.drawable.ic_album_placeholder)
-                    .transition(com.bumptech.glide.load.resource.drawable.DrawableTransitionOptions.withCrossFade(200))
+                    .transition(DrawableTransitionOptions.withCrossFade(200))
                     .into(ivCover)
             } else if (!NetworkUtils.isNetworkAvailable(this) && coverUrl != null) {
                 // 2) Cache-only when offline
@@ -484,7 +499,7 @@ class QueueActivity : AppCompatActivity() {
                     .apply(RequestOptions().onlyRetrieveFromCache(true))
                     .placeholder(R.drawable.ic_album_placeholder)
                     .error(R.drawable.ic_album_placeholder)
-                    .transition(com.bumptech.glide.load.resource.drawable.DrawableTransitionOptions.withCrossFade(200))
+                    .transition(DrawableTransitionOptions.withCrossFade(200))
                     .into(ivCover)
             } else if (coverUrl != null) {
                 // 3) Normal remote load
@@ -492,7 +507,7 @@ class QueueActivity : AppCompatActivity() {
                     .load(coverUrl)
                     .placeholder(R.drawable.ic_album_placeholder)
                     .error(R.drawable.ic_album_placeholder)
-                    .transition(com.bumptech.glide.load.resource.drawable.DrawableTransitionOptions.withCrossFade(200))
+                    .transition(DrawableTransitionOptions.withCrossFade(200))
                     .into(ivCover)
             } else {
                 ivCover.setImageResource(R.drawable.ic_album_placeholder)
