@@ -5,6 +5,8 @@ import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import androidx.recyclerview.widget.DiffUtil
+import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import com.arantec.castafiore.R
 import com.arantec.castafiore.data.models.Artist
@@ -20,17 +22,31 @@ class ArtistHorizontalAdapter(
     private val textWidthDp: Int? = null,
     private val textSizeSp: Float? = null,
     private val centerText: Boolean = false
-) : RecyclerView.Adapter<ArtistHorizontalAdapter.ArtistViewHolder>() {
-
-    private var artists: List<Artist> = emptyList()
+) : ListAdapter<Artist, ArtistHorizontalAdapter.ArtistViewHolder>(DIFF) {
 
     companion object {
-        private const val VIEW_TYPE_ARTIST = 1001 // Unique view type for artist items
+        private const val VIEW_TYPE_ARTIST = 1001
+
+        private val DIFF = object : DiffUtil.ItemCallback<Artist>() {
+            override fun areItemsTheSame(oldItem: Artist, newItem: Artist): Boolean =
+                oldItem.id == newItem.id
+
+            override fun areContentsTheSame(oldItem: Artist, newItem: Artist): Boolean =
+                oldItem == newItem
+        }
+    }
+
+    init {
+        setHasStableIds(true)
     }
 
     fun submit(list: List<Artist>) {
-        artists = list
-        notifyDataSetChanged()
+        // Usar submitList en lugar de notifyDataSetChanged para preservar ViewHolders
+        submitList(list.toList())
+    }
+
+    override fun getItemId(position: Int): Long {
+        return getItem(position).id.hashCode().toLong()
     }
 
     override fun getItemViewType(position: Int): Int {
@@ -43,17 +59,18 @@ class ArtistHorizontalAdapter(
     }
 
     override fun onBindViewHolder(holder: ArtistViewHolder, position: Int) {
-        // Add type safety check to prevent ClassCastException
-        if (holder is ArtistViewHolder && position < artists.size) {
-            holder.bind(artists[position])
+        if (holder is ArtistViewHolder && position < itemCount) {
+            holder.bind(getItem(position))
         }
     }
-
-    override fun getItemCount(): Int = artists.size
 
     inner class ArtistViewHolder(
         private val binding: ItemArtistHorizontalBinding
     ) : RecyclerView.ViewHolder(binding.root) {
+
+        // Track current URL to avoid unnecessary reloads
+        private var currentUrl: String? = null
+
         fun bind(artist: Artist) {
             // Apply per-instance sizing if provided
             val density = binding.root.resources.displayMetrics.density
@@ -98,14 +115,29 @@ class ArtistHorizontalAdapter(
             val repo = MusicRepository.getInstance(context)
             try {
                 val server = repo.serverUrl
-                if (!server.isNullOrEmpty()) {
+                val targetUrl: String? = if (!server.isNullOrEmpty()) {
                     val (u, t, s) = repo.getAuthParams()
-                    val url = ImageLoader.buildArtistImageUrl(server, artist.id, u, t, s, 300)
-                    ImageLoader.loadArtistImage(context, binding.ivArtistImage, url)
+                    ImageLoader.buildArtistImageUrl(server, artist.id, u, t, s, 300)
                 } else {
-                    binding.ivArtistImage.setImageResource(R.drawable.ic_person)
+                    null
                 }
+
+                // CRÍTICO: Solo recargar si la URL cambió
+                // Esto evita que Glide ponga el placeholder cuando la imagen ya está cargada
+                if (targetUrl != currentUrl) {
+                    currentUrl = targetUrl
+
+                    if (targetUrl != null) {
+                        ImageLoader.loadArtistImage(context, binding.ivArtistImage, targetUrl)
+                    } else {
+                        binding.ivArtistImage.setImageResource(R.drawable.ic_person)
+                    }
+                }
+                // Si targetUrl == currentUrl, NO hacer nada
+                // La imagen ya está en el ImageView
+
             } catch (_: Exception) {
+                currentUrl = null
                 binding.ivArtistImage.setImageResource(R.drawable.ic_person)
             }
 

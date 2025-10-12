@@ -163,6 +163,11 @@ class AlbumDetailFragment : Fragment(), HasContentState {
             cancelAlbumGroupDownloads()
         }
 
+        // Retry en estado vacío
+        binding.btnRetry.setOnClickListener {
+            loadAlbumDetails()
+        }
+
         // Diferir operaciones pesadas para evitar bloqueo de la animación
         view.post {
             if (isAdded && _binding != null) {
@@ -280,10 +285,10 @@ class AlbumDetailFragment : Fragment(), HasContentState {
         if (!isAdded || _binding == null) return
 
         if (isFavorited) {
-            binding.btnFavorite.setImageResource(R.drawable.ic_favorite_36)
-            binding.btnFavorite.setColorFilter("#FF2D55".toColorInt()) // Color principal
+            binding.btnFavorite.setImageResource(R.drawable.ic_favorite)
+            binding.btnFavorite.setColorFilter("#FFFFFF".toColorInt()) // Color principal
         } else {
-            binding.btnFavorite.setImageResource(R.drawable.ic_favorite_border_36)
+            binding.btnFavorite.setImageResource(R.drawable.ic_favorite_border)
             binding.btnFavorite.setColorFilter("#B3FFFFFF".toColorInt()) // Color texto secundario
         }
     }
@@ -642,22 +647,41 @@ class AlbumDetailFragment : Fragment(), HasContentState {
                                 albumSongs.clear()
                                 albumSongs.addAll(songsToUse)
                                 songAdapter.updateSongs(albumSongs)
-                                // Removed redundant notifyDataSetChanged to avoid extra rebinds
-                                // songAdapter.notifyDataSetChanged()
                                 // Aplicar estado del botón si todo ya está descargado
                                 maybeApplyAllDownloadedEffects(applyTintOnly = true)
+                                // Mostrar lista y ocultar vacío
+                                binding.rvSongs.visibility = View.VISIBLE
+                                binding.emptyLayout.visibility = View.GONE
+                                binding.btnRetry.visibility = View.GONE
                             } else {
-                                // Si no hay canciones en la respuesta, generar de muestra
-                                generateSampleSongs(albumAsAlbum)
+                                // No hay canciones: mostrar estado vacío en lugar de datos de muestra
+                                albumSongs.clear()
+                                songAdapter.updateSongs(albumSongs)
+                                binding.rvSongs.visibility = View.GONE
+                                binding.emptyLayout.visibility = View.VISIBLE
+                                binding.tvEmpty.text = getString(R.string.no_songs)
+                                binding.btnRetry.visibility = View.GONE
                             }
                         },
-                        onFailure = {
-                            // Si falla, generar canciones de muestra
-                            generateSampleSongs(album)
+                        onFailure = { err ->
+                            // Error de carga: mostrar estado vacío y mensaje
+                            albumSongs.clear()
+                            songAdapter.updateSongs(albumSongs)
+                            binding.rvSongs.visibility = View.GONE
+                            binding.emptyLayout.visibility = View.VISIBLE
+                            binding.tvEmpty.text = getString(R.string.error_loading_album)
+                            binding.btnRetry.visibility = View.VISIBLE
+                            snack("Error al cargar álbum: ${err.message ?: "desconocido"}")
                         }
                     )
-                } catch (_: Exception) {
-                    generateSampleSongs(album)
+                } catch (e: Exception) {
+                    albumSongs.clear()
+                    songAdapter.updateSongs(albumSongs)
+                    binding.rvSongs.visibility = View.GONE
+                    binding.emptyLayout.visibility = View.VISIBLE
+                    binding.tvEmpty.text = getString(R.string.error_loading_album)
+                    binding.btnRetry.visibility = View.VISIBLE
+                    snack("Error al cargar álbum: ${e.message ?: "desconocido"}")
                 }
             }
         }

@@ -26,7 +26,7 @@ class SetupActivity : AppCompatActivity() {
     private lateinit var binding: ActivitySetupBinding
     private lateinit var musicRepository: MusicRepository
 
-    private val FIXED_SERVER_URL = "http://65.109.23.109:8080"
+    private val FIXED_SERVER_URL = "http://65.109.23.109:8096"
     private var isLoading: Boolean = false
 
     override fun onCreate(savedInstanceState: Bundle?) {

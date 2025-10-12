@@ -310,9 +310,16 @@ class CastafioreClient(
                         )
                     } ?: emptyList(),
                     songs = searchResults?.songs?.map { song ->
+                        // Filter out invalid artist names like ".":
+                        val artistName = song.artist?.takeIf { it.isNotBlank() && it != "." }
+
                         SongResponse(
                             id = song.id,
                             title = song.title,
+                            // Map artist string to ArtistResponse object
+                            artist = artistName?.let { ArtistResponse(id = song.artistId ?: "", name = it, albumCount = null) },
+                            // Map album string to AlbumResponse object
+                            album = song.album?.takeIf { it.isNotBlank() }?.let { AlbumResponse(id = song.albumId ?: "", title = it) },
                             duration = song.duration ?: 0,
                             track = song.track,
                             year = song.year,

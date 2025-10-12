@@ -56,13 +56,10 @@ class AlbumHorizontalAdapter(
         private val binding: ItemAlbumHorizontalBinding
     ) : RecyclerView.ViewHolder(binding.root) {
 
+        // Track current URL to avoid unnecessary reloads
+        private var currentUrl: String? = null
+
         fun bind(album: Album) {
-            // Cancel previous image load to avoid incorrect images on fast scroll
-            com.bumptech.glide.Glide.with(binding.root.context).clear(binding.ivAlbumCover)
-
-            // Immediate placeholder to clear recycled state
-            binding.ivAlbumCover.setImageResource(R.drawable.ic_album_placeholder)
-
             binding.tvAlbumName.text = album.name
             binding.tvArtistName.text = album.artist
 
@@ -72,15 +69,16 @@ class AlbumHorizontalAdapter(
                 val dm = com.arantec.castafiore.data.download.SongDownloadManager.getInstance(binding.root.context)
                 val localPath = dm.createAlbumCoverPath(album.artist, album.name)
                 val localFile = java.io.File(localPath)
-                if (localFile.exists()) {
-                    ImageLoader.loadLocalThumbnail(binding.root.context, binding.ivAlbumCover, localPath)
+
+                val targetUrl: String? = if (localFile.exists()) {
+                    localPath
                 } else {
                     // 2) Fallback to server URL (will use cache-only when offline)
                     val musicRepo = MusicRepository.getInstance(binding.root.context)
                     val (username, token, salt) = musicRepo.getAuthParams()
 
                     if (album.coverArt != null && musicRepo.serverUrl != null) {
-                        val coverUrl = ImageLoader.buildCoverArtUrl(
+                        ImageLoader.buildCoverArtUrl(
                             musicRepo.serverUrl!!,
                             album.coverArt,
                             username,
@@ -88,13 +86,31 @@ class AlbumHorizontalAdapter(
                             salt,
                             200 // thumbnail size
                         )
+                    } else {
+                        null
+                    }
+                }
 
-                        ImageLoader.loadThumbnail(binding.root.context, binding.ivAlbumCover, coverUrl)
+                // CRÍTICO: Solo recargar si la URL cambió
+                // Esto evita que Glide ponga el placeholder cuando la imagen ya está cargada
+                if (targetUrl != currentUrl) {
+                    currentUrl = targetUrl
+
+                    if (targetUrl != null) {
+                        if (localFile.exists()) {
+                            ImageLoader.loadLocalThumbnail(binding.root.context, binding.ivAlbumCover, targetUrl)
+                        } else {
+                            ImageLoader.loadThumbnail(binding.root.context, binding.ivAlbumCover, targetUrl)
+                        }
                     } else {
                         binding.ivAlbumCover.setImageResource(R.drawable.ic_album_placeholder)
                     }
                 }
+                // Si targetUrl == currentUrl, NO hacer nada
+                // La imagen ya está en el ImageView (desde caché de Glide o cargándose)
+
             } catch (_: Exception) {
+                currentUrl = null
                 binding.ivAlbumCover.setImageResource(R.drawable.ic_album_placeholder)
             }
 

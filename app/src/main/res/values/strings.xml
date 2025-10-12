@@ -31,6 +31,11 @@
     <string name="error_loading_favorites">Error al cargar favoritos</string>
     <string name="error_loading_playlist">Error al cargar la playlist</string>
 
+    <!-- Home sections -->
+    <string name="agregados_recientemente">Agregados recientemente</string>
+    <string name="escuchados_recientemente">Escuchados recientemente</string>
+    <string name="m_s_reproducidos">Más reproducidos</string>
+
     <!-- Descargas (removed download-specific strings) -->
     <!--
     <string name="song_already_downloaded">La canción ya está descargada</string>
@@ -53,6 +58,9 @@
 
     <!-- Playlist detail -->
     <string name="no_songs">No hay canciones</string>
+
+    <!-- Album detail -->
+    <string name="error_loading_album">Error al cargar el álbum</string>
 
     <!-- Playlist actions -->
     <string name="edit_playlist">Editar playlist</string>
@@ -248,7 +256,4 @@
     <string name="icon_status_desc">Icono de estado</string>
 
     <!-- Home Screen -->
-    <string name="escuchados_recientemente">Escuchado recientemente</string>
-    <string name="agregados_recientemente">Agregado recientemente</string>
-    <string name="m_s_reproducidos">Más escuchado</string>
 </resources>

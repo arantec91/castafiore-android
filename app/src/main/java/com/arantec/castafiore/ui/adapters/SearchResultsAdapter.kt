@@ -142,6 +142,10 @@ class SearchResultsAdapter(
     }
 
     inner class SearchResultViewHolder(private val binding: ItemSearchResultBinding) : RecyclerView.ViewHolder(binding.root) {
+
+        // Track current URL to avoid unnecessary reloads
+        private var currentUrl: String? = null
+
         private fun styleBest(isBest: Boolean) {
             val card = binding.root as MaterialCardView
             val ctx = card.context
@@ -182,7 +186,16 @@ class SearchResultsAdapter(
             binding.btnRadio.setOnClickListener(null)
 
             binding.tvTitle.text = song.title
-            binding.tvSubtitle.text = listOfNotNull(song.artist, song.album).joinToString(" • ")
+            // Filter out empty or invalid artist names from subtitle
+            val subtitleParts = listOfNotNull(
+                song.artist.takeIf { it.isNotBlank() },
+                song.album.takeIf { it.isNotBlank() }
+            )
+            binding.tvSubtitle.text = if (subtitleParts.isNotEmpty()) {
+                subtitleParts.joinToString(" • ")
+            } else {
+                "" // Empty subtitle if both are blank
+            }
             binding.btnMore.isVisible = true
             binding.btnFavorite.isVisible = true
             val isFav = favoriteSongIds.contains(song.id)
@@ -201,12 +214,17 @@ class SearchResultsAdapter(
                     .build()
             }
 
-            val coverUrl = song.getCoverImageUrl(serverUrl, username, token, salt, 300)
-            ImageLoader.loadThumbnail(
-                binding.root.context,
-                binding.ivArtwork,
-                coverUrl
-            )
+            val targetUrl = song.getCoverImageUrl(serverUrl, username, token, salt, 300)
+
+            // CRÍTICO: Solo recargar si la URL cambió
+            if (targetUrl != currentUrl) {
+                currentUrl = targetUrl
+                ImageLoader.loadThumbnail(
+                    binding.root.context,
+                    binding.ivArtwork,
+                    targetUrl
+                )
+            }
 
             binding.clickableContainer.setOnClickListener { onSongClick(song) }
             binding.btnMore.setOnClickListener { onSongMoreClick(song) }
@@ -241,14 +259,19 @@ class SearchResultsAdapter(
                     .build()
             }
 
-            val coverUrl = album.coverArt?.let {
+            val targetUrl = album.coverArt?.let {
                 ImageLoader.buildCoverArtUrl(serverUrl, it, username, token, salt, 300)
             }
-            ImageLoader.loadThumbnail(
-                binding.root.context,
-                binding.ivArtwork,
-                coverUrl
-            )
+
+            // CRÍTICO: Solo recargar si la URL cambió
+            if (targetUrl != currentUrl) {
+                currentUrl = targetUrl
+                ImageLoader.loadThumbnail(
+                    binding.root.context,
+                    binding.ivArtwork,
+                    targetUrl
+                )
+            }
 
             binding.clickableContainer.setOnClickListener { onAlbumClick(album) }
             binding.btnFavorite.setOnClickListener { onAlbumFavoriteClick(album) }
@@ -278,13 +301,17 @@ class SearchResultsAdapter(
                     .build()
             }
 
-            val artistImageUrl = ImageLoader.buildArtistImageUrl(serverUrl, artist.id, username, token, salt, 300)
-            // Cargar como circular para distinguir artistas
-            ImageLoader.loadArtistImage(
-                binding.root.context,
-                binding.ivArtwork,
-                artistImageUrl
-            )
+            val targetUrl = ImageLoader.buildArtistImageUrl(serverUrl, artist.id, username, token, salt, 300)
+
+            // CRÍTICO: Solo recargar si la URL cambió
+            if (targetUrl != currentUrl) {
+                currentUrl = targetUrl
+                ImageLoader.loadArtistImage(
+                    binding.root.context,
+                    binding.ivArtwork,
+                    targetUrl
+                )
+            }
 
             // Show quick actions only if this is the best artist item
             if (isBest) {

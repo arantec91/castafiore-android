@@ -2,27 +2,42 @@ package com.arantec.castafiore.ui.adapters
 
 import android.view.LayoutInflater
 import android.view.ViewGroup
+import androidx.recyclerview.widget.DiffUtil
+import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import com.arantec.castafiore.R
 import com.arantec.castafiore.data.models.Album
 import com.arantec.castafiore.data.repository.MusicRepository
 import com.arantec.castafiore.databinding.ItemArtistAlbumHorizontalBinding
 import com.arantec.castafiore.utils.ImageLoader
-import com.bumptech.glide.load.resource.drawable.DrawableTransitionOptions
 
 class ArtistAlbumHorizontalAdapter(
     private val onAlbumClick: (Album) -> Unit
-) : RecyclerView.Adapter<ArtistAlbumHorizontalAdapter.ArtistAlbumViewHolder>() {
-
-    private var albums = listOf<Album>()
+) : ListAdapter<Album, ArtistAlbumHorizontalAdapter.ArtistAlbumViewHolder>(DIFF) {
 
     companion object {
-        private const val VIEW_TYPE_ARTIST_ALBUM = 1003 // Unique view type for artist album items
+        private const val VIEW_TYPE_ARTIST_ALBUM = 1003
+
+        private val DIFF = object : DiffUtil.ItemCallback<Album>() {
+            override fun areItemsTheSame(oldItem: Album, newItem: Album): Boolean =
+                oldItem.id == newItem.id
+
+            override fun areContentsTheSame(oldItem: Album, newItem: Album): Boolean =
+                oldItem == newItem
+        }
+    }
+
+    init {
+        setHasStableIds(true)
     }
 
     fun updateAlbums(newAlbums: List<Album>) {
-        albums = newAlbums
-        notifyDataSetChanged()
+        // Usar submitList en lugar de notifyDataSetChanged para preservar ViewHolders
+        submitList(newAlbums.toList())
+    }
+
+    override fun getItemId(position: Int): Long {
+        return getItem(position).id.hashCode().toLong()
     }
 
     override fun getItemViewType(position: Int): Int {
@@ -37,17 +52,17 @@ class ArtistAlbumHorizontalAdapter(
     }
 
     override fun onBindViewHolder(holder: ArtistAlbumViewHolder, position: Int) {
-        // Add type safety check to prevent ClassCastException
-        if (holder is ArtistAlbumViewHolder && position < albums.size) {
-            holder.bind(albums[position])
+        if (holder is ArtistAlbumViewHolder && position < itemCount) {
+            holder.bind(getItem(position))
         }
     }
-
-    override fun getItemCount(): Int = albums.size
 
     inner class ArtistAlbumViewHolder(
         private val binding: ItemArtistAlbumHorizontalBinding
     ) : RecyclerView.ViewHolder(binding.root) {
+
+        // Track current URL to avoid unnecessary reloads
+        private var currentUrl: String? = null
 
         fun bind(album: Album) {
             // Configurar información del álbum (sin año)
@@ -59,9 +74,9 @@ class ArtistAlbumHorizontalAdapter(
             val musicRepository = MusicRepository.getInstance(context)
 
             try {
-                if (album.coverArt != null && musicRepository.serverUrl != null) {
+                val targetUrl: String? = if (album.coverArt != null && musicRepository.serverUrl != null) {
                     val (username, token, salt) = musicRepository.getAuthParams()
-                    val coverUrl = ImageLoader.buildCoverArtUrl(
+                    ImageLoader.buildCoverArtUrl(
                         musicRepository.serverUrl!!,
                         album.coverArt!!,
                         username,
@@ -69,18 +84,26 @@ class ArtistAlbumHorizontalAdapter(
                         salt,
                         300 // Tamaño optimizado para las imágenes horizontales
                     )
-
-                    // Usar Glide con crossfade para una transición suave
-                    com.bumptech.glide.Glide.with(context)
-                        .load(coverUrl)
-                        .placeholder(R.drawable.ic_album_placeholder)
-                        .error(R.drawable.ic_album_placeholder)
-                        .transition(DrawableTransitionOptions.withCrossFade(200))
-                        .into(binding.ivAlbumCover)
                 } else {
-                    binding.ivAlbumCover.setImageResource(R.drawable.ic_album_placeholder)
+                    null
                 }
+
+                // CRÍTICO: Solo recargar si la URL cambió
+                // Esto evita que Glide ponga el placeholder cuando la imagen ya está cargada
+                if (targetUrl != currentUrl) {
+                    currentUrl = targetUrl
+
+                    if (targetUrl != null) {
+                        ImageLoader.loadAlbumCover(context, binding.ivAlbumCover, targetUrl)
+                    } else {
+                        binding.ivAlbumCover.setImageResource(R.drawable.ic_album_placeholder)
+                    }
+                }
+                // Si targetUrl == currentUrl, NO hacer nada
+                // La imagen ya está en el ImageView
+
             } catch (e: Exception) {
+                currentUrl = null
                 binding.ivAlbumCover.setImageResource(R.drawable.ic_album_placeholder)
             }
 

@@ -193,10 +193,15 @@ class MusicRepository private constructor(private val context: Context) {
             if (response.isSuccessful && response.body()?.success == true) {
                 response.body()?.data?.let { searchResponse ->
                     val songs = searchResponse.songs?.map { songResponse ->
+                        // Sanitize artist name: filter out invalid values like "."
+                        val artistName = songResponse.artist?.name?.takeIf {
+                            it.isNotBlank() && it != "."
+                        } ?: ""
+
                         Song(
                             id = songResponse.id,
                             title = songResponse.title,
-                            artist = songResponse.artist?.name ?: "",
+                            artist = artistName,
                             album = songResponse.album?.title ?: "",
                             duration = songResponse.duration,
                             artistId = songResponse.artistId,
@@ -353,48 +358,57 @@ class MusicRepository private constructor(private val context: Context) {
                 return Result.failure(Exception("Authentication failed"))
             }
 
-            val response = getClient().getAlbum(albumId)
+            // Use Subsonic API instead of REST API
+            val response = getClient().getAlbumSubsonic(albumId)
 
-            if (response.isSuccessful && response.body()?.success == true) {
-                response.body()?.data?.let { albumResponse ->
-                    val songs = albumResponse.songs?.map { songResponse ->
-                        Song(
-                            id = songResponse.id,
-                            title = songResponse.title,
-                            artist = songResponse.artist?.name ?: albumResponse.artist ?: "",
-                            album = albumResponse.title ?: "",
-                            duration = songResponse.duration,
-                            track = songResponse.track,
-                            year = songResponse.year,
-                            genre = songResponse.genre,
-                            artistId = songResponse.artistId,
-                            albumId = albumResponse.id,
-                            bitRate = songResponse.bitRate,
-                            size = songResponse.size,
-                            coverArt = songResponse.coverArt ?: albumResponse.coverArt,
-                            suffix = songResponse.suffix
+            if (response.isSuccessful) {
+                val subsonicResponse = response.body()?.subsonicResponse
+
+                if (subsonicResponse?.status == "ok") {
+                    subsonicResponse.album?.let { albumResponse ->
+                        val songs = albumResponse.songs?.map { songResponse ->
+                            Song(
+                                id = songResponse.id,
+                                title = songResponse.title,
+                                artist = songResponse.artist ?: albumResponse.artist ?: "",
+                                album = albumResponse.name,
+                                duration = songResponse.duration ?: 0,
+                                track = songResponse.track,
+                                year = songResponse.year,
+                                genre = songResponse.genre,
+                                artistId = songResponse.artistId,
+                                albumId = albumResponse.id,
+                                bitRate = songResponse.bitRate,
+                                size = songResponse.size,
+                                coverArt = songResponse.coverArt ?: albumResponse.coverArt,
+                                suffix = songResponse.suffix,
+                                path = songResponse.path
+                            )
+                        } ?: emptyList()
+
+                        val albumDetail = AlbumDetail(
+                            id = albumResponse.id,
+                            title = albumResponse.name,
+                            artist = albumResponse.artist ?: "",
+                            artistId = albumResponse.artistId,
+                            songCount = albumResponse.songCount ?: songs.size,
+                            duration = albumResponse.duration ?: 0,
+                            year = albumResponse.year,
+                            genre = albumResponse.genre,
+                            coverArt = albumResponse.coverArt,
+                            songs = songs
                         )
-                    } ?: emptyList()
-
-                    val albumDetail = AlbumDetail(
-                        id = albumResponse.id,
-                        title = albumResponse.title ?: "",
-                        artist = albumResponse.artist ?: "",
-                        artistId = albumResponse.artistId,
-                        songCount = albumResponse.songCount ?: songs.size,
-                        duration = albumResponse.duration ?: 0,
-                        year = albumResponse.year,
-                        genre = albumResponse.genre,
-                        coverArt = albumResponse.coverArt,
-                        songs = songs
-                    )
-                    Result.success(albumDetail)
-                } ?: Result.failure(Exception("Empty response"))
+                        Result.success(albumDetail)
+                    } ?: Result.failure(Exception("Empty album response"))
+                } else {
+                    val errorMessage = subsonicResponse?.error?.message ?: "Failed to get album detail"
+                    Result.failure(Exception(errorMessage))
+                }
             } else {
-                val errorMessage = response.body()?.error ?: "Failed to get album detail"
-                Result.failure(Exception(errorMessage))
+                Result.failure(Exception("HTTP ${response.code()}: ${response.message()}"))
             }
         } catch (e: Exception) {
+            Log.e("MusicRepository", "Error getting album detail", e)
             Result.failure(e)
         }
     }

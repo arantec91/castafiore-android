@@ -6,11 +6,15 @@ import android.graphics.drawable.Drawable
 import android.widget.ImageView
 import androidx.fragment.app.Fragment
 import com.bumptech.glide.Glide
+import com.bumptech.glide.load.DataSource
 import com.bumptech.glide.load.engine.DiskCacheStrategy
+import com.bumptech.glide.load.engine.GlideException
 import com.bumptech.glide.load.resource.bitmap.BitmapTransitionOptions
 import com.bumptech.glide.load.resource.drawable.DrawableTransitionOptions
+import com.bumptech.glide.request.RequestListener
 import com.bumptech.glide.request.RequestOptions
 import com.bumptech.glide.request.target.CustomTarget
+import com.bumptech.glide.request.target.Target
 import com.bumptech.glide.request.transition.Transition
 import com.arantec.castafiore.R
 import java.io.File
@@ -21,42 +25,47 @@ import java.io.File
 object ImageLoader {
 
     /**
-     * Opciones de caché optimizado para imágenes de música
+     * Opciones de caché optimizado CON placeholder
+     * El placeholder se muestra solo cuando se carga desde red/disco
      */
     private val musicImageOptions = RequestOptions()
-        .diskCacheStrategy(DiskCacheStrategy.ALL)
+        .diskCacheStrategy(DiskCacheStrategy.AUTOMATIC)
         .skipMemoryCache(false)
         .placeholder(R.drawable.ic_album_placeholder)
         .error(R.drawable.ic_album_placeholder)
+        .dontAnimate()
 
     /**
-     * Opciones para imágenes de álbum con transición suave
+     * Opciones para imágenes de álbum CON placeholder
      */
     private val albumImageOptions = RequestOptions()
-        .diskCacheStrategy(DiskCacheStrategy.ALL)
+        .diskCacheStrategy(DiskCacheStrategy.AUTOMATIC)
         .skipMemoryCache(false)
         .placeholder(R.drawable.ic_album_placeholder)
         .error(R.drawable.ic_album_placeholder)
+        .dontAnimate()
 
     /**
-     * Opciones para imágenes de artista con esquinas redondeadas
+     * Opciones para imágenes de artista CON placeholder
      */
     private val artistImageOptions = RequestOptions()
-        .diskCacheStrategy(DiskCacheStrategy.ALL)
+        .diskCacheStrategy(DiskCacheStrategy.AUTOMATIC)
         .skipMemoryCache(false)
         .placeholder(R.drawable.ic_person)
         .error(R.drawable.ic_person)
         .circleCrop()
+        .dontAnimate()
 
     /**
-     * Opciones para thumbnails pequeños (listas)
+     * Opciones para thumbnails CON placeholder
      */
     private val thumbnailOptions = RequestOptions()
-        .diskCacheStrategy(DiskCacheStrategy.ALL)
+        .diskCacheStrategy(DiskCacheStrategy.AUTOMATIC)
         .skipMemoryCache(false)
         .placeholder(R.drawable.ic_music_note)
         .error(R.drawable.ic_music_note)
         .override(200, 200)
+        .dontAnimate()
 
     /**
      * Carga una imagen local (File path) con opciones de thumbnail
@@ -64,8 +73,7 @@ object ImageLoader {
     fun loadLocalThumbnail(context: Context, imageView: ImageView, filePath: String) {
         Glide.with(context)
             .load(File(filePath))
-            .apply(thumbnailOptions)
-            .transition(DrawableTransitionOptions.withCrossFade(200))
+            .apply(thumbnailOptions.clone().placeholder(null)) // Sin placeholder para locales (son rápidas)
             .into(imageView)
     }
 
@@ -76,8 +84,7 @@ object ImageLoader {
         Glide.with(context)
             .asBitmap()
             .load(File(filePath))
-            .apply(albumImageOptions)
-            .transition(BitmapTransitionOptions.withCrossFade(250))
+            .apply(albumImageOptions.clone().placeholder(null)) // Sin placeholder para locales
             .into(imageView)
     }
 
@@ -91,35 +98,20 @@ object ImageLoader {
         onSuccess: ((Bitmap) -> Unit)? = null,
         onError: (() -> Unit)? = null
     ) {
-        android.util.Log.d("ImageLoader", "loadAlbumCover called with URL: $url")
-        
         if (url.isNullOrEmpty()) {
-            android.util.Log.w("ImageLoader", "Album cover URL is null or empty")
             imageView.setImageResource(R.drawable.ic_album_placeholder)
             onError?.invoke()
             return
         }
 
         val isNetworkAvailable = NetworkUtils.isNetworkAvailable(context)
-        android.util.Log.d("ImageLoader", "Network available for album cover: $isNetworkAvailable")
-        
         val opts = albumImageOptions.clone().onlyRetrieveFromCache(!isNetworkAvailable)
-        android.util.Log.d("ImageLoader", "Cache-only mode for album cover: ${!isNetworkAvailable}")
 
-        try {
-            android.util.Log.d("ImageLoader", "Starting Glide load for album cover URL: $url")
-            Glide.with(context)
-                .asBitmap()
-                .load(url)
-                .apply(opts)
-                .transition(BitmapTransitionOptions.withCrossFade(250))
-                .into(imageView)
-            android.util.Log.d("ImageLoader", "Glide load request submitted for album cover")
-        } catch (e: Exception) {
-            android.util.Log.e("ImageLoader", "Exception in loadAlbumCover", e)
-            imageView.setImageResource(R.drawable.ic_album_placeholder)
-            onError?.invoke()
-        }
+        Glide.with(context)
+            .asBitmap()
+            .load(url)
+            .apply(opts)
+            .into(imageView)
     }
 
     /**
@@ -166,32 +158,18 @@ object ImageLoader {
         imageView: ImageView,
         url: String?
     ) {
-        android.util.Log.d("ImageLoader", "loadArtistImage called with URL: $url")
-        
         if (url.isNullOrEmpty()) {
-            android.util.Log.w("ImageLoader", "Artist image URL is null or empty")
             imageView.setImageResource(R.drawable.ic_person)
             return
         }
         
         val isNetworkAvailable = NetworkUtils.isNetworkAvailable(context)
-        android.util.Log.d("ImageLoader", "Network available for artist image: $isNetworkAvailable")
-        
         val opts = artistImageOptions.clone().onlyRetrieveFromCache(!isNetworkAvailable)
-        android.util.Log.d("ImageLoader", "Cache-only mode for artist image: ${!isNetworkAvailable}")
 
-        try {
-            android.util.Log.d("ImageLoader", "Starting Glide load for artist image URL: $url")
-            Glide.with(context)
-                .load(url)
-                .apply(opts)
-                .transition(DrawableTransitionOptions.withCrossFade(250))
-                .into(imageView)
-            android.util.Log.d("ImageLoader", "Glide load request submitted for artist image")
-        } catch (e: Exception) {
-            android.util.Log.e("ImageLoader", "Exception in loadArtistImage", e)
-            imageView.setImageResource(R.drawable.ic_person)
-        }
+        Glide.with(context)
+            .load(url)
+            .apply(opts)
+            .into(imageView)
     }
 
     /**
@@ -208,7 +186,6 @@ object ImageLoader {
         Glide.with(fragment)
             .load(url)
             .apply(opts)
-            .transition(DrawableTransitionOptions.withCrossFade(250))
             .into(imageView)
     }
 
@@ -220,32 +197,18 @@ object ImageLoader {
         imageView: ImageView,
         url: String?
     ) {
-        android.util.Log.d("ImageLoader", "loadThumbnail called with URL: $url")
-        
         if (url.isNullOrEmpty()) {
-            android.util.Log.w("ImageLoader", "Thumbnail URL is null or empty")
             imageView.setImageResource(R.drawable.ic_music_note)
             return
         }
         
         val isNetworkAvailable = NetworkUtils.isNetworkAvailable(context)
-        android.util.Log.d("ImageLoader", "Network available for thumbnail: $isNetworkAvailable")
-        
         val opts = thumbnailOptions.clone().onlyRetrieveFromCache(!isNetworkAvailable)
-        android.util.Log.d("ImageLoader", "Cache-only mode for thumbnail: ${!isNetworkAvailable}")
-        
-        try {
-            android.util.Log.d("ImageLoader", "Starting Glide load for thumbnail URL: $url")
-            Glide.with(imageView)
-                .load(url)
-                .apply(opts)
-                .transition(DrawableTransitionOptions.withCrossFade(200))
-                .into(imageView)
-            android.util.Log.d("ImageLoader", "Glide load request submitted for thumbnail")
-        } catch (e: Exception) {
-            android.util.Log.e("ImageLoader", "Exception in loadThumbnail", e)
-            imageView.setImageResource(R.drawable.ic_music_note)
-        }
+
+        Glide.with(imageView)
+            .load(url)
+            .apply(opts)
+            .into(imageView)
     }
 
     /**
@@ -263,7 +226,6 @@ object ImageLoader {
         Glide.with(fragment)
             .load(url)
             .apply(opts)
-            .transition(DrawableTransitionOptions.withCrossFade(200))
             .into(imageView)
     }
 
@@ -314,6 +276,6 @@ object ImageLoader {
         salt: String,
         size: Int = 300
     ): String {
-        return "$serverUrl/rest/getCoverArt.view?id=$artistId&u=$username&t=$token&s=$salt&v=1.16.1&c=Castafiore&size=$size"
+        return "$serverUrl/rest/getCoverArt?id=artist-$artistId&u=$username&t=$token&s=$salt&v=1.16.1&c=Castafiore&f=json&size=$size"
     }
 }

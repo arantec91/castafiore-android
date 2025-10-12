@@ -76,6 +76,9 @@ class SongAdapter(
         private val binding: ItemSongBinding
     ) : RecyclerView.ViewHolder(binding.root) {
 
+        // Track current URL to avoid unnecessary reloads
+        private var currentCoverUrl: String? = null
+
         fun bind(song: Song) {
             binding.apply {
 
@@ -86,14 +89,12 @@ class SongAdapter(
                     ivSongCover.visibility = View.VISIBLE
                     // Cargar portada sólo en bind completo, nunca en payloads
                     try {
-                        // Placeholder inmediato
-                        ivSongCover.setImageResource(R.drawable.ic_music_note)
-
                         // 1) Local-first: si existe una portada descargada para el álbum
                         val dm = SongDownloadManager.getInstance(root.context)
                         val localPath = try { dm.createCoverPath(song) } catch (_: Exception) { null }
-                        if (!localPath.isNullOrEmpty() && File(localPath).exists()) {
-                            ImageLoader.loadLocalThumbnail(root.context, ivSongCover, localPath)
+
+                        val targetUrl: String? = if (!localPath.isNullOrEmpty() && File(localPath).exists()) {
+                            localPath
                         } else {
                             // 2) Fallback a URL remota; ImageLoader manejará modo offline usando solo caché
                             val repo = MusicRepository.getInstance(root.context)
@@ -101,7 +102,7 @@ class SongAdapter(
                             val coverId = song.coverArt ?: song.albumId
                             if (!server.isNullOrEmpty() && !coverId.isNullOrEmpty()) {
                                 val (username, token, salt) = repo.getAuthParams()
-                                val coverUrl = ImageLoader.buildCoverArtUrl(
+                                ImageLoader.buildCoverArtUrl(
                                     server,
                                     coverId,
                                     username,
@@ -109,12 +110,31 @@ class SongAdapter(
                                     salt,
                                     200 // tamaño optimizado para lista
                                 )
-                                ImageLoader.loadThumbnail(root.context, ivSongCover, coverUrl)
+                            } else {
+                                null
+                            }
+                        }
+
+                        // CRÍTICO: Solo recargar si la URL cambió
+                        // Esto evita que Glide ponga el placeholder cuando la imagen ya está cargada
+                        if (targetUrl != currentCoverUrl) {
+                            currentCoverUrl = targetUrl
+
+                            if (targetUrl != null) {
+                                if (!localPath.isNullOrEmpty() && File(localPath).exists()) {
+                                    ImageLoader.loadLocalThumbnail(root.context, ivSongCover, targetUrl)
+                                } else {
+                                    ImageLoader.loadThumbnail(root.context, ivSongCover, targetUrl)
+                                }
                             } else {
                                 ivSongCover.setImageResource(R.drawable.ic_music_note)
                             }
                         }
+                        // Si targetUrl == currentCoverUrl, NO hacer nada
+                        // La imagen ya está en el ImageView
+
                     } catch (_: Exception) {
+                        currentCoverUrl = null
                         ivSongCover.setImageResource(R.drawable.ic_music_note)
                     }
                 }

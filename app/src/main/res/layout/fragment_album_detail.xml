@@ -289,6 +289,49 @@
                     tools:itemCount="10"
                     tools:listitem="@layout/item_song_album" />
 
+                <!-- Estado vacío -->
+                <LinearLayout
+                    android:id="@+id/emptyLayout"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:gravity="center"
+                    android:padding="24dp"
+                    android:visibility="gone">
+
+                    <ImageView
+                        android:layout_width="80dp"
+                        android:layout_height="80dp"
+                        android:src="@drawable/ic_music_note"
+                        app:tint="#404040"
+                        android:layout_marginBottom="16dp"
+                        android:contentDescription="@string/music_info_icon_desc" />
+
+                    <TextView
+                        android:id="@+id/tvEmpty"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:textColor="#B3B3B3"
+                        android:textSize="16sp"
+                        android:gravity="center"
+                        android:lineSpacingExtra="4dp"
+                        tools:text="No se encontraron canciones" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnRetry"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="16dp"
+                        android:text="@string/retry"
+                        style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                        app:strokeColor="@color/primary"
+                        app:strokeWidth="1dp"
+                        app:icon="@drawable/ic_refresh"
+                        app:iconTint="@color/primary"
+                        app:rippleColor="@color/primary"
+                        android:visibility="gone" />
+                </LinearLayout>
+
             </LinearLayout>
 
         </LinearLayout>

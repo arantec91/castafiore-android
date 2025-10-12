@@ -48,8 +48,8 @@ class CastafioreGlideModule : AppGlideModule() {
     override fun applyOptions(context: Context, builder: com.bumptech.glide.GlideBuilder) {
         super.applyOptions(context, builder)
 
-        // Configurar caché de memoria más grande (60MB)
-        val memorySizeBytes = 1024 * 1024 * 60 // 60MB por defecto
+        // Configurar caché de memoria más grande (80MB para más imágenes en memoria)
+        val memorySizeBytes = 1024 * 1024 * 80 // 80MB
         builder.setMemoryCache(com.bumptech.glide.load.engine.cache.LruResourceCache(memorySizeBytes.toLong()))
 
         // Configurar caché de disco más grande (500MB)
@@ -65,19 +65,28 @@ class CastafioreGlideModule : AppGlideModule() {
         // Configurar nivel de log - usar WARN para reducir logs en todas las versiones
         builder.setLogLevel(android.util.Log.WARN)
 
-        // Transiciones por defecto: crossfade suave para Drawables y Bitmaps
-        val crossFadeFactory = DrawableCrossFadeFactory.Builder(250)
-            .setCrossFadeEnabled(true) // también desde memoria
+        // CRÍTICO: Configurar transiciones que NO se ejecutan desde MEMORIA caché
+        // pero SÍ desde red o disco caché (para feedback visual)
+        val crossFadeFactory = DrawableCrossFadeFactory.Builder(200)
+            .setCrossFadeEnabled(false) // Desactivar crossfade desde memoria caché
             .build()
 
         builder.setDefaultTransitionOptions(
             Drawable::class.java,
             DrawableTransitionOptions.withCrossFade(crossFadeFactory)
         )
+
+        // Para Bitmaps, también desactivar crossfade desde memoria
         builder.setDefaultTransitionOptions(
             Bitmap::class.java,
-            BitmapTransitionOptions.withCrossFade(250)
+            BitmapTransitionOptions.withCrossFade(200)
         )
+
+        // Configurar el pool de Bitmaps para reutilización eficiente
+        builder.setBitmapPool(com.bumptech.glide.load.engine.bitmap_recycle.LruBitmapPool(memorySizeBytes.toLong()))
+
+        // Configurar el ArrayPool para mejor manejo de memoria
+        builder.setArrayPool(com.bumptech.glide.load.engine.bitmap_recycle.LruArrayPool(memorySizeBytes / 2))
     }
 
     // Deshabilitar manifests parsing para mejor rendimiento
