@@ -105,6 +105,11 @@ dependencies {
     // WorkManager para descargas en segundo plano
     implementation("androidx.work:work-runtime-ktx:2.9.0")
 
+    // Room Database
+    implementation("androidx.room:room-runtime:2.6.1")
+    implementation("androidx.room:room-ktx:2.6.1")
+    ksp("androidx.room:room-compiler:2.6.1")
+
     // ExoPlayer for audio playback
     implementation("com.google.android.exoplayer:exoplayer:2.19.1")
 
