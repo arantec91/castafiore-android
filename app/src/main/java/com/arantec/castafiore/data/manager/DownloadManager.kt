@@ -332,4 +332,16 @@ class DownloadManager private constructor(private val context: Context) {
             dao.deleteFailedAndCancelled()
         }
     }
+
+    /**
+     * Get all downloaded song IDs
+     */
+    suspend fun getAllDownloadedSongs(): List<String> {
+        return withContext(Dispatchers.IO) {
+            val completed = dao.observeCompletedDownloads().first()
+            completed.filter { download ->
+                download.localPath?.let { File(it).exists() } == true
+            }.map { it.songId }
+        }
+    }
 }
