@@ -4,6 +4,7 @@ import com.arantec.castafiore.data.model.SubsonicResponseWrapper
 import retrofit2.Response
 import retrofit2.http.GET
 import retrofit2.http.Query
+import retrofit2.http.Streaming
 
 /**
  * Subsonic API Service for compatibility with Subsonic protocol
@@ -225,6 +226,36 @@ interface SubsonicApiService {
         @Query("id") id: String,
         @Query("count") count: Int = 20,
         @Query("includeNotPresent") includeNotPresent: Boolean = true,
+        @Query("u") username: String,
+        @Query("t") token: String,
+        @Query("s") salt: String,
+        @Query("v") version: String,
+        @Query("c") client: String,
+        @Query("f") format: String = "json"
+    ): Response<SubsonicResponseWrapper>
+
+    /**
+     * Download a song with streaming support
+     * Returns ResponseBody for streaming download
+     */
+    @GET("rest/download.view")
+    @Streaming
+    suspend fun downloadSong(
+        @Query("id") id: String,
+        @Query("u") username: String,
+        @Query("t") token: String,
+        @Query("s") salt: String,
+        @Query("v") version: String,
+        @Query("c") client: String
+    ): Response<okhttp3.ResponseBody>
+
+    /**
+     * Get download info for multiple songs
+     * Returns size and format information
+     */
+    @GET("rest/getDownloadInfo.view")
+    suspend fun getDownloadInfo(
+        @Query("id") ids: String, // Comma-separated list of song IDs
         @Query("u") username: String,
         @Query("t") token: String,
         @Query("s") salt: String,
