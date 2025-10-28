@@ -366,6 +366,8 @@ class DownloadsFragment : Fragment(), HasContentState {
     }
 
     private fun setupDownloadObservers() {
+        var lastDownloadCount = 0
+        
         viewLifecycleOwner.lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 // Observe completed downloads for displaying in the list
@@ -375,8 +377,11 @@ class DownloadsFragment : Fragment(), HasContentState {
                         if (now - lastDownloadUiUpdateMs < 250L) return@collect
                         lastDownloadUiUpdateMs = now
 
-                        // Reload the list when completed downloads change
-                        loadDownloads(isRefresh = true)
+                        // Only reload if the number of completed downloads changed
+                        if (downloads.size != lastDownloadCount) {
+                            lastDownloadCount = downloads.size
+                            loadDownloads(isRefresh = true)
+                        }
                     }
             }
         }

@@ -335,13 +335,18 @@ class DownloadManager private constructor(private val context: Context) {
 
     /**
      * Get all downloaded song IDs
+     * Uses a cached file existence check for better performance
      */
     suspend fun getAllDownloadedSongs(): List<String> {
         return withContext(Dispatchers.IO) {
             val completed = dao.observeCompletedDownloads().first()
-            completed.filter { download ->
-                download.localPath?.let { File(it).exists() } == true
-            }.map { it.songId }
+            
+            // Batch check file existence for better performance
+            completed.mapNotNull { download ->
+                download.localPath?.let { path ->
+                    if (File(path).exists()) download.songId else null
+                }
+            }
         }
     }
 }
