@@ -38,7 +38,8 @@ import kotlinx.coroutines.withContext
 import kotlin.random.Random
 import android.os.SystemClock
 import com.arantec.castafiore.data.repository.MusicRepository
-import com.arantec.castafiore.data.download.DownloadStatus
+import com.arantec.castafiore.data.local.entity.DownloadStatus
+import com.arantec.castafiore.data.manager.DownloadManager
 
 class DownloadsFragment : Fragment(), HasContentState {
 
@@ -55,7 +56,7 @@ class DownloadsFragment : Fragment(), HasContentState {
     private var playbackStateListener: ((Boolean) -> Unit)? = null
     private var songChangeListener: ((Song?) -> Unit)? = null
 
-    private lateinit var downloadManager: com.arantec.castafiore.data.download.SongDownloadManager
+    private lateinit var downloadManager: DownloadManager
 
     // Throttle UI updates for download states
     private var lastDownloadUiUpdateMs: Long = 0L
@@ -94,7 +95,7 @@ class DownloadsFragment : Fragment(), HasContentState {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-        downloadManager = com.arantec.castafiore.data.download.SongDownloadManager.getInstance(requireContext())
+        downloadManager = DownloadManager.getInstance(requireContext())
 
         setupToolbar()
         setupRecyclerView()
@@ -245,7 +246,9 @@ class DownloadsFragment : Fragment(), HasContentState {
 
         viewLifecycleOwner.lifecycleScope.launch {
             val repo = MusicRepository.getInstance(requireContext())
-            val ids = downloadManager.getAllDownloadedSongs()
+            val ids = withContext(Dispatchers.IO) {
+                downloadManager.getAllDownloadedSongs()
+            }
             val songs = withContext(Dispatchers.IO) {
                 coroutineScope {
                     ids.map { id ->
@@ -363,35 +366,21 @@ class DownloadsFragment : Fragment(), HasContentState {
     }
 
     private fun setupDownloadObservers() {
+        var lastDownloadCount = 0
+        
         viewLifecycleOwner.lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
-                downloadManager.downloadStates
-                    .collect { states ->
+                // Observe completed downloads for displaying in the list
+                downloadManager.completedDownloads
+                    .collect { downloads ->
                         val now = SystemClock.elapsedRealtime()
                         if (now - lastDownloadUiUpdateMs < 250L) return@collect
                         lastDownloadUiUpdateMs = now
 
-                        // Update per-item download UI
-                        states.values.forEach { state ->
-                            songAdapter.updateDownloadState(state)
-                        }
-                        // Remove items that were deleted in real time
-                        val toRemove = states.values
-                            .filter { st ->
-                                (st.status == DownloadStatus.CANCELLED ||
-                                 st.status == DownloadStatus.FAILED) &&
-                                downloadedSongs.any { it.id == st.songId } &&
-                                !downloadManager.isSongDownloaded(st.songId)
-                            }
-                            .map { it.songId }
-                            .toSet()
-
-                        if (toRemove.isNotEmpty()) {
-                            downloadedSongs.removeAll { it.id in toRemove }
-                            if (isAdded && _binding != null) {
-                                songAdapter.updateSongs(downloadedSongs)
-                                updateInfoAndEmptyState()
-                            }
+                        // Only reload if the number of completed downloads changed
+                        if (downloads.size != lastDownloadCount) {
+                            lastDownloadCount = downloads.size
+                            loadDownloads(isRefresh = true)
                         }
                     }
             }
